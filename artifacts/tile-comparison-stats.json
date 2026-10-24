@@ -1,0 +1,144 @@
+{
+  "dimensions": [
+    1024,
+    1024
+  ],
+  "baselineBBox": {
+    "minX": 403,
+    "minY": 126,
+    "maxX": 620,
+    "maxY": 905,
+    "count": 144035
+  },
+  "tiledBBox": {
+    "minX": 403,
+    "minY": 126,
+    "maxX": 620,
+    "maxY": 905,
+    "count": 144038
+  },
+  "baselineCorners": [
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "tiledCorners": [
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "stats": {
+    "allProduct": {
+      "pixels": 149688,
+      "alphaMAE": 0.04974346641013307,
+      "alphaMax": 18,
+      "alphaChanged": 4241,
+      "rgbMAE": 0.03284832451499118,
+      "rgbMax": 46,
+      "rgbChannelsChanged": 11333,
+      "silhouetteIoU": 0.9998403310007775
+    },
+    "tileBoundaryBands5px": {
+      "pixels": 2180,
+      "alphaMAE": 0.03211009174311927,
+      "alphaMax": 5,
+      "alphaChanged": 42,
+      "rgbMAE": 0.017737003058103974,
+      "rgbMax": 2,
+      "rgbChannelsChanged": 105,
+      "silhouetteIoU": 1
+    },
+    "interior": {
+      "pixels": 147508,
+      "alphaMAE": 0.050004067575995875,
+      "alphaMax": 18,
+      "alphaChanged": 4199,
+      "rgbMAE": 0.03307165261093184,
+      "rgbMax": 46,
+      "rgbChannelsChanged": 11228,
+      "silhouetteIoU": 0.9998378888904552
+    },
+    "vertical384": {
+      "pixels": 0,
+      "alphaMAE": null,
+      "alphaMax": 0,
+      "alphaChanged": 0,
+      "rgbMAE": null,
+      "rgbMax": 0,
+      "rgbChannelsChanged": 0,
+      "silhouetteIoU": null
+    },
+    "horizontal384": {
+      "pixels": 1100,
+      "alphaMAE": 0,
+      "alphaMax": 0,
+      "alphaChanged": 0,
+      "rgbMAE": 0.0030303030303030303,
+      "rgbMax": 1,
+      "rgbChannelsChanged": 10,
+      "silhouetteIoU": 1
+    },
+    "vertical768": {
+      "pixels": 0,
+      "alphaMAE": null,
+      "alphaMax": 0,
+      "alphaChanged": 0,
+      "rgbMAE": null,
+      "rgbMax": 0,
+      "rgbChannelsChanged": 0,
+      "silhouetteIoU": null
+    },
+    "horizontal768": {
+      "pixels": 1080,
+      "alphaMAE": 0.06481481481481481,
+      "alphaMax": 5,
+      "alphaChanged": 42,
+      "rgbMAE": 0.03271604938271605,
+      "rgbMax": 2,
+      "rgbChannelsChanged": 95,
+      "silhouetteIoU": 1
+    }
+  }
+}
