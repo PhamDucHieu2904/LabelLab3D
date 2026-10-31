@@ -26,6 +26,10 @@ export function createStudioGround(scene: THREE.Scene): StudioGroundController {
   const gridMaterial = new THREE.ShaderMaterial({
     transparent: true,
     premultipliedAlpha: true,
+    // The ground is rendered alone into the studio matte, before the product.
+    // Layer grid ink by renderOrder instead of comparing its 20 μm floor gap
+    // against the matte camera's long depth range (which flickers while orbiting).
+    depthTest: false,
     depthWrite: false,
     side: THREE.DoubleSide,
     uniforms: { gridColor: { value: new THREE.Color("#bfc6ce") } },
@@ -80,6 +84,8 @@ export function createStudioGround(scene: THREE.Scene): StudioGroundController {
   const contactMaterial = new THREE.ShaderMaterial({
     transparent: true,
     premultipliedAlpha: true,
+    // The contact wash belongs above both floor and grid in that same matte.
+    depthTest: false,
     depthWrite: false,
     side: THREE.DoubleSide,
     vertexShader: `

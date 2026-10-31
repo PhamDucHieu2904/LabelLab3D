@@ -2,6 +2,7 @@
 export interface ScenePreferences {
   modelId: string;
   sceneMode: "website" | "studio";
+  style: "pink" | "white";
   motion: "showcase" | "off";
   background: string;
   liquidColor: string;
@@ -20,6 +21,7 @@ export const PREFERENCES_KEY = "labellab.scene.preferences.v1";
 export const DEFAULT_PREFERENCES: Readonly<ScenePreferences> = Object.freeze({
   modelId: "basil-strawberry",
   sceneMode: "website",
+  style: "pink",
   motion: "showcase",
   background: "#d53660",
   liquidColor: "#F14E78",
@@ -56,6 +58,7 @@ export function parsePreferences(value: unknown): ScenePreferences {
     };
     const modelId = own("modelId"),
       sceneMode = own("sceneMode"),
+      style = own("style"),
       motion = own("motion");
     const frame = own("frame"),
       resolution = own("resolution");
@@ -70,6 +73,7 @@ export function parsePreferences(value: unknown): ScenePreferences {
         sceneMode === "website" || sceneMode === "studio"
           ? sceneMode
           : defaults.sceneMode,
+      style: style === "pink" || style === "white" ? style : defaults.style,
       motion:
         motion === "showcase" || motion === "off" ? motion : defaults.motion,
       background: color(own("background"), defaults.background),

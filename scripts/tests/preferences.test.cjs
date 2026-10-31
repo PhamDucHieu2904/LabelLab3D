@@ -39,6 +39,41 @@ test('malformed JSON and unsupported schemas do not prevent editor startup', () 
   }
 });
 
+test('style and scene persist independently for every combination', () => {
+  const storage = memory();
+  for (const sceneMode of ['website', 'studio']) {
+    for (const style of ['pink', 'white']) {
+      const chosen = { ...defaults, sceneMode, style, motion: 'off', background: '#123ABC' };
+      assert.equal(savePreferences(chosen, storage), true);
+      const restored = loadPreferences(storage);
+      assert.equal(restored.style, style);
+      assert.equal(restored.sceneMode, sceneMode);
+      assert.equal(restored.motion, 'off');
+      assert.equal(restored.background, '#123ABC');
+      assert.equal(JSON.parse(storage.values.get(PREFERENCES_KEY)).preferences.style, style);
+    }
+  }
+});
+
+test('legacy and invalid styles default to pink without changing the selected scene', () => {
+  const storage = memory();
+  assert.equal(defaults.style, 'pink');
+  for (const sceneMode of ['website', 'studio']) {
+    const legacy = { ...defaults, sceneMode, motion: 'off' };
+    delete legacy.style;
+    storage.setItem(PREFERENCES_KEY, JSON.stringify({ version: 1, preferences: legacy }));
+    assert.equal(loadPreferences(storage).style, 'pink');
+    assert.equal(loadPreferences(storage).sceneMode, sceneMode);
+    assert.equal(loadPreferences(storage).motion, 'off');
+    for (const style of ['studio', 'website', 'WHITE', '', null, 1, true, {}]) {
+      const restored = parsePreferences({ ...legacy, style });
+      assert.equal(restored.style, 'pink');
+      assert.equal(restored.sceneMode, sceneMode);
+      assert.equal(restored.motion, 'off');
+    }
+  }
+});
+
 test('high-resolution transparent story exports persist while legacy records remain opaque', () => {
   const storage = memory();
   for (const resolution of [4096, 8129]) {

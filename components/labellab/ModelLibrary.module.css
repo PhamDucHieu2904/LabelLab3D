@@ -1,0 +1,102 @@
+/* Card proportions and color follow the supplied Demo.svg. Keep the whole
+   card enclosed, with a white image well and centered packaging captions. */
+.grid:global(.models-grid) {
+  --card-surface: #ea3b6d;
+  --card-ink: #fff;
+  --card-line: rgb(255 255 255 / 85%);
+  --card-accent: #a8244a;
+  gap: 8px;
+  align-items: start;
+}
+
+.grid[data-tone="white"] {
+  --card-surface: #f3f1f2;
+  --card-ink: #403a43;
+  --card-line: #bfb8c0;
+  --card-accent: #665365;
+}
+
+.grid[data-tone="neutral"] {
+  --card-surface: #eceef0;
+  --card-ink: #292c30;
+  --card-line: #bfc5cb;
+  --card-accent: #35393f;
+}
+
+.grid:global(.models-grid) .card:global(.model-card) {
+  min-width: 0;
+  padding: 5.75px;
+  overflow: hidden;
+  border: 0.5px solid var(--card-line);
+  border-radius: 8px;
+  color: var(--card-ink);
+  background: var(--card-surface);
+  text-align: center;
+  box-shadow: none;
+  text-shadow: none;
+  transition: border-color 160ms ease;
+}
+
+.grid:global(.models-grid) .card:global(.model-card):hover,
+.grid:global(.models-grid) .card:global(.model-card)[aria-pressed="true"] {
+  border-color: var(--card-ink);
+}
+
+.grid:global(.models-grid) .card:global(.model-card):focus-visible {
+  outline: 2px solid var(--card-ink);
+  outline-offset: 3px;
+}
+
+.grid:global(.models-grid) .card:global(.model-card) .image {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 102.52 / 117.16;
+  border: 0;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.grid:global(.models-grid) .card:global(.model-card) .image img {
+  width: 86%;
+  height: 88%;
+  object-fit: contain;
+  mix-blend-mode: normal;
+  transform: none;
+}
+
+.grid:global(.models-grid) .card:global(.model-card) .name {
+  display: block;
+  margin: 7px 0 0;
+  color: var(--card-ink);
+  font-family: var(--font-mona-sans), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  font-stretch: 87.5%;
+  line-height: 1.1;
+  letter-spacing: 0;
+  text-shadow: none;
+  text-transform: uppercase;
+}
+
+.grid:global(.models-grid) .card:global(.model-card) .caption {
+  display: block;
+  margin: 1px 0 0;
+  color: var(--card-ink);
+  font-family: var(--font-ui);
+  font-size: 9px;
+  font-weight: 300;
+  line-height: 1.15;
+  letter-spacing: 0;
+  text-shadow: none;
+}
+
+.grid:global(.models-grid) .card:global(.model-card) :global(.selected-check) {
+  top: 5px;
+  right: 5px;
+  width: 16px;
+  height: 16px;
+  color: #fff;
+  background: var(--card-accent);
+  box-shadow: none;
+}

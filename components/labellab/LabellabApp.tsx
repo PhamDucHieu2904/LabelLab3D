@@ -15,8 +15,6 @@ import {
   FolderOpen,
   Globe2,
   Grid2X2,
-  ImagePlus,
-  LoaderCircle,
   Maximize2,
   Minus,
   Move3D,
@@ -49,6 +47,9 @@ import {
   releaseLocalArtwork,
 } from "@/lib/labellab/local-artwork";
 import type { MockupStatus, MockupCameraPreset } from "@/lib/mockup/contracts";
+import { UNITY_CAMERA_PRESETS } from "@/lib/mockup/unity-camera-presets";
+import studioTheme from "./StudioNeutral.module.css";
+import modelLibrary from "./ModelLibrary.module.css";
 import SceneCanvas, { type SceneCanvasHandle } from "./SceneCanvas";
 import MovingGrid from "./MovingGrid";
 import RenderPanel from "./RenderPanel";
@@ -145,6 +146,7 @@ export default function LabellabApp() {
   );
   const model = getLabModel(settings.modelId);
   const studio = settings.sceneMode === "studio";
+  const whiteStyle = settings.style === "white";
   const ready = status === "ready";
   const models = LAB_MODELS.filter(
     (item) =>
@@ -174,10 +176,10 @@ export default function LabellabApp() {
     setSettings(initial);
     setActiveCamera(
       initial.sceneMode === "studio"
-        ? "three-quarter"
+        ? "view-4"
         : initial.motion === "showcase"
           ? "animated"
-          : "front",
+          : "view-1",
     );
     setProjects(readProjects());
     if (params.get("panel") === "projects") setModal("projects");
@@ -308,10 +310,10 @@ export default function LabellabApp() {
     if (exportBusy) return;
     setActiveCamera(
       mode === "studio"
-        ? "three-quarter"
+        ? "view-4"
         : settings.motion === "showcase"
           ? "animated"
-          : "front",
+          : "view-1",
     );
     setSettings((value) => ({ ...value, sceneMode: mode }));
   };
@@ -336,11 +338,12 @@ export default function LabellabApp() {
       <SiteHeader activePage="studio" disabled={exportBusy} onOpenProjects={() => setModal("projects")} />
 
       <section
-        className={`creative-space ${studio ? "is-studio" : ""}`}
-        style={{ "--scene-color": settings.background } as CSSProperties}
+        className={`creative-space ${studio ? `is-studio ${studioTheme.theme}` : ""}`}
+        data-style={settings.style}
+        style={{ "--scene-color": studio || whiteStyle ? "#ffffff" : settings.background } as CSSProperties}
         id="workspace"
       >
-        <MovingGrid enabled={settings.grid && !studio} />
+        <MovingGrid enabled={settings.grid && !studio} style={settings.style} />
         <div className="workspace-heading">
           <div>
             <div className="eyebrow">
@@ -379,16 +382,6 @@ export default function LabellabApp() {
               >
                 <Palette size={18} />
                 <span>Artwork</span>
-              </button>
-              <button
-                className={activeTool === "scene" ? "is-active" : ""}
-                aria-pressed={activeTool === "scene"}
-                aria-label="Scene settings"
-                title="Scene settings"
-                onClick={() => selectTool("scene")}
-              >
-                <Grid2X2 size={18} />
-                <span>Scene</span>
               </button>
               <button
                 className={activeTool === "materials" ? "is-active" : ""}
@@ -436,16 +429,20 @@ export default function LabellabApp() {
                       </button>
                     ))}
                   </div>
-                  <div className="models-grid">
+                  <div
+                    className={`models-grid ${modelLibrary.grid}`}
+                    data-tone={studio ? "neutral" : settings.style}
+                  >
                     {models.map((item, index) => (
                       <button
-                        className={`model-card ${item.id === model.id ? "selected" : ""}`}
+                        className={`model-card ${modelLibrary.card} ${item.id === model.id ? "selected" : ""}`}
                         key={item.id}
+                        aria-label={`${item.name}, ${item.volume}, ${item.category === "can" ? "aluminum can" : item.category === "glass" ? "glass bottle" : "PET bottle"}`}
                         aria-pressed={item.id === model.id}
                         onClick={() => chooseModel(item.id)}
                       >
                         <div
-                          className={`model-image model-image-${item.category}`}
+                          className={`model-image ${modelLibrary.image}`}
                         >
                           <img
                             src={item.poster}
@@ -457,22 +454,16 @@ export default function LabellabApp() {
                               <Check size={12} />
                             </span>
                           )}
-                          <span className="model-kind">
-                            {item.category === "glass"
-                              ? "GLASS"
-                              : item.category === "pet"
-                                ? "PET"
-                                : "ALUMINUM"}
-                          </span>
                         </div>
-                        <strong>{item.name}</strong>
-                        <span>
-                          {item.volume} <span className="model-dot">·</span>{" "}
-                          {item.category === "glass"
-                            ? "Basil seed"
+                        <strong className={modelLibrary.name}>
+                          {item.volume} {item.category === "can" ? "CAN" : "BOTTLE"}
+                        </strong>
+                        <span className={modelLibrary.caption}>
+                          ({item.category === "glass"
+                            ? "Glass bottle"
                             : item.category === "can"
-                              ? "Standard can"
-                              : "Short label"}
+                              ? "Alu can"
+                              : "PET bottle"})
                         </span>
                       </button>
                     ))}
@@ -509,6 +500,7 @@ export default function LabellabApp() {
                   </p>
                   <button
                     className="outline-button"
+                    disabled={uploadBusy}
                     onClick={() => uploadRef.current?.click()}
                   >
                     <Upload size={16} /> Choose artwork
@@ -520,24 +512,6 @@ export default function LabellabApp() {
                   )}
                 </div>
               )}
-              <button
-                className="upload-card"
-                disabled={uploadBusy}
-                onClick={() => uploadRef.current?.click()}
-              >
-                {uploadBusy ? (
-                  <LoaderCircle className="spinning" size={20} />
-                ) : (
-                  <ImagePlus size={22} />
-                )}
-                <span>
-                  <strong>
-                    {uploadBusy ? "Loading artwork..." : "Your artwork"}
-                  </strong>
-                  <small>PNG, JPG, WebP · up to 15 MB</small>
-                </span>
-                <Plus size={16} />
-              </button>
               <input
                 ref={uploadRef}
                 className="sr-only"
@@ -557,7 +531,7 @@ export default function LabellabApp() {
               ref={stageRef}
             >
               <div className="scene-layer" aria-label="3D scene">
-                {!studio && settings.highlight && (
+                {!studio && !whiteStyle && settings.highlight && (
                   <div className="product-highlight" aria-hidden="true" />
                 )}
                 <div className="scene-area">
@@ -588,6 +562,27 @@ export default function LabellabApp() {
                     </button>
                   </div>
                   <div className="studio-project-actions" role="group" aria-label="Project actions">
+                    {!studio && <div className="studio-style-switch" role="group" aria-label="Preview style">
+                      <span>Style</span>
+                      <div className="studio-style-track">
+                        <button
+                          type="button"
+                          className={!whiteStyle ? "is-active" : ""}
+                          aria-pressed={!whiteStyle}
+                          onClick={() => update("style", "pink")}
+                        >
+                          Pink
+                        </button>
+                        <button
+                          type="button"
+                          className={whiteStyle ? "is-active" : ""}
+                          aria-pressed={whiteStyle}
+                          onClick={() => update("style", "white")}
+                        >
+                          White
+                        </button>
+                      </div>
+                    </div>}
                     <button type="button" onClick={reset} aria-label="Restore default scene" title="Restore default scene">
                       <RotateCcw size={16} /><span>Restore defaults</span>
                     </button>
@@ -598,23 +593,23 @@ export default function LabellabApp() {
                 </div>
                 <div className="vertical-tools">
                   <button
-                    aria-label="Front view"
-                    title="Front view"
+                    aria-label="View 1"
+                    title="View 1"
                     onClick={() => {
-                      setActiveCamera("front");
+                      setActiveCamera("view-1");
                       update("motion", "off");
-                      sceneRef.current?.camera("front");
+                      sceneRef.current?.camera("view-1");
                     }}
                   >
                     <Box size={17} />
                   </button>
                   <button
-                    aria-label="Three-quarter view"
-                    title="Three-quarter view"
+                    aria-label="View 4"
+                    title="View 4"
                     onClick={() => {
-                      setActiveCamera("three-quarter");
+                      setActiveCamera("view-4");
                       update("motion", "off");
-                      sceneRef.current?.camera("three-quarter");
+                      sceneRef.current?.camera("view-4");
                     }}
                   >
                     <Move3D size={17} />
@@ -687,14 +682,7 @@ export default function LabellabApp() {
                     </div>
                     <div className="camera-mode-frame camera-mode-frame-green">
                     <div className="camera-preset-list" aria-label="Idle camera angles">
-                      {([
-                        ["front", "Front"],
-                        ["three-quarter", "3/4"],
-                        ["left", "Left"],
-                        ["right", "Right"],
-                        ["back", "Back"],
-                        ["top", "Top"],
-                      ] as const).map(([preset, label]) => (
+                      {UNITY_CAMERA_PRESETS.map(({ id: preset, label }) => (
                         <button
                           key={preset}
                           className={`camera-preset ${activeCamera === preset ? "is-active" : ""}`}
@@ -735,6 +723,7 @@ export default function LabellabApp() {
             </div>
 
             <aside
+              id="material-settings-panel"
               className={`controls-panel tool-panel ${activeTool === "scene" || activeTool === "materials" ? "is-open" : ""}`}
               data-active-tool={activeTool ?? ""}
               aria-label="Scene and material settings"
@@ -832,7 +821,10 @@ export default function LabellabApp() {
                     aria-pressed={studio || settings.motion === "off"}
                     onClick={() => {
                       update("motion", "off");
-                      if (activeCamera === "animated") setActiveCamera("front");
+                      if (activeCamera === "animated") {
+                        setActiveCamera("view-1");
+                        sceneRef.current?.camera("view-1");
+                      }
                     }}
                   >
                     <Circle size={15} />
@@ -921,6 +913,8 @@ export default function LabellabApp() {
               progress={renderProgress}
               onRender={() => void exportPreview()}
               result={exportResult}
+              onOpenMaterials={() => setActiveTool("materials")}
+              materialsOpen={activeTool === "materials"}
             />
           </div>
         </div>
@@ -986,10 +980,10 @@ export default function LabellabApp() {
                       setSettings(project.settings);
                       setActiveCamera(
                         project.settings.sceneMode === "studio"
-                          ? "three-quarter"
+                          ? "view-4"
                           : project.settings.motion === "showcase"
                             ? "animated"
-                            : "front",
+                            : "view-1",
                       );
                       setProjectName(project.name);
                       setModal(null);

@@ -2,17 +2,24 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Bell, Layers3 } from "lucide-react";
+import { Bell, Layers3, LogIn, LogOut } from "lucide-react";
 import { LABELLAB_UPDATES } from "@/lib/labellab/updates";
+import { useAuthDialog } from "./AuthDialog";
 import styles from "./SiteHeader.module.css";
 
 type SiteHeaderProps = {
   activePage: "home" | "studio";
   disabled?: boolean;
   onOpenProjects?: () => void;
+  isLoggedIn?: boolean;
+  onLogin?: () => void;
+  onLogout?: () => void;
 };
 
-export default function SiteHeader({ activePage, disabled = false, onOpenProjects }: SiteHeaderProps) {
+export default function SiteHeader({ activePage, disabled = false, onOpenProjects, isLoggedIn = false, onLogin, onLogout }: SiteHeaderProps) {
+  const openAuth = useAuthDialog();
+  const accountLabel = isLoggedIn ? "Log out" : "Login";
+  const AccountIcon = isLoggedIn ? LogOut : LogIn;
   return (
     <header className={styles.header} inert={disabled}>
       <Link className={styles.wordmark} href="/" aria-label="Labellab home">
@@ -23,7 +30,6 @@ export default function SiteHeader({ activePage, disabled = false, onOpenProject
         <Link href="/studio#workspace" aria-current={activePage === "studio" ? "page" : undefined}>Mockup Studio</Link>
       </nav>
       <div className={styles.actions}>
-        <span className={styles.preview}><span /> Early preview</span>
         <Link
           className={styles.projects}
           href="/studio?panel=projects#workspace"
@@ -55,9 +61,14 @@ export default function SiteHeader({ activePage, disabled = false, onOpenProject
             </ul>
           </div>
         </details>
-        <Link className={styles.start} href="/studio#workspace" aria-label="Start designing">
-          <span>Start designing</span><ArrowRight className={styles.icon} aria-hidden="true" />
-        </Link>
+        <button
+          className={styles.start}
+          type="button"
+          aria-label={accountLabel}
+          onClick={isLoggedIn ? onLogout : (onLogin ?? (() => openAuth("login")))}
+        >
+          <span>{accountLabel}</span><AccountIcon className={styles.icon} aria-hidden="true" />
+        </button>
       </div>
     </header>
   );

@@ -1,0 +1,112 @@
+.card {
+  display: grid;
+  grid-template-rows: auto auto minmax(76px, 1fr);
+  gap: clamp(10px, calc(16 * var(--home-unit)), 16px);
+  padding: clamp(14px, calc(24 * var(--home-unit)), 24px);
+  color: #633047;
+}
+
+.headingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.titleBlock { min-width: 0; }
+.titleBlock h2 {
+  margin: 0;
+  font-size: clamp(22px, calc(30 * var(--home-unit)), 30px);
+  line-height: 1.12;
+  font-weight: 700;
+}
+.titleBlock p {
+  margin: 5px 0 0;
+  color: #795365;
+  font-size: 15px;
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+.coinArt {
+  flex: 0 0 auto;
+  width: clamp(44px, calc(56 * var(--home-unit)), 56px);
+  height: clamp(44px, calc(56 * var(--home-unit)), 56px);
+  object-fit: contain;
+}
+
+.markets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(189, 71, 110, .09);
+}
+.markets button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #795365;
+  cursor: pointer;
+}
+.markets button[aria-pressed="true"] {
+  background: #fff8fb;
+  color: #a12e56;
+}
+.marketLabel { font-size: 15px; font-weight: 650; line-height: 1.2; }
+.marketCurrency { font-size: 14px; line-height: 1.2; opacity: .8; }
+
+.packs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(6px, calc(12 * var(--home-unit)), 12px);
+  min-height: 76px;
+}
+.pack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 76px;
+  padding: 10px 4px;
+  border: 1px solid rgba(165, 70, 106, .16);
+  border-radius: 12px;
+  color: #6a334b;
+  background: rgba(255, 255, 255, .28);
+  cursor: pointer;
+}
+.pack[aria-pressed="true"] {
+  border-color: #bf416a;
+  background: rgba(213, 69, 107, .1);
+  color: #962e51;
+}
+.coinRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.coinRow img { width: 20px; height: 20px; object-fit: contain; }
+.coinRow strong { font-size: clamp(18px, calc(24 * var(--home-unit)), 24px); line-height: 1.1; }
+.coinRow span { font-size: 15px; line-height: 1.2; }
+.price { font-size: clamp(16px, calc(18 * var(--home-unit)), 18px); line-height: 1.2; white-space: nowrap; }
+.price strong { font-weight: 600; }
+.markets button:hover, .pack:hover { background-color: rgba(255, 255, 255, .65); }
+.markets button:focus-visible, .pack:focus-visible { outline: 2px solid #9c2751; outline-offset: 3px; }
+
+@media (max-width: 860px) {
+  .card { grid-template-rows: auto auto auto; gap: 14px; padding: 20px; }
+  .markets button { min-height: 44px; }
+  .packs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .pack { min-height: 86px; }
+}

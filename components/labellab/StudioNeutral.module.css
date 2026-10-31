@@ -1,0 +1,89 @@
+/* Scene 2 has its own fixed neutral UI. Scene 1's saved pink/white preference
+   stays intact and takes effect again when returning to that scene. */
+.theme:global(.creative-space.is-studio) {
+  --studio-ink: #292c30;
+  --studio-muted: #61666d;
+  --studio-line: #dcdfe2;
+  --studio-soft: #eceef0;
+  --studio-charcoal: #35393f;
+  --studio-surface: rgb(250 251 252 / 92%);
+  color: var(--studio-ink);
+  background: #fff;
+}
+
+.theme:global(.creative-space.is-studio) :global(.preview-stage:fullscreen) { background: #fff; }
+.theme:global(.creative-space.is-studio) :global(.editor-rail) {
+  color: #fff;
+  border-color: #ffffff36;
+  background: rgb(53 57 63 / 94%);
+  box-shadow: 0 12px 28px #1d232b17;
+  backdrop-filter: blur(20px);
+}
+.theme:global(.creative-space.is-studio) :global(.editor-rail button) { color: #e7e9ec; background: transparent; }
+.theme:global(.creative-space.is-studio) :global(.editor-rail button:hover:not(:disabled)) { color: #fff; background: #ffffff1a; }
+.theme:global(.creative-space.is-studio) :global(.editor-rail button.is-active) { color: var(--studio-ink); background: #fff; box-shadow: none; }
+.theme:global(.creative-space.is-studio) :global(.editor-rail-divider) { background: #ffffff26; }
+
+.theme:global(.creative-space.is-studio) :global(:is(.library-panel, .controls-panel, .render-panel)) {
+  color: var(--studio-ink);
+  border-color: var(--studio-line);
+  background: var(--studio-surface);
+  box-shadow: 0 12px 32px #1d232b0d;
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+}
+.theme:global(.creative-space.is-studio) :global(:is(.library-panel, .controls-panel) .panel-title h2),
+.theme:global(.creative-space.is-studio) :global(:is(.library-panel, .controls-panel) .panel-title h2 svg),
+.theme:global(.creative-space.is-studio) :global(:is(.model-card > strong, .control-heading h3, .range-field output, .artwork-library > strong)) { color: var(--studio-ink); }
+.theme:global(.creative-space.is-studio) :global(:is(.settings-caption, .model-card > span, .control-heading, .control-heading svg, .color-field, .color-value > span, .toggle-row, .range-field > div, .advanced-materials summary, .library-bottom, .library-bottom > span:last-child, .artwork-library, .artwork-library p, .upload-card strong, .upload-card small, .quiet-button, .empty-state, .empty-state button, .studio-info, .studio-info small)) { color: var(--studio-muted); }
+.theme:global(.creative-space.is-studio) :global(:is(.count-badge, .pro-tag, .file-tag)) { color: var(--studio-muted); border-color: var(--studio-line); background: var(--studio-soft); }
+.theme:global(.creative-space.is-studio) :global(:is(.search-box, .upload-card, .library-tabs, .artwork-library .outline-button, .artwork-library .quiet-button)) { color: var(--studio-ink); border-color: var(--studio-line); background: #ffffffb3; }
+.theme:global(.creative-space.is-studio) :global(.search-box input) { color: var(--studio-ink); }
+.theme:global(.creative-space.is-studio) :global(.search-box input::placeholder) { color: var(--studio-muted); }
+.theme:global(.creative-space.is-studio) :global(.search-box:focus-within) { border-color: #777e87; box-shadow: 0 0 0 2px #35393f14; }
+.theme:global(.creative-space.is-studio) :global(:is(.library-tabs button, .category-filters button)) { color: var(--studio-muted); }
+.theme:global(.creative-space.is-studio) :global(:is(.library-tabs button, .category-filters button):hover) { color: var(--studio-ink); background: var(--studio-soft); }
+.theme:global(.creative-space.is-studio) :global(:is(.library-tabs button, .category-filters button)[aria-pressed="true"]) { color: #fff; border-color: var(--studio-charcoal); background: var(--studio-charcoal); box-shadow: none; }
+.theme:global(.creative-space.is-studio) :global(.selected-check) { color: #fff; background: var(--studio-charcoal); }
+.theme:global(.creative-space.is-studio) :global(.model-kind) { color: #4d535b; }
+.theme:global(.creative-space.is-studio) :global(.tiny-dot) { background: #89919a; }
+.theme:global(.creative-space.is-studio) :global(:is(.control-section, .advanced-materials, .artwork-thumbnail, .range-field output, input[type="color"])) { border-color: var(--studio-line); }
+.theme:global(.creative-space.is-studio) :global(:is(.artwork-library .outline-button, .artwork-library .quiet-button):hover) { background: var(--studio-soft); }
+.theme:global(.creative-space.is-studio) :global(.toggle-track) { background: #cfd3d8; }
+.theme:global(.creative-space.is-studio) :global(.toggle-track.on) { background: var(--studio-charcoal); }
+.theme:global(.creative-space.is-studio) :global(.range-field input) { background: linear-gradient(to right, #626972 0%, #626972 var(--range-fill), #dde1e5 var(--range-fill), #dde1e5 100%); }
+.theme:global(.creative-space.is-studio) :global(.range-field input::-webkit-slider-thumb) { border-color: #626972; box-shadow: 0 1px 3px #1d232b20; }
+.theme:global(.creative-space.is-studio) :global(.range-field input::-moz-range-thumb) { border-color: #626972; box-shadow: 0 1px 3px #1d232b20; }
+.theme:global(.creative-space.is-studio) :global(.motion-options button) { border-color: var(--studio-line); background: #fff; }
+.theme:global(.creative-space.is-studio) :global(:is(.motion-options button, .motion-options button strong, .motion-options button small)) { color: var(--studio-muted); }
+.theme:global(.creative-space.is-studio) :global(.motion-options button[aria-pressed="true"]) { color: var(--studio-ink); border-color: #8b929a; background: var(--studio-soft); }
+
+.theme:global(.creative-space.is-studio) :global(:is(.mode-switch, .zoom-tools)) { border-color: var(--studio-line); background: #f5f6f7e6; box-shadow: 0 3px 12px #1d232b08; }
+.theme:global(.creative-space.is-studio) :global(:is(.mode-switch button, .zoom-tools button)) { color: var(--studio-muted); background: transparent; }
+.theme:global(.creative-space.is-studio) :global(.mode-switch button[aria-pressed="true"]) { color: #fff; background: var(--studio-charcoal); box-shadow: none; }
+.theme:global(.creative-space.is-studio) :global(.zoom-tools > span) { background: #cfd3d8; }
+.theme:global(.creative-space.is-studio) :global(:is(.studio-project-actions > button, .vertical-tools button)) { color: #4d535b; border-color: var(--studio-line); background: #f5f6f7df; box-shadow: none; }
+.theme:global(.creative-space.is-studio) :global(:is(.studio-project-actions > button, .vertical-tools button, .zoom-tools button):hover:not(:disabled)) { color: var(--studio-ink); background: #e5e8eb; }
+.theme:global(.creative-space.is-studio) :global(.camera-dpad) { color: var(--studio-muted); border-color: var(--studio-line); background: #f5f6f7df; }
+
+.theme:global(.creative-space.is-studio) :global(.camera-presets) { background: #e8eaede8; border-color: var(--studio-line); box-shadow: 0 4px 16px #1d232b12; }
+.theme:global(.creative-space.is-studio) :global(.camera-mode-frame-green) { border-color: #afb5bd; }
+.theme:global(.creative-space.is-studio) :global(.camera-mode-frame .camera-preset) { color: #4d535b; background: transparent; }
+.theme:global(.creative-space.is-studio) :global(.camera-mode-frame .camera-preset:hover:not(:disabled)) { color: var(--studio-ink); background: #d8dde2; }
+.theme:global(.creative-space.is-studio) :global(.camera-mode-frame .camera-preset.is-active) { color: #fff; background: var(--studio-charcoal); }
+.theme:global(.creative-space.is-studio) :global(.camera-mode-frame .camera-preset.animated-preset) { color: #737981; background: #f5f6f7; }
+
+.theme:global(.creative-space.is-studio) :global(.render-panel-preview) { border-color: var(--studio-line); background-color: #fff; }
+.theme:global(.creative-space.is-studio) :global(.render-panel-fields select) { color: var(--studio-ink); border-color: #d1d5da; background: #fff; }
+.theme:global(.creative-space.is-studio) :global(.render-panel-toggle input) { border-color: #c1c7ce; background: #cfd3d8; }
+.theme:global(.creative-space.is-studio) :global(.render-panel-toggle input:checked) { border-color: var(--studio-charcoal); background: var(--studio-charcoal); }
+.theme:global(.creative-space.is-studio) :global(.render-panel-toggle input::after),
+.theme:global(.creative-space.is-studio) :global(.render-panel-toggle input:checked::after) { background: #fff; box-shadow: 0 1px 3px #1d232b26; }
+.theme:global(.creative-space.is-studio) :global(.render-panel-submit) { color: #fff; background: var(--studio-charcoal); border: 0; box-shadow: none; }
+.theme:global(.creative-space.is-studio) :global(.render-panel-submit:not(:disabled):hover) { color: #fff; background: #24272c; box-shadow: none; }
+.theme:global(.creative-space.is-studio) :global(.render-panel-cost) { color: #f1f2f4; }
+.theme:global(.creative-space.is-studio) :global(.render-panel-progress progress) { accent-color: #626972; }
+.theme:global(.creative-space.is-studio) :global(.render-panel-loading) { color: var(--studio-muted); background: #f0f2f4cc; }
+.theme:global(.creative-space.is-studio) :global(.material-properties-button) { color: var(--studio-ink); border-color: var(--studio-line); background: var(--studio-surface); }
+.theme:global(.creative-space.is-studio) :global(.material-properties-button:hover:not(:disabled)) { background: var(--studio-soft); }
+.theme:global(.creative-space.is-studio) :global(:is(button, a, select, input, summary):focus-visible) { outline: 2px solid #6f7781; outline-offset: 3px; }

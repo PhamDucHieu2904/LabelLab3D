@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { backgroundConfig, labellabWhiteIconUrl } from "@/lib/background-config";
+import { backgroundConfig } from "@/lib/background-config";
 import { backgroundTileUrl } from "@/lib/background-render-state";
-import { loadBackgroundTile } from "@/lib/background-image-tile";
+import { loadStyleGridTile } from "@/lib/labellab/style-background";
+import type { ScenePreferences } from "@/lib/labellab/preferences";
 import {
   BackgroundAutodrift,
   backgroundPointerVelocity,
@@ -15,18 +16,16 @@ const tile = backgroundTileUrl("berry", {
   lineOpacity: 0.2,
   iconOpacity: 0.42,
 });
-const brandTileTheme = { id: "labellab", color: "#ffffff", icon: "berry", iconUrl: labellabWhiteIconUrl } as const;
-
-export default function MovingGrid({ enabled }: { enabled: boolean }) {
+export default function MovingGrid({ enabled, style = "pink" }: { enabled: boolean; style?: ScenePreferences["style"] }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [gridTile, setGridTile] = useState(tile);
   useEffect(() => {
     let alive = true;
-    void loadBackgroundTile(brandTileTheme, { ...backgroundConfig, lineOpacity: 0.2, iconOpacity: 0.42 })
+    void loadStyleGridTile(style)
       .then((value) => { if (alive) setGridTile(value); })
       .catch(() => {});
     return () => { alive = false; };
-  }, []);
+  }, [style]);
   useEffect(() => {
     const track = trackRef.current;
     if (!track || !enabled) return;

@@ -20,12 +20,16 @@ import { renderBottleScene } from '../viewer/bottle-materials';
 import { setBottleBackdrop } from '../viewer/bottle-backdrop';
 import { setBasilHighBackdrop } from '../viewer/basil-bottle-materials';
 import { isBasilHighAsset, basilHighPresentation } from '../viewer/basil-presentation';
-import { fitMockupCamera, mockupCameraDirection, mockupOrbitBounds, mockupShowcaseBounds, normalizeMockupAspect } from './camera';
+import { fitMockupCamera, mockupCameraDirection, mockupOrbitBounds, mockupShowcaseBounds, normalizeMockupAspect, unityMockupCameraFocus } from './camera';
+import { UNITY_CAMERA_SMOOTH_TIME, unityCameraDestination, unitySmoothDamp, unitySmoothDampAngle, type UnityCameraPresetId } from './unity-camera-presets';
+import { updateMockupProductDepthRange } from './depth-range';
 import { MOCKUP_FOCAL_FOV } from './focal-length';
 import { centeredMockupCrop, createMockupCaptureGate, createMockupTiles, encodeMockupCanvasPng, flipMockupPixels, mockupAbortError, mockupCaptureSize } from './capture';
 import { disposeMockupDetachedTextures, neutralizeMockupLabelArtwork } from './appearance';
 import { createBasilNeckExport } from './basil-neck-export';
 import { createRefractiveBackdrop, type RefractiveBackdropRegion } from './refractive-backdrop';
+import { createExportRefractionSession } from './export-refraction';
+import { createRefractionAtlas, projectedRefractionRect } from './refraction-atlas';
 import { mockupModelKey, mockupSelectionKey } from './selection';
 import { createStudioGround } from '../labellab/studio-ground';
 import type { MockupAnimation, MockupBackdropPainter, MockupBackground, MockupCameraPreset, MockupFocalPreset, MockupRuntime, MockupRuntimeOptions, MockupRenderPreviewOptions, MockupStatus } from './contracts';
@@ -78,6 +82,9 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   let sceneMode: 'website' | 'studio' = 'website';
   let websiteBackground: MockupBackground = { type: 'white' };
   const camera = new THREE.PerspectiveCamera(30, 1, 0.0001, 100);
+  camera.zoom = Number.isFinite(options.displayScale)
+    ? THREE.MathUtils.clamp(options.displayScale!, 0.5, 2) : 1;
+  camera.updateProjectionMatrix();
   camera.position.set(0, 0.01, 0.4);
   // Three caches transmission buffers per camera ID; reuse one export camera
   // so repeated PNG captures do not retain another full-size buffer each time.
@@ -101,7 +108,8 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   let returnFrom: THREE.Quaternion | null = null;
   const controls = new OrbitControls(camera, canvas);
   controls.enablePan = false;
-  controls.enableDamping = false;
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
   controls.minPolarAngle = 0.04; controls.maxPolarAngle = Math.PI - 0.04;
   controls.rotateSpeed = 0.65; controls.zoomSpeed = 0.8;
   // Page scrolling and browser pinch zoom remain available over the preview.
@@ -144,8 +152,16 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     fromTarget: THREE.Vector3;
     toPosition: THREE.Vector3;
     toTarget: THREE.Vector3;
+    fromFov: number;
+    toFov: number;
     startedAt: number;
     duration: number;
+    unity?: {
+      yaw: number; pitch: number; distance: number;
+      toYaw: number; toPitch: number;
+      yawVelocity: number; pitchVelocity: number; distanceVelocity: number; fovVelocity: number;
+      targetVelocity: THREE.Vector3;
+    };
   } | null = null;
   let raf = 0;
   let dirty = true;
@@ -170,6 +186,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     backgroundTop: { value: new THREE.Color('#ffffff') },
     backgroundBottom: { value: new THREE.Color('#ffffff') },
     backgroundAlpha: { value: 1 },
+    outputRegion: { value: new THREE.Vector4(0, 0, 1, 1) },
     studioMatte: { value: null as THREE.Texture | null },
     studioMatteEnabled: { value: 0 },
     basilNeckEnabled: { value: 0 },
@@ -180,7 +197,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     name: 'Mockup PNG output', uniforms: outputUniforms,
     vertexShader: OutputShader.vertexShader,
     fragmentShader: OutputShader.fragmentShader
-      .replace('uniform sampler2D tDiffuse;', 'uniform sampler2D tDiffuse;\nuniform sampler2D studioMatte;\nuniform float studioMatteEnabled;\nuniform vec3 backgroundTop;\nuniform vec3 backgroundBottom;\nuniform float backgroundAlpha;\nuniform float basilNeckEnabled;\nuniform sampler2D basilNeckRadiance;\nuniform sampler2D basilNeckCoverage;')
+      .replace('uniform sampler2D tDiffuse;', 'uniform sampler2D tDiffuse;\nuniform sampler2D studioMatte;\nuniform float studioMatteEnabled;\nuniform vec3 backgroundTop;\nuniform vec3 backgroundBottom;\nuniform float backgroundAlpha;\nuniform vec4 outputRegion;\nuniform float basilNeckEnabled;\nuniform sampler2D basilNeckRadiance;\nuniform sampler2D basilNeckCoverage;')
       .replace('gl_FragColor = texture2D( tDiffuse, vUv );', 'gl_FragColor = texture2D( tDiffuse, vUv );\nif (gl_FragColor.a > 0.00001) gl_FragColor.rgb /= gl_FragColor.a; else gl_FragColor.rgb = vec3(0.0);')
       .replace('// color space', `
         // GlassNeckExportScope: tone radiance first, then reserve its alpha
@@ -198,7 +215,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
           }
         }
         // color space`)
-      .replace(/\}\s*$/, '\nvec3 backdrop = studioMatteEnabled > .5 ? texture2D(studioMatte, vUv).rgb : mix(backgroundBottom, backgroundTop, vUv.y);\n#ifdef SRGB_TRANSFER\nbackdrop = sRGBTransferOETF(vec4(backdrop, 1.0)).rgb;\n#endif\nif (backgroundAlpha > 0.5) { gl_FragColor.rgb = mix(backdrop, gl_FragColor.rgb, gl_FragColor.a); gl_FragColor.a = 1.0; }\n}'),
+      .replace(/\}\s*$/, '\nvec3 backdrop = studioMatteEnabled > .5 ? texture2D(studioMatte, vUv).rgb : mix(backgroundBottom, backgroundTop, outputRegion.y + vUv.y * outputRegion.w);\n#ifdef SRGB_TRANSFER\nbackdrop = sRGBTransferOETF(vec4(backdrop, 1.0)).rgb;\n#endif\nif (backgroundAlpha > 0.5) { gl_FragColor.rgb = mix(backdrop, gl_FragColor.rgb, gl_FragColor.a); gl_FragColor.a = 1.0; }\n}'),
     defines: { NEUTRAL_TONE_MAPPING: '', SRGB_TRANSFER: '' },
     depthTest: false, depthWrite: false, blending: THREE.NoBlending,
   });
@@ -207,8 +224,11 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   const previewBackdrop = createRefractiveBackdrop();
   const thumbnailBackdrop = createRefractiveBackdrop(384);
   const captureBackdrop = createRefractiveBackdrop(1536);
+  let frozenCaptureBackdrop: THREE.Texture | null = null;
+  const captureBackdropRegion = new THREE.Vector4();
   const sampleDiagnostics = () => {
     host.dataset.renderFrames = String(renderFrames); host.dataset.frameMs = lastFrameMs.toFixed(2);
+    host.dataset.cameraNear = String(camera.near); host.dataset.cameraFar = String(camera.far);
     host.dataset.geometryCount = String(renderer.info.memory.geometries); host.dataset.textureCount = String(renderer.info.memory.textures);
     diagnosticsAt = performance.now();
   };
@@ -240,6 +260,18 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   });
   const renderTo = (linear: THREE.WebGLRenderTarget, output: THREE.WebGLRenderTarget | null, view: THREE.PerspectiveCamera, transparent = false,
     backdropSurface = previewBackdrop, paintBackground: MockupBackdropPainter | undefined = options.paintBackground, backdropRegion?: RefractiveBackdropRegion) => {
+    const region = outputUniforms.outputRegion.value;
+    if (backdropRegion) region.set(backdropRegion.x / backdropRegion.fullWidth,
+      (backdropRegion.fullHeight - backdropRegion.y - backdropRegion.height) / backdropRegion.fullHeight,
+      backdropRegion.width / backdropRegion.fullWidth, backdropRegion.height / backdropRegion.fullHeight);
+    else region.set(0, 0, 1, 1);
+    // Each live/thumbnail/export camera needs precision at its current distance,
+    // including every frame while a Unity view is still moving. active.bounds
+    // already includes the authored front yaw; only its animated parent remains.
+    if (active) {
+      product.updateWorldMatrix(true, false);
+      updateMockupProductDepthRange(view, active.bounds, product.matrixWorld, active.radius);
+    }
     // Render the display matte separately: white/grid must bypass product HDR
     // exposure and ACES/Neutral curves, including in exported PNGs.
     outputUniforms.studioMatteEnabled.value = 0;
@@ -254,13 +286,20 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       else studioMatteTarget.setSize(linear.width, linear.height);
       const previousToneMapping = renderer.toneMapping;
       const productVisible = product.visible;
+      const productNear = view.near;
       try {
         product.visible = false;
+        // The floor extends towards the eye. Give only this separate matte pass
+        // its close near plane; the print/glass pass keeps its precise product
+        // range. Changing Z clipping leaves camera rays and tile offsets intact.
+        view.near = Math.min(productNear, Math.max(0.00001, (active?.radius ?? 0.02) * 0.005));
+        if (view.near !== productNear) view.updateProjectionMatrix();
         renderer.toneMapping = THREE.NoToneMapping;
         renderer.setRenderTarget(studioMatteTarget); renderer.clear(); renderer.render(scene, view);
         outputUniforms.studioMatte.value = studioMatteTarget.texture;
         outputUniforms.studioMatteEnabled.value = 1;
       } finally {
+        if (view.near !== productNear) { view.near = productNear; view.updateProjectionMatrix(); }
         product.visible = productVisible;
         renderer.toneMapping = previousToneMapping;
       }
@@ -272,10 +311,13 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     // reservoir. Without it, Basil's water falls back to opaque white lighting.
     const refractive = active?.asset.packaging === 'glass' || active?.asset.packaging === 'pet';
     const opticalBackdrop = !transparent && refractive
-      ? studio ? studioMatteTarget?.texture ?? null
+      ? frozenCaptureBackdrop ?? (studio ? studioMatteTarget?.texture ?? null
         : paintBackground ? backdropSurface.update(linear.width, linear.height, paintBackground, backdropRegion) : null
+        )
       : null;
-    setBottleBackdrop(scene, opticalBackdrop);
+    if (frozenCaptureBackdrop && backdropRegion) captureBackdropRegion.copy(region);
+    else captureBackdropRegion.set(0, 0, 1, 1);
+    setBottleBackdrop(scene, opticalBackdrop, captureBackdropRegion);
     if (backdropSurface === previewBackdrop) host.dataset.backdropRefraction = opticalBackdrop ? 'true' : 'false';
     // The High integrator sees the selected studio matte before the final output pass.
     const solid = outputUniforms.backgroundAlpha.value > .5;
@@ -362,16 +404,50 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     raf = 0;
     if (!isVisible() || captureGate.busy) return;
     const dt = Math.min(0.06, Math.max(0, (now - lastTime) / 1000)); lastTime = now;
-    if (cameraTransition) {
-      const transition = cameraTransition;
-      const progress = THREE.MathUtils.clamp((now - transition.startedAt) / transition.duration, 0, 1);
-      const eased = progress * progress * (3 - 2 * progress);
-      camera.position.lerpVectors(transition.fromPosition, transition.toPosition, eased);
-      controls.target.lerpVectors(transition.fromTarget, transition.toTarget, eased);
+    const transitionAtFrame = cameraTransition;
+    if (transitionAtFrame) {
+      const transition = transitionAtFrame;
+      let complete = false;
+      if (transition.unity) {
+        const state = transition.unity;
+        const yaw = unitySmoothDampAngle(state.yaw, state.toYaw, state.yawVelocity, UNITY_CAMERA_SMOOTH_TIME, dt);
+        const pitch = unitySmoothDampAngle(state.pitch, state.toPitch, state.pitchVelocity, UNITY_CAMERA_SMOOTH_TIME, dt);
+        const distance = unitySmoothDamp(state.distance, transition.toPosition.distanceTo(transition.toTarget), state.distanceVelocity, UNITY_CAMERA_SMOOTH_TIME, dt);
+        const lens = unitySmoothDamp(camera.fov, transition.toFov, state.fovVelocity, UNITY_CAMERA_SMOOTH_TIME, dt);
+        state.yaw = yaw.value; state.yawVelocity = yaw.velocity;
+        state.pitch = pitch.value; state.pitchVelocity = pitch.velocity;
+        state.distance = distance.value; state.distanceVelocity = distance.velocity; state.fovVelocity = lens.velocity;
+        for (const axis of ['x', 'y', 'z'] as const) {
+          const pan = unitySmoothDamp(controls.target[axis], transition.toTarget[axis], state.targetVelocity[axis], UNITY_CAMERA_SMOOTH_TIME, dt);
+          controls.target[axis] = pan.value; state.targetVelocity[axis] = pan.velocity;
+        }
+        const yawRadians = THREE.MathUtils.degToRad(state.yaw), pitchRadians = THREE.MathUtils.degToRad(state.pitch);
+        camera.position.set(Math.sin(yawRadians) * Math.cos(pitchRadians), Math.sin(pitchRadians), Math.cos(yawRadians) * Math.cos(pitchRadians))
+          .multiplyScalar(state.distance).add(controls.target);
+        camera.fov = lens.value;
+        complete = camera.position.distanceTo(transition.toPosition) < 0.000001
+          && controls.target.distanceTo(transition.toTarget) < 0.000001 && Math.abs(camera.fov - transition.toFov) < 0.0001;
+        if (complete) {
+          camera.position.copy(transition.toPosition); controls.target.copy(transition.toTarget); camera.fov = transition.toFov;
+          host.dataset.cameraPresetState = 'settled';
+          host.dataset.cameraPosition = JSON.stringify(camera.position.toArray());
+          host.dataset.cameraTarget = JSON.stringify(controls.target.toArray());
+          host.dataset.productPose = JSON.stringify(product.quaternion.toArray());
+        }
+        host.dataset.cameraFov = String(camera.fov);
+      } else {
+        const progress = THREE.MathUtils.clamp((now - transition.startedAt) / transition.duration, 0, 1);
+        const eased = progress * progress * (3 - 2 * progress);
+        camera.position.lerpVectors(transition.fromPosition, transition.toPosition, eased);
+        controls.target.lerpVectors(transition.fromTarget, transition.toTarget, eased);
+        camera.fov = THREE.MathUtils.lerp(transition.fromFov, transition.toFov, eased);
+        complete = progress >= 1;
+      }
+      camera.updateProjectionMatrix();
       camera.lookAt(controls.target);
       controls.update();
       dirty = true;
-      if (progress >= 1) cameraTransition = null;
+      if (complete) cameraTransition = null;
     }
     if (moving()) {
       if (animation.mode === 'showcase') {
@@ -388,7 +464,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
           pose.multiply(spin.setFromAxisAngle(yawAxis, dt * animation.speed * settings.motion.idleSpeed));
         } else pose.slerp(targetPose, 1 - Math.exp(-dt * 10));
         product.quaternion.copy(pose);
-      } else product.rotation.y = (product.rotation.y + dt * animation.speed * 0.65) % (Math.PI * 2);
+      } else if (animation.mode === 'turntable' && animation.playing) product.rotation.y = (product.rotation.y + dt * animation.speed * 0.65) % (Math.PI * 2);
       dirty = true;
     }
     if (dirty && previewTarget && now - lastDraw >= 1000 / (mobile ? 30 : 60)) {
@@ -402,38 +478,66 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     }
     // OrbitControls may request a frame from its synchronous change event.
     // Reuse that request instead of starting a second animation chain.
-    if ((moving() || dirty) && !raf) raf = requestAnimationFrame(frame);
+    // The transition branch already synchronizes OrbitControls after moving
+    // the camera. Avoid damping it twice in the same frame.
+    const controlsMoving = transitionAtFrame ? false : controls.update();
+    if ((moving() || controlsMoving || dirty) && !raf) raf = requestAnimationFrame(frame);
   }
-  const fit = (preset?: MockupCameraPreset, animate = false) => {
+  const fit = (preset?: MockupCameraPreset, animate = false, targetFov = camera.fov, transitionDuration = 660) => {
     if (!active) return;
+    const authored = preset?.startsWith('view-') ? unityCameraDestination(preset as UnityCameraPresetId) : undefined;
+    if (authored) targetFov = authored.fieldOfView;
     const direction = sceneMode === 'studio' && preset === 'three-quarter' ? new THREE.Vector3(Math.sin(Math.PI / 4) * Math.cos(.34), Math.sin(.34), Math.cos(Math.PI / 4) * Math.cos(.34))
       : preset === 'front' && animation.mode === 'showcase' ? new THREE.Vector3(0, 0, 1)
       : preset ? mockupCameraDirection(preset)
       : camera.position.clone().sub(controls.target).normalize();
     const tilted = animation.mode === 'showcase' || Math.abs(product.rotation.x) + Math.abs(product.rotation.z) > 0.00001;
     const bounds = tilted ? mockupShowcaseBounds(active.bounds, animation.mode === 'showcase' ? rest : product.quaternion) : mockupOrbitBounds(active.bounds);
-    const nextDistance = fitMockupCamera(bounds, direction, aspect, camera.fov);
+    const nextDistance = authored ? authored.distanceMetres : fitMockupCamera(bounds, direction, aspect, targetFov);
     const ratio = preset ? 1 : camera.position.distanceTo(controls.target) / Math.max(fitDistance, 0.0001);
     fitDistance = nextDistance;
-    const nextTarget = active.bounds.getCenter(new THREE.Vector3());
+    const nextTarget = authored ? unityMockupCameraFocus(active.bounds, active.asset.src) : active.bounds.getCenter(new THREE.Vector3());
     const nextPosition = nextTarget.clone().addScaledVector(direction, nextDistance * Math.min(6, Math.max(0.45, ratio)));
     controls.minDistance = Math.max(active.radius * 1.1, nextDistance * 0.35);
     controls.maxDistance = nextDistance * 6;
-    camera.near = Math.max(0.00001, active.radius * 0.005);
     // Keep the full 12–20 m ground fade inside the frustum. Actual-metre
     // bottles otherwise fit with a 10 m far plane and expose a hard grid edge.
     camera.far = Math.max(sceneMode === 'studio' ? 30 : 10, nextDistance * 30);
-    camera.updateProjectionMatrix();
-    if (animate && preset) {
+    if (!animate) {
+      camera.fov = targetFov;
+      camera.updateProjectionMatrix();
+    }
+    if (animate && (preset || Math.abs(targetFov - camera.fov) > 0.001)) {
+      const prior = cameraTransition?.unity;
+      const relative = camera.position.clone().sub(controls.target);
       cameraTransition = {
         fromPosition: camera.position.clone(), fromTarget: controls.target.clone(),
         toPosition: nextPosition, toTarget: nextTarget,
-        startedAt: performance.now(), duration: 660,
+        fromFov: camera.fov, toFov: targetFov,
+        startedAt: performance.now(), duration: transitionDuration,
+        ...(authored ? { unity: {
+          yaw: THREE.MathUtils.radToDeg(Math.atan2(relative.x, relative.z)),
+          pitch: THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(relative.y / Math.max(relative.length(), 0.000001), -1, 1))),
+          distance: relative.length(), toYaw: authored.yawDegrees, toPitch: authored.pitchDegrees,
+          yawVelocity: prior?.yawVelocity ?? 0, pitchVelocity: prior?.pitchVelocity ?? 0,
+          distanceVelocity: prior?.distanceVelocity ?? 0, fovVelocity: prior?.fovVelocity ?? 0,
+          targetVelocity: prior?.targetVelocity.clone() ?? new THREE.Vector3(),
+        } } : {}),
       };
     } else {
       cameraTransition = null;
       controls.target.copy(nextTarget); camera.position.copy(nextPosition);
       camera.lookAt(controls.target); controls.update();
+    }
+    if (authored) {
+      host.dataset.cameraPreset = preset;
+      host.dataset.cameraPresetState = animate ? 'moving' : 'settled';
+      host.dataset.cameraFov = String(camera.fov);
+      if (!animate) {
+        host.dataset.cameraPosition = JSON.stringify(camera.position.toArray());
+        host.dataset.cameraTarget = JSON.stringify(controls.target.toArray());
+        host.dataset.productPose = JSON.stringify(product.quaternion.toArray());
+      }
     }
     requestRender();
   };
@@ -610,7 +714,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         studioGround.setFloorY(candidate.bounds.min.y);
         studioGround.setRadius(candidate.radius);
         lights.forEach((light, index) => light.position.set(...settings.lights[index].position).multiplyScalar(candidate!.radius));
-        if (changingModel) fit(sceneMode === 'studio' ? 'three-quarter' : 'front'); else requestRender();
+        if (changingModel) fit(sceneMode === 'studio' ? 'view-4' : animation.mode === 'showcase' ? 'front' : 'view-1'); else requestRender();
         // The shared pool prepared textures and shaders against the ready studio
         // environment before commit. Render that revision before capture becomes ready.
         if (previewTarget && isVisible()) { renderTo(previewTarget, null, camera); renderFrames++; }
@@ -637,18 +741,25 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   };
   const manualCamera = (preset: MockupCameraPreset) => {
     if (disposed || captureGate.busy) return;
-    cameraTransition = null;
+    const wasAnimated = animation.mode !== 'off';
+    cancelPointers();
+    // Clear OrbitControls momentum without advancing the visible camera.
+    const position = camera.position.clone(), target = controls.target.clone();
+    controls.enableDamping = false; controls.update();
+    camera.position.copy(position); controls.target.copy(target); camera.lookAt(target); controls.update();
+    controls.enableDamping = true;
     if (animation.mode !== 'off' || animation.playing) {
       animation = { ...animation, mode: 'off', playing: false };
       controls.enableRotate = true; controls.enableZoom = true;
       host.dataset.motionMode = 'off';
     }
-    // Idle presets are deterministic world-space camera views. Clear the
-    // showcase/turntable pose first so the result never depends on where the
-    // product happened to be tilted or spun before the click.
-    product.quaternion.identity();
-    pose.identity(); targetPose.identity(); returnFrom = null; lastInputAt = -Infinity;
-    pauseFromInteraction(); fit(preset, true);
+    // Exiting the web showcase returns its tilted object to the idle pose.
+    // Subsequent Unity views change the camera only, as ProductCameraOrbit does.
+    if (wasAnimated) { product.quaternion.identity(); pose.identity(); targetPose.identity(); }
+    returnFrom = null; lastInputAt = -Infinity;
+    controls.maxPolarAngle = Math.PI - 0.04;
+    host.dataset.cameraPreset = preset; host.dataset.cameraPresetState = 'moving';
+    pauseFromInteraction(); fit(preset, !matchMedia('(prefers-reduced-motion: reduce)').matches);
   };
   const rotateProduct = (axis: THREE.Vector3, angle: number) => {
     candidatePose.copy(targetPose).premultiply(dragStep.setFromAxisAngle(axis, angle)).normalize();
@@ -701,13 +812,33 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     direction.setLength(THREE.MathUtils.clamp(direction.length() / factor, controls.minDistance, controls.maxDistance));
     camera.position.copy(controls.target).add(direction); controls.update(); requestRender();
   };
+  const preserveTransitionOffset = (offset: THREE.Vector3, fromFov: number) => {
+    const transition = cameraTransition;
+    if (!transition) return;
+    // The transition's `from*` values are already the live, panned camera.
+    // Only the fitted destination is centered by `fit()`, so apply the
+    // existing pan offset to its destination without moving the first frame.
+    transition.toPosition.add(offset);
+    transition.toTarget.add(offset);
+    transition.fromFov = fromFov;
+  };
   const adjustFov = (deltaDegrees: number) => {
-    if (disposed || captureGate.busy || !Number.isFinite(deltaDegrees)) return;
+    if (disposed || captureGate.busy || !active || !Number.isFinite(deltaDegrees)) return;
+    const nextFov = THREE.MathUtils.clamp(camera.fov + deltaDegrees, 10, 90);
+    if (Math.abs(nextFov - camera.fov) < 0.001) return;
+
+    // Keep the user's current framing while changing the lens. `fit()`
+    // recalculates the distance required by the new FOV and preserves the
+    // current zoom ratio, but it intentionally recenters the controls target.
+    // Save and restore that offset so WASD/pan adjustments do not jump.
+    const center = active.bounds.getCenter(new THREE.Vector3());
+    const targetOffset = controls.target.clone().sub(center);
+    const previousFov = camera.fov;
     cameraTransition = null; pauseFromInteraction();
-    camera.fov = THREE.MathUtils.clamp(camera.fov + deltaDegrees, 10, 90);
-    camera.updateProjectionMatrix();
     focal = 'standard';
-    host.dataset.cameraFov = String(camera.fov);
+    host.dataset.cameraFov = String(nextFov);
+    fit(undefined, true, nextFov, 260);
+    preserveTransitionOffset(targetOffset, previousFov);
     requestRender();
   };
   const panView = (horizontal: number, vertical: number) => {
@@ -725,13 +856,16 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     const offset = nextTarget.clone().sub(center);
     if (offset.length() > maxOffset) nextTarget.copy(center).add(offset.setLength(maxOffset));
     const applied = nextTarget.sub(controls.target);
-    camera.position.add(applied);
-    controls.target.copy(nextTarget);
-    controls.update();
+    cameraTransition = {
+      fromPosition: camera.position.clone(), fromTarget: controls.target.clone(),
+      toPosition: camera.position.clone().add(applied), toTarget: nextTarget.clone(),
+      fromFov: camera.fov, toFov: camera.fov,
+      startedAt: performance.now(), duration: 180,
+    };
     requestRender();
   };
   const wheel = (event: WheelEvent) => {
-    if (animation.mode !== 'showcase' || !active || !isVisible() || captureGate.busy || event.ctrlKey) return;
+    if (options.enableWheelZoom === false || animation.mode !== 'showcase' || !active || !isVisible() || captureGate.busy || event.ctrlKey) return;
     event.preventDefault();
     const pixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? host.clientHeight : 1);
     zoomCamera(Math.exp(THREE.MathUtils.clamp(-pixels * 0.001 * controls.zoomSpeed, -0.5, 0.5)));
@@ -781,7 +915,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       } else controls.maxPolarAngle = Math.PI - .04;
       setBackground(websiteBackground);
       host.dataset.sceneMode = mode;
-      fit(mode === 'studio' ? 'three-quarter' : 'front'); requestRender();
+      fit(mode === 'studio' ? 'view-4' : animation.mode === 'showcase' ? 'front' : 'view-1'); requestRender();
     },
     setMaterialOverrides(overrides = {}) {
       if (disposed || captureGate.busy) return;
@@ -832,8 +966,14 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       const spherical = new THREE.Spherical().setFromVector3(relative);
       spherical.theta += yawRadians;
       spherical.phi = THREE.MathUtils.clamp(spherical.phi + pitchRadians, controls.minPolarAngle, controls.maxPolarAngle);
-      camera.position.copy(controls.target).add(new THREE.Vector3().setFromSpherical(spherical));
-      camera.lookAt(controls.target); controls.update(); requestRender();
+      const nextPosition = controls.target.clone().add(new THREE.Vector3().setFromSpherical(spherical));
+      cameraTransition = {
+        fromPosition: camera.position.clone(), fromTarget: controls.target.clone(),
+        toPosition: nextPosition, toTarget: controls.target.clone(),
+        fromFov: camera.fov, toFov: camera.fov,
+        startedAt: performance.now(), duration: 180,
+      };
+      requestRender();
     },
     adjustFov,
     panView,
@@ -850,10 +990,11 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       product.quaternion.copy(animation.mode === 'showcase' ? rest : new THREE.Quaternion());
       pose.copy(product.quaternion); targetPose.copy(pose); lastInputAt = -Infinity; returnFrom = null;
       focal = 'standard'; camera.fov = MOCKUP_FOCAL_FOV[focal]; camera.updateProjectionMatrix();
-      host.dataset.focalLength = focal; host.dataset.cameraFov = String(camera.fov); fit(sceneMode === 'studio' ? 'three-quarter' : 'front');
+      host.dataset.focalLength = focal; host.dataset.cameraFov = String(camera.fov); fit(sceneMode === 'studio' ? 'view-4' : animation.mode === 'showcase' ? 'front' : 'view-1');
     },
     async capture(captureOptions) {
       if (disposed || contextLost || !active || readyRevision !== revision || statusPhase !== 'ready') throw new Error('The selected scene is not ready for export');
+      const captureModel = active;
       const exportAspect = normalizeMockupAspect(captureOptions.aspect ?? aspect);
       const snapshotRevision = revision;
       const previousTarget = renderer.getRenderTarget();
@@ -864,6 +1005,10 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       const previousControls = controls.enabled;
       let linear: THREE.WebGLRenderTarget | null = null;
       let output: THREE.WebGLRenderTarget | null = null;
+      let refraction: ReturnType<typeof createExportRefractionSession> | null = null;
+      let refractionAtlas: ReturnType<typeof createRefractionAtlas> | null = null;
+      let frozenMatte: THREE.WebGLRenderTarget | null = null;
+      const refractionCulling: { mesh: THREE.Mesh; enabled: boolean }[] = [];
       const stitched = document.createElement('canvas');
       const tileCanvas = document.createElement('canvas');
       const abortExport = () => exportAbort?.abort();
@@ -889,23 +1034,94 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         host.dataset.captureTransparent = String(Boolean(captureOptions.transparent));
         const frame = frameCamera(captureCamera, size.width, size.height, exportAspect);
         captureOptions.onProgress?.(0);
+        let reservoirTiles = 0;
+        const prepareTile = (width: number, height: number) => {
+          if (!linear) linear = createLinearTarget(width, height);
+          else linear.setSize(width, height);
+          if (!output) output = new THREE.WebGLRenderTarget(width, height, { type: THREE.UnsignedByteType, format: THREE.RGBAFormat, depthBuffer: false });
+          else output.setSize(width, height);
+        };
+        if (tiled) {
+          refraction = createExportRefractionSession(scene);
+          if (refraction.materialCount) {
+            // Three skips its native reservoir if no transmissive render item
+            // survives tile culling. Keep these draws in the list even for an
+            // empty guard tile, so its source cannot reuse a preceding tile.
+            scene.traverseVisible(node => {
+              if (!(node instanceof THREE.Mesh)) return;
+              const materials = Array.isArray(node.material) ? node.material : [node.material];
+              if (!materials.some(material => material.visible && material instanceof THREE.MeshPhysicalMaterial && material.transmission > 0)) return;
+              refractionCulling.push({ mesh: node, enabled: node.frustumCulled });
+              node.frustumCulled = false;
+            });
+            // Freeze the entire optical background, so refracted UVs may cross
+            // tile boundaries without clamping to an independently painted tile.
+            if (!captureOptions.transparent && sceneMode === 'website' && captureOptions.paintBackground) {
+              frozenCaptureBackdrop = captureBackdrop.update(size.width, size.height, captureOptions.paintBackground);
+            } else if (!captureOptions.transparent && sceneMode === 'studio') {
+              const scale = Math.min(1, 1536 / size.longEdge);
+              frozenMatte = createLinearTarget(Math.max(1, Math.round(size.width * scale)), Math.max(1, Math.round(size.height * scale)));
+              captureCamera.setViewOffset(frame.fullWidth * scale, frame.fullHeight * scale,
+                frame.offsetX * scale, frame.offsetY * scale, size.width * scale, size.height * scale);
+              const productVisible = product.visible, near = captureCamera.near, tone = renderer.toneMapping;
+              try {
+                product.visible = false;
+                captureCamera.near = Math.min(near, Math.max(.00001, captureModel.radius * .005));
+                captureCamera.updateProjectionMatrix();
+                renderer.toneMapping = THREE.NoToneMapping;
+                renderer.setRenderTarget(frozenMatte); renderer.clear(); renderer.render(scene, captureCamera);
+                frozenCaptureBackdrop = frozenMatte.texture;
+              } finally {
+                product.visible = productVisible; captureCamera.near = near;
+                captureCamera.updateProjectionMatrix(); renderer.toneMapping = tone;
+              }
+            }
+            captureCamera.setViewOffset(frame.fullWidth, frame.fullHeight, frame.offsetX, frame.offsetY, size.width, size.height);
+            product.updateWorldMatrix(true, false);
+            const sourceRect = projectedRefractionRect(captureModel.bounds, product.matrixWorld, captureCamera, size.width, size.height);
+            if (sourceRect.width > renderer.capabilities.maxTextureSize || sourceRect.height > renderer.capabilities.maxTextureSize) {
+              throw new Error('This device cannot allocate the full-resolution refraction source for this export.');
+            }
+            refractionAtlas = createRefractionAtlas(renderer, sourceRect, linearType);
+            const sourceTiles = createMockupTiles(sourceRect.width, sourceRect.height, maxTileSize, 64);
+            reservoirTiles = sourceTiles.length;
+            host.dataset.captureRefraction = `${sourceRect.width}x${sourceRect.height}`;
+            for (let index = 0; index < sourceTiles.length; index++) {
+              if (disposed || signal.aborted || snapshotRevision !== revision) throw mockupAbortError();
+              const tile = sourceTiles[index];
+              prepareTile(tile.renderWidth, tile.renderHeight);
+              const x = sourceRect.x + tile.renderX, y = sourceRect.y + tile.renderY;
+              captureCamera.setViewOffset(frame.fullWidth, frame.fullHeight, frame.offsetX + x, frame.offsetY + y, tile.renderWidth, tile.renderHeight);
+              renderTo(linear!, output!, captureCamera, captureOptions.transparent, captureBackdrop, captureOptions.paintBackground,
+                { x, y, width: tile.renderWidth, height: tile.renderHeight, fullWidth: size.width, fullHeight: size.height });
+              const native = refraction.getNativeSource();
+              if (!native || native.width !== tile.renderWidth || native.height !== tile.renderHeight) {
+                throw new Error('Unable to prepare the full-resolution refraction source.');
+              }
+              refractionAtlas.copy(native.texture, tile, index === sourceTiles.length - 1);
+              captureOptions.onProgress?.((index + 1) / (tiles.length + reservoirTiles + 1));
+              await new Promise<void>(resolve => setTimeout(resolve, 0));
+            }
+            refraction.bindAtlas(refractionAtlas.texture, sourceRect.width, sourceRect.height, sourceRect, size.height, size.width);
+            refractionCulling.forEach(({ mesh, enabled }) => { mesh.frustumCulled = enabled; });
+            refractionCulling.length = 0;
+          }
+        }
         for (let index = 0; index < tiles.length; index++) {
           if (disposed || signal.aborted || snapshotRevision !== revision) throw mockupAbortError();
           const tile = tiles[index];
-          if (!linear) linear = createLinearTarget(tile.renderWidth, tile.renderHeight);
-          else linear.setSize(tile.renderWidth, tile.renderHeight);
-          if (!output) output = new THREE.WebGLRenderTarget(tile.renderWidth, tile.renderHeight, { type: THREE.UnsignedByteType, format: THREE.RGBAFormat, depthBuffer: false });
-          else output.setSize(tile.renderWidth, tile.renderHeight);
+          prepareTile(tile.renderWidth, tile.renderHeight);
+          refraction?.setTile({ x: tile.renderX, y: tile.renderY, width: tile.renderWidth, height: tile.renderHeight });
           captureCamera.setViewOffset(frame.fullWidth, frame.fullHeight, frame.offsetX + tile.renderX, frame.offsetY + tile.renderY, tile.renderWidth, tile.renderHeight);
-          renderTo(linear, output, captureCamera, captureOptions.transparent, captureBackdrop, captureOptions.paintBackground,
+          renderTo(linear!, output!, captureCamera, captureOptions.transparent, captureBackdrop, captureOptions.paintBackground,
             { x: tile.renderX, y: tile.renderY, width: tile.renderWidth, height: tile.renderHeight, fullWidth: size.width, fullHeight: size.height });
           const pixels = new Uint8Array(tile.renderWidth * tile.renderHeight * 4);
-          await abortable(renderer.readRenderTargetPixelsAsync(output, 0, 0, tile.renderWidth, tile.renderHeight, pixels), signal, 30000);
+          await abortable(renderer.readRenderTargetPixelsAsync(output!, 0, 0, tile.renderWidth, tile.renderHeight, pixels), signal, 30000);
           if (disposed || signal.aborted) throw mockupAbortError();
           tileCanvas.width = tile.renderWidth; tileCanvas.height = tile.renderHeight;
           tileContext.putImageData(new ImageData(flipMockupPixels(pixels, tile.renderWidth, tile.renderHeight), tile.renderWidth, tile.renderHeight), 0, 0);
           context.drawImage(tileCanvas, tile.cropX, tile.cropY, tile.width, tile.height, tile.x, tile.y, tile.width, tile.height);
-          captureOptions.onProgress?.((index + 1) / (tiles.length + 1));
+          captureOptions.onProgress?.((reservoirTiles + index + 1) / (tiles.length + reservoirTiles + 1));
           await new Promise<void>(resolve => setTimeout(resolve, 0));
         }
         const blob = await encodeMockupCanvasPng(stitched, signal);
@@ -913,6 +1129,9 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         return blob;
       }, () => {
         captureOptions.signal?.removeEventListener('abort', abortExport); exportAbort = null;
+        refraction?.dispose(); refractionAtlas?.dispose();
+        refractionCulling.forEach(({ mesh, enabled }) => { mesh.frustumCulled = enabled; });
+        frozenCaptureBackdrop = null; frozenMatte?.dispose();
         linear?.dispose(); output?.dispose();
         setBottleBackdrop(scene, null); captureBackdrop.dispose();
         captureCamera.clearViewOffset();

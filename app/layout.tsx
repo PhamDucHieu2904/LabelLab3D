@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { Changa_One, Luckiest_Guy, Mona_Sans } from "next/font/google";
+import { AuthDialogProvider } from "@/components/labellab/AuthDialog";
 import "./globals.css";
 
 const uiFont = Mona_Sans({
   subsets: ["latin", "latin-ext", "vietnamese"],
   weight: "variable",
+  axes: ["wdth"],
   display: "swap",
   variable: "--font-mona-sans",
 });
@@ -44,7 +46,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${uiFont.variable} ${titleFont.variable} ${accentFont.variable}`}>
-        {children}
+        <AuthDialogProvider>{children}</AuthDialogProvider>
       </body>
     </html>
   );

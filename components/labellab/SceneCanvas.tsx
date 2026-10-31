@@ -17,6 +17,7 @@ import type {
   MockupRuntime,
   MockupStatus,
   MockupCameraPreset,
+  MockupBackdropPainter,
 } from "@/lib/mockup/contracts";
 import type { ScenePreferences } from "@/lib/labellab/preferences";
 import { paintRenderBackdrop, prepareRenderBackdrop, snapshotRenderBackdrop } from "@/lib/labellab/render-backdrop";
@@ -35,7 +36,10 @@ interface Props {
   settings: ScenePreferences;
   artwork?: string;
   onStatus: (status: MockupStatus) => void;
-  renderCanvasRef: RefObject<HTMLCanvasElement | null>;
+  renderCanvasRef?: RefObject<HTMLCanvasElement | null>;
+  interaction?: "studio" | "drag-only";
+  displayScale?: number;
+  paintBackground?: MockupBackdropPainter;
 }
 function applyMotion(
   runtime: MockupRuntime,
@@ -52,19 +56,19 @@ function applyMotion(
 }
 
 const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
-  { model, settings, artwork, onStatus, renderCanvasRef },
+  { model, settings, artwork, onStatus, renderCanvasRef, interaction = "studio", displayScale = 1, paintBackground },
   ref,
 ) {
   const outerRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<MockupRuntime | null>(null);
-  const propsRef = useRef({ model, settings, artwork, onStatus });
+  const propsRef = useRef({ model, settings, artwork, onStatus, paintBackground });
   const [readyVersion, setReadyVersion] = useState(0);
   const [status, setStatus] = useState("loading-model");
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   useEffect(() => {
-    propsRef.current = { model, settings, artwork, onStatus };
+    propsRef.current = { model, settings, artwork, onStatus, paintBackground };
   });
 
   useImperativeHandle(
@@ -73,7 +77,7 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
       capture: async (onProgress) => {
         if (!runtimeRef.current) throw new Error("The scene is not ready.");
         const state = propsRef.current.settings;
-        if (!state.transparent && state.grid && state.sceneMode === 'website') await prepareRenderBackdrop();
+        if (!state.transparent && state.grid && state.sceneMode === 'website') await prepareRenderBackdrop(state.style);
         const host = hostRef.current;
         if (!host) throw new Error('The scene is not ready.');
         const backdrop = snapshotRenderBackdrop(host, state, aspects[state.frame]);
@@ -96,7 +100,7 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
 
   useEffect(() => {
     const runtime = runtimeRef.current;
-    if (!runtime) return;
+    if (!runtime || !renderCanvasRef?.current) return;
     runtime.setRenderPreview(renderCanvasRef.current, {
       aspect: aspects[settings.frame],
       transparent: settings.transparent,
@@ -106,9 +110,9 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
         paintRenderBackdrop(context, width, height, snapshotRenderBackdrop(hostRef.current, state, aspects[state.frame]));
       },
     });
-    void prepareRenderBackdrop().then(() => runtime.requestFrame()).catch(() => {});
+    void prepareRenderBackdrop(settings.style).then(() => runtime.requestFrame()).catch(() => {});
     return () => runtime.setRenderPreview(null, {});
-  }, [readyVersion, renderCanvasRef, settings.frame, settings.transparent, settings.background, settings.grid, settings.highlight, settings.sceneMode]);
+  }, [readyVersion, renderCanvasRef, settings.frame, settings.transparent, settings.background, settings.grid, settings.highlight, settings.sceneMode, settings.style]);
 
   useEffect(() => {
     let alive = true;
@@ -118,7 +122,13 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
         if (!alive || !hostRef.current) return;
         try {
           owned = createMockupRuntime(hostRef.current, {
+            enableWheelZoom: interaction !== "drag-only",
+            displayScale,
             paintBackground: (context, width, height) => {
+              if (propsRef.current.paintBackground) {
+                propsRef.current.paintBackground(context, width, height);
+                return;
+              }
               const host = hostRef.current;
               if (!host) return;
               const state = { ...propsRef.current.settings, transparent: false };
@@ -155,7 +165,7 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
       owned?.dispose();
       runtimeRef.current = null;
     };
-  }, [retry]);
+  }, [retry, interaction, displayScale]);
 
   useEffect(() => {
     const runtime = runtimeRef.current;
@@ -248,9 +258,11 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
         className="viewer-host"
         ref={hostRef}
         role="region"
-        aria-label={`3D view of ${model.name}. Use left and right arrows to rotate, up and down arrows to change field of view, and WASD to pan.`}
-        tabIndex={0}
-        onKeyDown={(event) => {
+        aria-label={interaction === "drag-only"
+          ? `Interactive 3D demo of ${model.name}. Drag the product to rotate it.`
+          : `3D view of ${model.name}. Use left and right arrows to rotate, up and down arrows to change field of view, and WASD to pan.`}
+        tabIndex={interaction === "drag-only" ? undefined : 0}
+        onKeyDown={interaction === "drag-only" ? undefined : (event) => {
           const key = event.key.toLowerCase();
           const map: Record<string, () => void> = {
             ArrowLeft: () => runtimeRef.current?.orbitView(-0.15, 0),

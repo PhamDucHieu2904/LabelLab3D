@@ -4,50 +4,41 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
-  BellRing,
   CalendarCheck,
   Check,
   ChevronRight,
-  CircleDollarSign,
   Clock3,
-  Coins,
   Gift,
   Megaphone,
-  MoreHorizontal,
-  Settings2,
   Sparkles,
-  Trophy,
-  UserRound,
   Zap,
 } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import MovingGrid from "./MovingGrid";
 import SiteHeader from "./SiteHeader";
+import CoinPricing from "./CoinPricing";
+import UserProfileCard from "./UserProfileCard";
+import HomeModelDemo from "./HomeModelDemo";
+import { LAB_MODELS } from "@/lib/labellab/catalog";
 import { LABELLAB_UPDATES } from "@/lib/labellab/updates";
-
-const offers = [
-  { coins: 200, price: "$4.90", discount: "15% off", note: "Starter" },
-  { coins: 500, price: "$9.90", discount: "25% off", note: "Popular" },
-  { coins: 1000, price: "$16.90", discount: "35% off", note: "Best value" },
-] as const;
+import { PROFILE_PREVIEW } from "@/lib/labellab/profile-preview";
 
 const noticeIcons = { pink: Gift, blue: Megaphone, mint: Sparkles } as const;
 
 const week = [
-  { day: "M", state: "claimed", reward: "+10" },
-  { day: "T", state: "claimed", reward: "+10" },
-  { day: "W", state: "claimed", reward: "+15" },
-  { day: "T", state: "today", reward: "+20" },
-  { day: "F", state: "locked", reward: "+20" },
-  { day: "S", state: "locked", reward: "+25" },
-  { day: "S", state: "locked", reward: "+50" },
+  { day: "Day 1", reward: "20", icon: "coin" },
+  { day: "Day 2", reward: "+110", icon: "gift" },
+  { day: "Day 3", reward: "45", icon: "coin" },
+  { day: "Day 4", reward: "45", icon: "coin" },
+  { day: "Day 5", reward: "+80", icon: "gift" },
+  { day: "Day 6", reward: "70", icon: "coin" },
+  { day: "Day 7", reward: "70", icon: "coin" },
 ] as const;
 
 export default function HomePage() {
   const shellRef = useRef<HTMLElement>(null);
-  const [selectedOffer, setSelectedOffer] = useState(1);
   const [claimed, setClaimed] = useState(false);
-  const offer = offers[selectedOffer];
+  const [featuredModel, setFeaturedModel] = useState(LAB_MODELS[0]);
 
   useLayoutEffect(() => {
     const shell = shellRef.current;
@@ -81,29 +72,12 @@ export default function HomePage() {
           <section className="home-card home-showcase" aria-label="Featured 3D mockup">
             <div className="home-showcase-visual">
               <div className="home-showcase-topline">
-                <span className="home-kicker"><Sparkles size={13} /> Featured model</span>
                 <span className="home-glass-badge"><Zap size={12} /> Web optimized</span>
               </div>
               <div className="home-hero-halo" aria-hidden="true" />
               <div className="home-orbit-ring home-orbit-ring-one" aria-hidden="true" />
               <div className="home-orbit-ring home-orbit-ring-two" aria-hidden="true" />
-              <Image
-                className="home-hero-product"
-                src="/models/bottles/glass-290-basil-poster.webp"
-                alt="Basil Strawberry glass bottle mockup"
-                width={640}
-                height={640}
-                priority
-              />
-              <div className="home-product-shadow" aria-hidden="true" />
-              <div className="home-hero-caption">
-                <div>
-                  <span>Vinut web asset</span>
-                  <strong>Basil Strawberry</strong>
-                  <small>Glass bottle · 290 ml · Realistic liquid shader</small>
-                </div>
-                <span className="home-live-pill"><span /> Live</span>
-              </div>
+              <HomeModelDemo model={featuredModel} />
             </div>
             <div className="home-showcase-bottom">
               <div className="home-scene-row">
@@ -111,10 +85,17 @@ export default function HomePage() {
                   <span className="home-section-eyebrow">Make it real</span>
                   <h2>Bring your next label to life.</h2>
                 </div>
-                <div className="home-scene-dots" aria-label="Featured mockup scenes">
-                  <button className="is-active" type="button" aria-label="Basil Strawberry scene" />
-                  <button type="button" aria-label="Mango can scene" />
-                  <button type="button" aria-label="Aloe PET scene" />
+                <div className="home-scene-dots" role="group" aria-label="Featured mockup models">
+                  {LAB_MODELS.map((model) => (
+                    <button
+                      key={model.id}
+                      className={model.id === featuredModel.id ? "is-active" : ""}
+                      type="button"
+                      aria-label={`Show ${model.name} 3D demo`}
+                      aria-pressed={model.id === featuredModel.id}
+                      onClick={() => setFeaturedModel(model)}
+                    />
+                  ))}
                 </div>
               </div>
               <Link className="home-showcase-action home-sheen" href="/studio#workspace">
@@ -123,49 +104,12 @@ export default function HomePage() {
             </div>
           </section>
 
-          <section className="home-center-column" aria-label="Credits and updates">
-            <article className="home-card home-balance-card">
-              <div className="home-card-heading">
-                <div>
-                  <span className="home-section-eyebrow">Credits & offers</span>
-                  <h2>Power your next render.</h2>
-                </div>
-                <span className="home-card-menu" aria-hidden="true"><MoreHorizontal size={18} /></span>
-              </div>
-              <div className="home-balance-row">
-                <div>
-                  <span className="home-muted-label">Your balance</span>
-                  <strong className="home-balance-number" aria-live="polite">1,000</strong>
-                  <span className="home-balance-unit"><Coins size={13} /> credits</span>
-                </div>
-                <div className="home-coin-art" aria-hidden="true"><CircleDollarSign size={55} /><Sparkles size={14} /></div>
-              </div>
-              <div className="home-offer-selector" role="group" aria-label="Choose a credit package">
-                {offers.map((item, index) => (
-                  <button
-                    key={item.coins}
-                    type="button"
-                    className={selectedOffer === index ? "is-active" : ""}
-                    aria-pressed={selectedOffer === index}
-                    onClick={() => setSelectedOffer(index)}
-                  >
-                    <strong>{item.coins.toLocaleString()} <small>credits</small></strong>
-                    <span>{item.discount}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="home-balance-footer">
-                <span><Trophy size={14} /> Save up to 35% today</span>
-                <button className="home-small-cta home-sheen" type="button">
-                  Top up {offer.coins.toLocaleString()} <ArrowRight size={15} />
-                </button>
-              </div>
-            </article>
+          <section className="home-center-column" aria-label="Coin packages and updates">
+            <CoinPricing />
 
-            <article className="home-card home-notices-card">
+            <article className="home-card home-notices-card" id="home-updates">
               <div className="home-card-heading">
                 <div>
-                  <span className="home-section-eyebrow">Stay in the loop</span>
                   <h2>Admin updates <span className="home-count-badge">3</span></h2>
                 </div>
                 <button className="home-text-action" type="button">View all <ChevronRight size={14} /></button>
@@ -199,41 +143,28 @@ export default function HomePage() {
           </section>
 
           <aside className="home-right-column" aria-label="Account and daily rewards">
-            <article className="home-card home-profile-card">
-              <div className="home-profile-heading">
-                <span className="home-section-eyebrow">Your workspace</span>
-                <button className="home-card-menu" type="button" aria-label="Profile settings"><Settings2 size={17} /></button>
-              </div>
-              <div className="home-profile-main">
-                <div className="home-avatar-wrap">
-                  <Image src="/home/avatar-female-3d.jpg" alt="User avatar" fill sizes="88px" />
-                  <span className="home-avatar-status" />
-                </div>
-                <div>
-                  <h2>Guest designer</h2>
-                  <p><UserRound size={13} /> 12 days in the studio</p>
-                </div>
-              </div>
-              <div className="home-profile-stats">
-                <span><strong>24</strong><small>mockups</small></span>
-                <span><strong>8.4k</strong><small>views</small></span>
-                <span><strong>Lv. 04</strong><small>creator</small></span>
-              </div>
-              <button className="home-notification-cta home-sheen" type="button"><BellRing size={16} /> Notifications <span>3</span></button>
-            </article>
+            <UserProfileCard profile={PROFILE_PREVIEW} notificationCount={LABELLAB_UPDATES.length} />
 
             <article className="home-card home-checkin-card">
               <div className="home-checkin-heading">
-                <div className="home-checkin-icon"><CalendarCheck size={22} /></div>
-                <div><span className="home-section-eyebrow">Daily reward</span><h2>Check in & earn.</h2></div>
+                <h2>Daily check-in</h2>
+                <p>Earn coins every day you check in</p>
               </div>
-              <div className="home-streak-line"><span><strong>3</strong> day streak</span><span>Next reward <b>+20</b></span></div>
               <div className="home-week" role="group" aria-label="Seven day check-in progress">
                 {week.map((item, index) => (
-                  <button key={`${item.day}-${index}`} className={`home-day ${item.state}`} type="button" aria-label={`${item.day}, ${item.reward} credits`}>
-                    <span>{item.state === "claimed" ? <Check size={14} /> : item.state === "today" ? <Zap size={14} /> : item.day}</span>
-                    <small>{item.day}</small>
-                  </button>
+                  <div className={`home-day-wrap ${index === 0 ? "today" : ""}`} key={`${item.day}-${index}`}>
+                    <button
+                      className={`home-day ${index === 0 ? "today" : ""} ${item.icon === "gift" ? "is-bonus" : ""}`}
+                      type="button"
+                      aria-label={`${item.day}, ${item.reward} coins`}
+                    >
+                      <span className={`home-day-icon ${item.icon === "gift" ? "is-gift" : ""}`}>
+                        {item.icon === "gift" ? <Gift size={22} aria-hidden="true" /> : <Image src="/branding/LLCoin.svg" alt="" width={28} height={28} />}
+                      </span>
+                      <strong className="home-day-reward">{item.reward}</strong>
+                    </button>
+                    <small>{index === 0 ? "Today" : item.day}</small>
+                  </div>
                 ))}
               </div>
               <button
@@ -244,7 +175,6 @@ export default function HomePage() {
               >
                 {claimed ? <><Check size={18} /> Reward claimed</> : <><CalendarCheck size={18} /> {"Claim today's +20"}</>}
               </button>
-              <p className="home-checkin-note">Come back every day to build your streak and unlock bigger rewards.</p>
             </article>
           </aside>
         </div>

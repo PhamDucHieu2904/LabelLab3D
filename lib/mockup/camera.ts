@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { MockupCameraPreset } from './contracts';
+import { unityCameraDestination } from './unity-camera-presets';
 
 export const MOCKUP_ASPECTS = { square: 1, portrait: 4 / 5, landscape: 16 / 9, story: 9 / 16 } as const;
 
@@ -16,9 +17,20 @@ export function normalizeMockupAspect(aspect: number): number {
 }
 
 export function mockupCameraDirection(preset: MockupCameraPreset): THREE.Vector3 {
-  const yaw = { front: 0, 'three-quarter': Math.PI / 4, left: -Math.PI / 2, right: Math.PI / 2, back: Math.PI, top: Math.PI / 8 }[preset];
-  const elevation = preset === 'top' ? Math.PI / 3 : preset === 'three-quarter' ? 0.12 : 0.025;
+  const unity = preset.startsWith('view-') ? unityCameraDestination(preset as Parameters<typeof unityCameraDestination>[0]) : undefined;
+  const yaw = unity ? THREE.MathUtils.degToRad(unity.yawDegrees) : preset === 'three-quarter' ? Math.PI / 4 : 0;
+  const elevation = unity ? THREE.MathUtils.degToRad(unity.pitchDegrees) : preset === 'three-quarter' ? 0.12 : 0.025;
   return new THREE.Vector3(Math.sin(yaw) * Math.cos(elevation), Math.sin(elevation), Math.cos(yaw) * Math.cos(elevation));
+}
+
+/** Undo the exported model's centered pivot before applying Unity's [0,1,0] focus. */
+export function unityMockupCameraFocus(bounds: THREE.Box3, modelSrc: string): THREE.Vector3 {
+  const focus = bounds.getCenter(new THREE.Vector3());
+  // Vinut export manifests: appMetersPerSourceUnit/exportScale=.1; source Z is height.
+  if (/glass-290-basil/.test(modelSrc)) focus.y += (1 - 0.9023135900497437) * 0.1;
+  else if (/pet-500-short-label/.test(modelSrc)) focus.y += (1 - 1.0481757521629333) * 0.1;
+  else focus.y = bounds.min.y + 0.1;
+  return focus;
 }
 
 /** Perspective fit in the actual view basis, valid at every azimuth/elevation. */

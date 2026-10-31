@@ -1,26 +1,24 @@
-import { backgroundConfig, labellabWhiteIconUrl } from '../background-config';
-import { loadBackgroundTile } from '../background-image-tile';
+import { loadStyleGridTile } from './style-background';
 import { centeredMockupCrop } from '../mockup/capture';
 import type { ScenePreferences } from './preferences';
 
-let gridImage: HTMLImageElement | undefined;
-let gridReady: Promise<void> | undefined;
+const gridImages = new Map<ScenePreferences['style'], HTMLImageElement>();
+const gridReady = new Map<ScenePreferences['style'], Promise<void>>();
 const gridScale = 8;
-export function prepareRenderBackdrop(): Promise<void> {
-  gridReady ??= new Promise((resolve, reject) => {
+export function prepareRenderBackdrop(style: ScenePreferences['style'] = 'pink'): Promise<void> {
+  const cached = gridReady.get(style);
+  if (cached) return cached;
+  const pending = new Promise<void>((resolve, reject) => {
     const image = new Image();
-    image.onload = () => { gridImage = image; resolve(); };
-    image.onerror = () => { gridReady = undefined; reject(new Error('Unable to load the grid for rendering.')); };
-    void loadBackgroundTile(
-      { id: 'labellab', color: '#ffffff', icon: 'berry', iconUrl: labellabWhiteIconUrl },
-      { ...backgroundConfig, lineOpacity: 0.2, iconOpacity: 0.42 },
-      gridScale,
-    ).then((url) => { image.src = url; }).catch(() => {
-      gridReady = undefined;
+    image.onload = () => { gridImages.set(style, image); resolve(); };
+    image.onerror = () => { gridReady.delete(style); reject(new Error('Unable to load the grid for rendering.')); };
+    void loadStyleGridTile(style, gridScale).then((url) => { image.src = url; }).catch(() => {
+      gridReady.delete(style);
       reject(new Error('Unable to load the grid for rendering.'));
     });
   });
-  return gridReady;
+  gridReady.set(style, pending);
+  return pending;
 }
 
 /** Freeze scene decoration coordinates once; UI panels never enter the image. */
@@ -41,11 +39,12 @@ export function snapshotRenderBackdrop(host: HTMLElement, settings: ScenePrefere
 export function paintRenderBackdrop(context: CanvasRenderingContext2D, width: number, height: number, state: ReturnType<typeof snapshotRenderBackdrop>) {
   if (state.transparent) return;
   context.save();
-  context.fillStyle = state.sceneMode === 'studio' ? '#ffffff' : state.background;
+  context.fillStyle = state.sceneMode === 'studio' || state.style === 'white' ? '#ffffff' : state.background;
   context.fillRect(0, 0, width, height);
   if (state.sceneMode === 'studio') { context.restore(); return; }
   context.scale(width / state.crop.width, height / state.crop.height);
   context.translate(-state.crop.x, -state.crop.y);
+  const gridImage = gridImages.get(state.style);
   if (state.grid && gridImage) {
     const pattern = context.createPattern(gridImage, 'repeat');
     if (pattern) {
@@ -54,7 +53,7 @@ export function paintRenderBackdrop(context: CanvasRenderingContext2D, width: nu
       context.fillRect(state.crop.x, state.crop.y, state.crop.width, state.crop.height);
     }
   }
-  if (state.highlight && state.glow) {
+  if (state.style !== 'white' && state.highlight && state.glow) {
     const glow = state.glow;
     context.globalCompositeOperation = 'overlay';
     context.globalAlpha = 0.72;

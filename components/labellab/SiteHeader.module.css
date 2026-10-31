@@ -36,19 +36,19 @@
 .notificationPanel ul { display: grid; gap: 14px; padding: 0; margin: 16px 0 0; list-style: none; }
 .notificationPanel li { display: grid; gap: 4px; }
 .notificationPanel small { color: #765d69; font-size: 13px; }
-.start { position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; gap: 16px; min-height: 44px; padding: 0 20px; border-radius: 10px; background: #2b2028; color: #fff; white-space: nowrap; box-shadow: 0 5px 14px #2b202819; }
+.start { position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; gap: 16px; min-width: 136px; min-height: 44px; padding: 0 20px; border: 0; border-radius: 10px; background: #2b2028; color: #fff; font: inherit; white-space: nowrap; cursor: pointer; box-shadow: 0 5px 14px #2b202819; }
 .start::after { content: ""; position: absolute; inset: -30% auto -30% -45%; width: 35%; transform: translateX(-120%) skewX(-18deg); background: linear-gradient(90deg, transparent, #ffffff55, transparent); transition: transform .6s ease; }
 .start:hover { background: #4c3543; }
 .start:hover::after { transform: translateX(460%) skewX(-18deg); }
-.header a, .notificationButton { transition: background .2s, color .2s; }
-.header :is(a, summary):focus-visible { outline: 3px solid #bc4169; outline-offset: 3px; }
+.header a, .header button, .notificationButton { transition: background .2s, color .2s; }
+.header :is(a, button, summary):focus-visible { outline: 3px solid #bc4169; outline-offset: 3px; }
 @media (max-width: 1100px) { .preview { display: none; } }
 @media (max-width: 860px) {
   .header { position: sticky; top: 0; padding-inline: 16px; gap: 12px; }
   .nav { display: none; }
   .projects { width: 44px; padding: 0; justify-content: center; }
   .projects span, .start span { display: none; }
-  .start { width: 44px; padding: 0; }
+  .start { width: 44px; min-width: 44px; padding: 0; }
 }
 @media (max-width: 520px) {
   .wordmark img { width: 140px; }

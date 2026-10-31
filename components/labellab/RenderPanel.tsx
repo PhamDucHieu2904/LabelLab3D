@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { CSSProperties, RefObject } from "react";
 import { ArrowDownToLine, LoaderCircle, SlidersHorizontal } from "lucide-react";
 import type { ScenePreferences } from "@/lib/labellab/preferences";
@@ -14,13 +15,16 @@ export interface RenderPanelProps {
   progress: number | null;
   onRender: () => void;
   result?: { url: string; name: string };
+  onOpenMaterials: () => void;
+  materialsOpen: boolean;
 }
 
 const frameRatios = { square: "1 / 1", portrait: "4 / 5", landscape: "16 / 9", story: "9 / 16" };
 
-export default function RenderPanel({ settings, onChange, canvasRef, ready, busy, progress, onRender, result }: RenderPanelProps) {
+export default function RenderPanel({ settings, onChange, canvasRef, ready, busy, progress, onRender, result, onOpenMaterials, materialsOpen }: RenderPanelProps) {
   const percentage = progress === null ? null : Math.round(Math.min(1, Math.max(0, progress)) * 100);
   return (
+    <div className="render-sidebar">
     <aside className="render-panel" aria-label="Render image" aria-busy={busy}>
       <div className="render-panel-heading">
         <span><SlidersHorizontal size={16} aria-hidden="true" /> Render image</span>
@@ -52,15 +56,32 @@ export default function RenderPanel({ settings, onChange, canvasRef, ready, busy
         <input type="checkbox" role="switch" checked={settings.transparent} disabled={busy} onChange={(event) => onChange("transparent", event.target.checked)} />
       </label>
       <button type="button" className="render-panel-submit" disabled={!ready || busy} onClick={onRender}>
-        {busy ? <LoaderCircle size={17} className="render-panel-spinner" aria-hidden="true" /> : <ArrowDownToLine size={17} aria-hidden="true" />}
-        {busy ? "Rendering…" : "Render image"}
-        <span>PNG</span>
+        <span className="render-panel-submit-label">
+          {busy && <LoaderCircle size={20} className="render-panel-spinner" aria-hidden="true" />}
+          {busy ? "Rendering…" : "Render Image"}
+        </span>
+        <span className="render-panel-cost" aria-label="Cost: 1 token">
+          <strong>1</strong>
+          <Image src="/branding/LLCoin.svg" alt="" width={17} height={17} aria-hidden="true" />
+        </span>
       </button>
       <div className="render-panel-progress" role="status" aria-live="polite">
         {busy && <><span>{percentage === null ? "Preparing image…" : `Rendering ${percentage}%`}</span><progress max={1} value={progress === null ? undefined : Math.min(1, Math.max(0, progress))} /></>}
       </div>
       {result && !busy && <a className="render-panel-result" href={result.url} title={result.name} download={result.name}><ArrowDownToLine size={15} aria-hidden="true" /> Download image</a>}
     </aside>
+    <button
+      type="button"
+      className="material-properties-button"
+      aria-expanded={materialsOpen}
+      aria-controls="material-settings-panel"
+      disabled={busy}
+      onClick={onOpenMaterials}
+    >
+      <SlidersHorizontal size={17} aria-hidden="true" />
+      Material properties
+    </button>
+    </div>
   );
 }
 

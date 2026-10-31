@@ -1,7 +1,8 @@
 import type { ProductAppearance, ProductAsset } from '../viewer-config';
 import type { LiveMaterialOverrides } from '../viewer/material-adjustments';
+import type { UnityCameraPresetId } from './unity-camera-presets';
 
-export type MockupCameraPreset = 'front' | 'three-quarter' | 'left' | 'right' | 'back' | 'top';
+export type MockupCameraPreset = 'front' | 'three-quarter' | UnityCameraPresetId;
 export type MockupFocalPreset = 'ultraWide' | 'wide' | 'standard' | 'long' | 'telephoto';
 export type MockupBackgroundType = 'white' | 'gray' | 'dark' | 'color' | 'gradient' | 'transparent';
 export interface MockupBackground { type: MockupBackgroundType; color?: string; colorEnd?: string }
@@ -29,6 +30,10 @@ export interface MockupStatus {
 }
 export interface MockupRuntimeOptions {
   onStatus(value: MockupStatus): void;
+  /** Demo embeds allow dragging while wheel gestures keep scrolling the page. */
+  enableWheelZoom?: boolean;
+  /** Optical display scale for an embed; leaves model geometry and Studio fit intact. */
+  displayScale?: number;
   /** Authored scene decoration beneath the product, excluding all editor UI. */
   paintBackground?: MockupBackdropPainter;
   /** Manual input pauses turntable; showcase resumes after releasing the product. */
