@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Archive, ArrowDownToLine, Check, CheckCircle2, Eye, FileBox, Pencil, Plus, RotateCcw, Search, Trash2, Upload, X } from 'lucide-react';
-import { createManagementData, fieldLabels, managementTabs, persistentManagementData, type ManagementRecord, type ManagementSection } from '@/lib/admin/management-data';
+import { createManagementData, migrateManagementData, fieldLabels, managementTabs, persistentManagementData, type ManagementRecord, type ManagementSection } from '@/lib/admin/management-data';
 import { logAdminActivity } from '@/lib/admin/activity-store';
 import s from './ManagementPanel.module.css';
 
@@ -31,7 +31,7 @@ export default function ManagementPanel({section}:{section:ManagementSection}) {
  const currentPage=Math.min(page,pages);
  useEffect(()=>{
   const timer=window.setTimeout(()=>{
-   try { const raw=localStorage.getItem(storageKey); if(raw){ const parsed=JSON.parse(raw); if(parsed&&typeof parsed==='object'&&Object.values(parsed).every(v=>Array.isArray(v)&&v.every(r=>typeof r.id==='string'&&typeof r.name==='string'&&r.values&&typeof r.values==='object'&&Object.values(r.values).every(value=>typeof value==='string')))){const initial=createManagementData();const restored=persistentManagementData({...initial,...parsed});restored.releases=restored.releases.map(record=>record.id==='release-demo'&&!record.values.snapshot?{...record,values:{...record.values,snapshot:initial.releases[0].values.snapshot}}:record);setData(restored);} }}catch{/* Retain usable initial fixtures. */}
+   try { const raw=localStorage.getItem(storageKey); if(raw){ const parsed=JSON.parse(raw); if(parsed&&typeof parsed==='object'&&Object.values(parsed).every(v=>Array.isArray(v)&&v.every(r=>typeof r.id==='string'&&typeof r.name==='string'&&r.values&&typeof r.values==='object'&&Object.values(r.values).every(value=>typeof value==='string')))){const initial=createManagementData();const restored=persistentManagementData(migrateManagementData(initial, parsed));restored.releases=restored.releases.map(record=>record.id==='release-demo'&&!record.values.snapshot?{...record,values:{...record.values,snapshot:initial.releases[0].values.snapshot}}:record);setData(restored);} }}catch{/* Retain usable initial fixtures. */}
    setReady(true);
   },0);
   return()=>window.clearTimeout(timer);

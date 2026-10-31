@@ -104,7 +104,7 @@
 .markets button:hover, .pack:hover { background-color: rgba(255, 255, 255, .65); }
 .markets button:focus-visible, .pack:focus-visible { outline: 2px solid #9c2751; outline-offset: 3px; }
 
-@media (max-width: 860px) {
+@container labellab-page (max-width: 860px) {
   .card { grid-template-rows: auto auto auto; gap: 14px; padding: 20px; }
   .markets button { min-height: 44px; }
   .packs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }

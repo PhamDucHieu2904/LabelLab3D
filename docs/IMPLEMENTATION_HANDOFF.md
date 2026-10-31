@@ -16,7 +16,7 @@ Stack: Next.js App Router 16.2.6, React/React DOM 19.3.0, TypeScript, raw Three.
 | `components/labellab/LabellabApp.tsx` | State scene, thư viện, upload, bản lưu, dialog export và phần giới thiệu |
 | `components/labellab/SceneCanvas.tsx` | Lazy-load runtime, đồng bộ model/settings, ResizeObserver, keyboard camera, loading/error/retry |
 | `components/labellab/MovingGrid.tsx` | Tile/grid berry, pointer direction và autodrift từ logic website mẫu |
-| `lib/labellab/catalog.ts` | Adapter snapshot published catalog; 3 model public hợp lệ |
+| `lib/labellab/catalog.ts` | Adapter snapshot published catalog plus five native blank can geometries; 8 model entries and 8 packaging families |
 | `lib/labellab/preferences.ts` | Schema localStorage, allowlist, finite bounds và safe storage |
 | `lib/labellab/local-artwork.ts` | Registry Blob URL chỉ thuộc session upload, revoke khi thay/xóa |
 | `lib/labellab/studio-ground.ts` | Sàn XZ thật, grid shader, contact shadow, fade, disposal |
@@ -25,11 +25,11 @@ Stack: Next.js App Router 16.2.6, React/React DOM 19.3.0, TypeScript, raw Three.
 
 ## 3. Hành vi và model
 
-Mặc định chọn `basil-strawberry`: chai 290 ml bản website tối ưu (`glass-290-basil-web.glb`), label dâu thật, cap vàng và liquid hồng. Các mẫu `can-mango`, `pet-aloe` được resolve từ snapshot catalog cùng appearance/label tương ứng. Runtime không nhận arbitrary remote model URL từ query.
+Mặc định chọn `basil-strawberry`: chai 290 ml bản website tối ưu (`glass-290-basil-web.glb`), label dâu thật, cap vàng và liquid hồng. Các mẫu `can-mango`, `pet-aloe` được resolve từ snapshot catalog cùng appearance/label tương ứng; năm hình dáng lon còn lại dùng GLB web Vinut nguyên trạng với label trống để người dùng upload artwork. Runtime không nhận arbitrary remote model URL từ query.
 
 Website mode dùng nền `#D53660` tùy chỉnh được, halo và grid động; motion `showcase` nghiêng/xoay mặc định. Idle dừng motion. Studio mode tắt motion, giữ upright, thêm sàn trắng và grid phối cảnh fade về trắng ở 20 m theo contract asset hiện tại; glass dimensionsMeters khoảng 0.18 m và appMetersPerSourceUnit 0.1; cần kiểm tra units cho mỗi model mới. Mỗi mode giữ cùng model/artwork/material settings.
 
-Model và material contract của cả ba mẫu giữ đúng phiên bản website đã publish của project VINUT. Basil dùng web GLB/web slots, không tự override sang High geometry/slots/optical buffers/HDRI; helper High còn trong source chỉ phục vụ tương thích, không phải mặc định. PNG capture sử dụng runtime rồi composite nền/halo và watermark ở canvas 2D. Chưa có bằng chứng trong tài liệu này rằng màu, refraction và alpha hoàn toàn tương đương Unity HDRP; cần visual QA đối chiếu trên nhiều GPU/trình duyệt.
+Model và material contract của ba display đã publish cùng sáu hình học lon giữ đúng phiên bản website của project VINUT. Basil dùng web GLB/web slots, không tự override sang High geometry/slots/optical buffers/HDRI; helper High còn trong source chỉ phục vụ tương thích, không phải mặc định. PNG capture sử dụng runtime rồi composite nền/halo và watermark ở canvas 2D. Chưa có bằng chứng trong tài liệu này rằng màu, refraction và alpha hoàn toàn tương đương Unity HDRP; cần visual QA đối chiếu trên nhiều GPU/trình duyệt.
 
 Điều chỉnh có trong UI: màu nước/nắp, label offset -50..50%, label roughness/metalness 0..1, camera preset, zoom/reset, scene mode, màu nền, grid/highlight, frame/resolution. Upload thay baseColorMap của label theo UV có sẵn, chưa có crop editor hay kiểm tra print-safe area đầy đủ.
 
@@ -51,7 +51,7 @@ Chưa triển khai auth, reset password, ledger, payment, webhook, daily free en
 
 Commands: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`. Tại thời điểm viết phần này, tác giả đã chạy trực tiếp `node --test scripts/tests/preferences.test.cjs`: 5/5 đạt cho round-trip schema, JSON/version sai, bounds/types, hostile values và blocked storage. Agent chính đã rerun và xác nhận typecheck/lint/test (8 tests)/verify-assets (12 assets)/build đều pass.
 
-Browser QA cần kiểm tra: cả 3 models, mode round-trip, upright/floor contact, perspective fade, custom artwork, material controls, camera keyboard/mouse/touch, reload settings, project restore, PNG kích thước/màu/watermark, 375/768/1024/1440px, reduced-motion, hidden tab, WebGL context loss/retry. Đặc biệt kiểm tra contrast text trên pink glass/halo và CTA sáng. PNG preview hiện là export cục bộ, chưa có job retry server/checksum/download history.
+Browser QA cần kiểm tra: cả 3 display scenes và 6 hình học lon, mode round-trip, upright/floor contact, perspective fade, custom artwork, material controls, camera keyboard/mouse/touch, reload settings, project restore, PNG kích thước/màu/watermark, 375/768/1024/1440px, reduced-motion, hidden tab, WebGL context loss/retry. Đặc biệt kiểm tra contrast text trên pink glass/halo và CTA sáng. PNG preview hiện là export cục bộ, chưa có job retry server/checksum/download history.
 
 ## 7. Bước tiếp theo để thương mại
 
@@ -75,7 +75,7 @@ Chưa xác nhận cross-browser/GPU matrix, WebGL context loss, screen reader, h
 
 Quy tắc cho mọi model bổ sung sau này: lấy model và material contract đã tối ưu từ project web VINUT (`D:\program project\3d display product website`), giữ cùng geometry/slots/UV/sampler/appearance. Không thay bằng bản Label Lab PC/Unity High. Đối chiếu asset nguồn và kiểm tra tải/render trên web trước khi đưa vào catalog.
 
-Theo yêu cầu người dùng, cả ba model dùng nguyên asset/material contracts website đã publish. Basil mặc định là `glass-290-basil-web.glb`; bỏ lựa chọn High nhầm ở prototype trước. Bản web-only đã pass typecheck/lint/8 tests (3 catalog/resolver + 5 preferences)/verify-assets (12 assets)/build. Inventory Chromium chỉ có studio-softbox.exr và GLB Web Basil/can/PET; không có High GLB/buffers/HDRI. Cả ba model ready trong Website/Studio, console zero errors/warnings. PNG Basil Web Studio 1024×1024 đã tải và xem kiểm tra sản phẩm/grid/watermark. Audit SHA256 xác nhận cả ba GLB trùng nguyên bản VINUT: Basil 424312 bytes, can 126500 bytes, PET 1128836 bytes. Các kiểm tra upload/responsive rộng hơn ở mục 8 thuộc đợt trước hiệu chỉnh; chưa chạy lại toàn bộ ma trận. Chưa công bố FPS đo được hoặc bảo đảm hiệu năng trên mọi GPU.
+Theo yêu cầu người dùng, ba display mẫu và sáu hình học lon dùng nguyên asset/material contracts website đã publish hoặc export từ VINUT. Basil mặc định là `glass-290-basil-web.glb`; bỏ lựa chọn High nhầm ở prototype trước. Năm lon mới có label trống, poster riêng và được cho phép upload artwork. Bản web-only đã pass typecheck/lint/tests/verify-assets/build. Inventory Chromium chỉ có các GLB web và runtime decoder; không có High GLB/buffers/HDRI. Các kiểm tra upload/responsive rộng hơn ở mục 8 thuộc đợt trước hiệu chỉnh; chưa chạy lại toàn bộ ma trận. Chưa công bố FPS đo được hoặc bảo đảm hiệu năng trên mọi GPU. Chi tiết hash và poster nằm trong `docs/ASSET_MIGRATION.md`.
 
 
 Ảnh bản web-only: docs/screenshots/labellab-basil-web.png và docs/screenshots/labellab-basil-web-export.png.

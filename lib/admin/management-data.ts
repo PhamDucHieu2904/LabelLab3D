@@ -36,7 +36,7 @@ export function createManagementData():Record<string,ManagementRecord[]> {
  const data:Record<string,ManagementRecord[]> = {
  models:LAB_MODELS.map((m,i)=>({...row(m.id,m.name,{category:({glass:'Chai thủy tinh',can:'Lon nhôm',pet:'Chai PET'})[m.category],volume:m.volume,file:m.asset.src,poster:m.poster,uv:`${m.category}-wrap`,yaw:String(m.frontYaw),slots:JSON.stringify(m.asset.materialSlots??{},null,2),rotationX:String(m.asset.orientation?.[0]??0),rotationY:String(m.asset.orientation?.[1]??0),rotationZ:String(m.asset.orientation?.[2]??0),order:String(i+1)}),poster:m.poster})),
  categories:[row('glass','Chai thủy tinh',{code:'glass',order:'1'}),row('can','Lon nhôm',{code:'can',order:'2'}),row('pet','Chai PET',{code:'pet',order:'3'})],
- materials:LAB_MODELS.map(m=>row(`mat-${m.id}`,`Nhãn ${m.name}`,{model:m.name,uv:`${m.category}-wrap`,texture:'',roughness:String(m.appearance.slots?.label?.roughness??.15),metalness:'0',color:m.appearance.slots?.liquid?.color??'#ffffff'})),
+ materials:LAB_MODELS.map(m=>row(`mat-${m.id}`,`Nhãn ${m.name}`,{model:m.name,uv:`${m.category}-wrap`,texture:'',roughness:String(m.appearance.slots?.label?.roughness??.15),metalness:String(m.appearance.slots?.label?.metalness??0),color:m.appearance.slots?.liquid?.color??'#ffffff'})),
  displays:LAB_MODELS.map((m,i)=>row(`display-${m.id}`,m.name,{model:m.name,mode:'3D',label:`Nhãn ${m.name}`,order:String(i+1)})),
  assets:LAB_MODELS.map(m=>({...row(`asset-${m.id}`,m.name,{type:'Model GLB',file:m.asset.src,size:'—',usage:'Studio / Demo'}),poster:m.poster})),
  banners:[row('banner-1','Bộ sưu tập mới',{placement:'Trang chủ · đầu trang',image:'/branding/LLLogo.svg',url:'/studio',alt:'Labellab',order:'1'},'Đang tắt')],
@@ -47,6 +47,24 @@ export function createManagementData():Record<string,ManagementRecord[]> {
  coupons:[row('coupon-welcome','Ưu đãi ra mắt',{code:'WELCOME10',discount:'10',limit:'100',end:'2026-12-31',region:'Tất cả'},'Đang tắt')],
  releases:[row('release-demo','Bản dựng giao diện',{version:'0.1.0',author:'Quản trị viên',note:'Dữ liệu mẫu ban đầu'},'Đang sử dụng')],
  };
+ data[BUILTIN_MARKER_KEY]=LAB_MODELS.map(m=>({id:m.id,name:m.name,status:'builtin',updated:'',values:{}}));
  data.releases[0].values.snapshot=JSON.stringify(Object.fromEntries(Object.entries(data).filter(([key])=>key!=='releases')));
  return data;
+}
+
+export const BUILTIN_MARKER_KEY = '_builtinModels';
+export function migrateManagementData(initial: Record<string, ManagementRecord[]>, saved: Record<string, ManagementRecord[]>): Record<string, ManagementRecord[]> {
+ const result: Record<string, ManagementRecord[]> = { ...initial, ...saved };
+ const previous = new Set((saved[BUILTIN_MARKER_KEY] ?? []).map(r => r.id));
+ const legacyKnown = new Set(['basil-strawberry', 'can-mango', 'pet-aloe']);
+ const known = previous.size ? previous : legacyKnown;
+ for (const key of ['models','materials','displays','assets']) {
+   const current = result[key] ?? [];
+   const owner = (r: ManagementRecord) => key === 'models' ? r.id : (r.id.match(/^(?:mat|display|asset)-(.+)$/)?.[1] ?? r.id);
+   const additions = (initial[key] ?? []).filter(r => !known.has(owner(r)) && !current.some(existing => existing.id === r.id));
+   result[key] = [...current, ...additions];
+ }
+ const markers = new Set([...known, ...initial.models.map(r => r.id)]);
+ result[BUILTIN_MARKER_KEY] = [...markers].map(id => ({ id, name: id, status: 'builtin', updated: '', values: {} }));
+ return result;
 }

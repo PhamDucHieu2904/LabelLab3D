@@ -32,7 +32,7 @@ function loadSource(filename) {
   return loaded.exports;
 }
 
-const { LAB_MODELS, publishedCatalog } = loadSource(path.join(root, 'lib/labellab/catalog'));
+const { LAB_MODELS, LAB_MODEL_FAMILIES, getDefaultFamilyVariant, getOrderedFamilyVariants, getLabModelFamily, filterLabModelFamilies, publishedCatalog } = loadSource(path.join(root, 'lib/labellab/catalog'));
 const { resolveDisplay3D } = loadSource(path.join(root, 'lib/catalog/resolve'));
 const { isBasilHighAsset } = loadSource(path.join(root, 'lib/viewer/basil-presentation'));
 const scenes = [
@@ -57,3 +57,57 @@ for (const [id, displayId, webUrl] of scenes) {
     assert.equal(fs.existsSync(path.join(root, 'public', webUrl)), true);
   });
 }
+
+test('290 ml family keeps the Label Lab PC order and selects index 0', () => {
+  const family = LAB_MODEL_FAMILIES.find(item => item.id === 'glass-290-rotate-cap');
+  assert.ok(family);
+  assert.equal(family.name, '290 ml Bottle');
+  assert.deepEqual(getOrderedFamilyVariants(family).map(item => [item.label, item.order]), [
+    ['Basil', 0],
+    ['Chia', 1],
+    ['Milk', 3],
+  ]);
+  assert.equal(getDefaultFamilyVariant(family).modelId, 'basil-strawberry');
+  assert.equal(family.variants.find(item => item.label === 'Basil').available, true);
+  assert.equal(family.variants.find(item => item.label === 'Chia').available, false);
+  assert.equal(family.variants.find(item => item.label === 'Milk').available, false);
+});
+
+test('model library families do not duplicate a model card for each variant', () => {
+  const modelIds = LAB_MODEL_FAMILIES.flatMap(family =>
+    family.variants.filter(variant => variant.available).map(variant => variant.modelId),
+  );
+  assert.deepEqual([...new Set(modelIds)].sort(), LAB_MODELS.map(model => model.id).sort());
+  assert.equal(new Set(modelIds).size, modelIds.length, 'each active child belongs to one packaging family');
+  assert.equal(LAB_MODEL_FAMILIES.length, 8);
+  for (const family of LAB_MODEL_FAMILIES) {
+    const first = getDefaultFamilyVariant(family);
+    assert.equal(first.available, true, `${family.name} must have a usable index 0`);
+    assert.ok(LAB_MODELS.some(model => model.id === first.modelId));
+    assert.ok(family.variants.filter(variant => !variant.available).every(variant => !variant.modelId),
+      'unavailable children must not alias another product GLB');
+  }
+});
+
+test('default means sorted list index zero, even with source order gaps and ties', () => {
+  const original = LAB_MODEL_FAMILIES[0];
+  const family = { ...original, variants: [
+    { id: 'milk', label: 'Milk', order: 2, available: false },
+    { id: 'chia', label: 'Chia', order: 2, available: false },
+    { id: 'basil', label: 'Basil', order: 1, modelId: 'basil-strawberry', available: true },
+  ] };
+  assert.equal(getDefaultFamilyVariant(family).modelId, 'basil-strawberry');
+  assert.deepEqual(getOrderedFamilyVariants(family).map(item => item.id), ['basil', 'chia', 'milk']);
+  assert.deepEqual(family.variants.map(item => item.id), ['milk', 'chia', 'basil'], 'sorting must not mutate catalog data');
+  assert.equal(getDefaultFamilyVariant({ ...original, variants: [] }), undefined);
+});
+
+test('searches match variant names while preserving one packaging card and category filters', () => {
+  for (const query of [' Chia ', 'MILK', 'strawberry', '290 ml']) {
+    assert.deepEqual(filterLabModelFamilies(query).map(item => item.id), ['glass-290-rotate-cap']);
+  }
+  assert.equal(filterLabModelFamilies('Chia', 'can').length, 0);
+  assert.deepEqual(filterLabModelFamilies('', 'pet').map(item => item.id), ['pet-500-short-label']);
+  assert.equal(getLabModelFamily(undefined), undefined);
+  assert.equal(getLabModelFamily('not-a-web-model'), undefined);
+});

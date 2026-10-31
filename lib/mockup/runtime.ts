@@ -543,13 +543,24 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   };
   const resize = () => {
     if (disposed || captureGate.busy) return;
-    const width = Math.max(1, Math.round(host.clientWidth));
+    // The page can keep desktop layout dimensions while CSS zoom scales its
+    // surface. Allocate pixels for the displayed canvas, not that larger layout.
+    const bounds = host.getBoundingClientRect();
+    const width = Math.max(1, Math.round(bounds.width));
     const height = Math.max(1, Math.round(width / aspect));
     const dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1.25 : 1.5);
-    renderer.setPixelRatio(dpr); renderer.setSize(width, height, false);
+    if (renderer.getPixelRatio() !== dpr) renderer.setPixelRatio(dpr);
+    const displaySize = renderer.getSize(new THREE.Vector2());
+    if (displaySize.x !== width || displaySize.y !== height) renderer.setSize(width, height, false);
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
     if (!previewTarget) previewTarget = createLinearTarget(size.x, size.y); else previewTarget.setSize(size.x, size.y);
-    camera.aspect = aspect; camera.updateProjectionMatrix(); fit(); requestRender();
+    // OrbitControls receives display-pixel deltas but divides by clientHeight,
+    // which remains in logical CSS pixels inside the scaled page.
+    controls.rotateSpeed = 0.65 * (bounds.height > 0 ? host.clientHeight / bounds.height : 1);
+    if (Math.abs(camera.aspect - aspect) > 0.0000001) {
+      camera.aspect = aspect; camera.updateProjectionMatrix(); fit();
+    }
+    requestRender();
   };
   const discard = (model: LoadedModel | null) => {
     if (!model || discarded.has(model)) return;
@@ -786,7 +797,10 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     if (!previous) return;
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (pointers.size > 1) return;
-    const dx = event.clientX - previous.x, dy = event.clientY - previous.y, distance = Math.hypot(dx, dy);
+    const bounds = canvas.getBoundingClientRect();
+    const dx = (event.clientX - previous.x) * (bounds.width > 0 ? host.clientWidth / bounds.width : 1);
+    const dy = (event.clientY - previous.y) * (bounds.height > 0 ? host.clientHeight / bounds.height : 1);
+    const distance = Math.hypot(dx, dy);
     if (distance < 0.1) return;
     rotateProduct(dragAxis.set(dy, dx, 0).normalize(), Math.min(distance * 0.008, 0.24));
   };
@@ -896,6 +910,12 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   canvas.addEventListener('webglcontextlost', lostContext); canvas.addEventListener('webglcontextrestored', restoredContext);
   document.addEventListener('visibilitychange', syncVisibility);
   const resizeObserver = new ResizeObserver(resize); resizeObserver.observe(host);
+  // CSS zoom may change without changing the host's logical content box, so
+  // ResizeObserver alone cannot notice every desktop scale adjustment.
+  const scaledSurface = host.closest('[data-labellab-surface]');
+  const scaleObserver = scaledSurface ? new MutationObserver(resize) : null;
+  if (scaledSurface) scaleObserver?.observe(scaledSurface, { attributes: true, attributeFilter: ['style'] });
+  window.addEventListener('resize', resize);
   const intersection = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; syncVisibility(); }); intersection.observe(host);
   resize();
 
@@ -1163,7 +1183,8 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       cancelPointers(); hitRegion.dispose();
       disposed = true; revision++; environmentRevision++; queuedSelection = null; request?.abort(); exportAbort?.abort();
       if (raf) cancelAnimationFrame(raf); raf = 0;
-      resizeObserver.disconnect(); intersection.disconnect();
+      resizeObserver.disconnect(); scaleObserver?.disconnect(); intersection.disconnect();
+      window.removeEventListener('resize', resize);
       document.removeEventListener('visibilitychange', syncVisibility);
       canvas.removeEventListener('webglcontextlost', lostContext); canvas.removeEventListener('webglcontextrestored', restoredContext);
       host.removeEventListener('pointerdown', pointerDown); host.removeEventListener('pointermove', pointerMove);

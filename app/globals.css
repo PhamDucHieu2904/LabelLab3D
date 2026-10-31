@@ -687,6 +687,13 @@ input[type="search"]::-webkit-search-cancel-button {
   max-height: 140px;
   object-fit: contain;
 }
+.artwork-thumbnail.is-empty {
+  border: 1px dashed color-mix(in srgb, currentColor 35%, transparent);
+  background: color-mix(in srgb, currentColor 5%, transparent);
+}
+.artwork-thumbnail.is-empty svg {
+  opacity: 0.7;
+}
 .artwork-library p {
   font-size: 9px;
   color: #97818b;
@@ -1051,8 +1058,8 @@ input[type="search"]::-webkit-search-cancel-button {
   text-shadow: none;
 }
 .preview-stage:fullscreen {
-  width: 100vw;
-  height: 100vh;
+  width: var(--labellab-page-width, 100vw);
+  height: var(--labellab-page-height, 100dvh);
   background: var(--scene-color);
 }
 .creative-space[data-style="white"] .preview-stage:fullscreen {
@@ -1747,7 +1754,7 @@ select {
   background: var(--paper);
   box-shadow: 0 25px 100px #32132345;
   color: var(--ink);
-  max-height: 90vh;
+  max-height: calc(var(--labellab-page-height, 100dvh) * .9);
   overflow: auto;
 }
 .app-dialog::backdrop {
@@ -2019,7 +2026,7 @@ select {
   padding: 6px;
   margin-left: 9px;
 }
-@media (min-width: 1600px) {
+@container labellab-page (min-width: 1600px) {
   .workspace-layout {
     grid-template-columns: 270px minmax(300px, 1fr) 290px;
     min-height: 720px;
@@ -2052,7 +2059,7 @@ select {
     margin-bottom: 20px;
   }
 }
-@media (max-width: 1200px) {
+@container labellab-page (max-width: 1200px) {
   .site-header {
     padding: 0 26px;
     gap: 28px;
@@ -2121,7 +2128,7 @@ select {
     font-size: 9px;
   }
 }
-@media (max-width: 1000px) {
+@container labellab-page (max-width: 1000px) {
   .site-header {
     height: 76px;
   }
@@ -2313,7 +2320,7 @@ select {
 }
 
 /* The source Vinut studio lets the pink scene show through every control surface. */
-@media (min-width: 1001px) {
+@container labellab-page (min-width: 1001px) {
   .workbench-bar {
     color: #fff;
     border-color: #fff9;
@@ -2546,7 +2553,7 @@ select {
     color: #6c5962;
   }
 }
-@media (max-width: 700px) {
+@container labellab-page (max-width: 700px) {
   body {
     font-size: 13px;
   }
@@ -3416,7 +3423,7 @@ select {
 .export-policy p {
   line-height: 1.65;
 }
-@media (min-width: 1001px) {
+@container labellab-page (min-width: 1001px) {
   .workspace-layout {
     grid-template-columns: 260px minmax(300px, 1fr) 280px;
   }
@@ -3428,7 +3435,7 @@ select {
     padding: 20px 18px;
   }
 }
-@media (min-width: 1001px) and (max-width: 1200px) {
+@container labellab-page (min-width: 1001px) and (max-width: 1200px) {
   .workspace-layout {
     grid-template-columns: 228px minmax(280px, 1fr) 258px;
   }
@@ -3439,12 +3446,12 @@ select {
     padding: 18px 14px;
   }
 }
-@media (min-width: 1600px) {
+@container labellab-page (min-width: 1600px) {
   .workspace-layout {
     grid-template-columns: 280px minmax(300px, 1fr) 300px;
   }
 }
-@media (min-width: 701px) and (max-width: 1000px) {
+@container labellab-page (min-width: 701px) and (max-width: 1000px) {
   .workspace-layout {
     grid-template-columns: 220px minmax(280px, 1fr);
   }
@@ -3477,7 +3484,7 @@ select {
     font-size: 12px;
   }
 }
-@media (max-width: 700px) {
+@container labellab-page (max-width: 700px) {
   .search-box {
     display: flex;
     margin-bottom: 14px;
@@ -3688,7 +3695,7 @@ select {
 }
 
 /* Vinut-style editor shell: one continuous canvas with light floating drawers. */
-@media (min-width: 1001px) {
+@container labellab-page (min-width: 1001px) {
   .site-header {
     height: 64px;
     padding: 0 28px;
@@ -3712,8 +3719,8 @@ select {
   }
 
   .creative-space {
-    min-height: calc(100dvh - 64px);
-    height: calc(100dvh - 64px);
+    min-height: calc(var(--labellab-page-height, 100dvh) - 64px);
+    height: calc(var(--labellab-page-height, 100dvh) - 64px);
     padding: 0;
   }
 
@@ -3884,7 +3891,7 @@ select {
   }
 }
 
-@media (min-width: 1001px) and (max-width: 1250px) {
+@container labellab-page (min-width: 1001px) and (max-width: 1250px) {
   .library-panel {
     width: 246px;
   }
@@ -3904,7 +3911,7 @@ select {
   }
 }
 
-@media (max-width: 1000px) {
+@container labellab-page (max-width: 1000px) {
   .creative-space {
     min-height: 0;
     padding: 0 12px 16px;
@@ -3981,7 +3988,7 @@ select {
 }
 
 /* Final cascade: translucent Vinut surfaces must win over the legacy cream-card rules above. */
-@media (min-width: 1001px) {
+@container labellab-page (min-width: 1001px) {
   .creative-space:not([data-style="white"]) .workbench-bar,
   .creative-space:not([data-style="white"]) .library-panel,
   .creative-space:not([data-style="white"]) .controls-panel {
@@ -4064,7 +4071,7 @@ select {
   }
 }
 
-@media (max-width: 1000px) {
+@container labellab-page (max-width: 1000px) {
   .creative-space:not([data-style="white"]) .workbench-bar,
   .creative-space:not([data-style="white"]) .library-panel,
   .creative-space:not([data-style="white"]) .controls-panel {
@@ -4157,7 +4164,7 @@ select {
   color: var(--berry);
 }
 
-@media (min-width: 1001px) {
+@container labellab-page (min-width: 1001px) {
   .library-panel,
   .controls-panel {
     top: 20px;
@@ -4173,7 +4180,7 @@ select {
   }
 }
 
-@media (min-width: 1001px) and (max-width: 1250px) {
+@container labellab-page (min-width: 1001px) and (max-width: 1250px) {
   .stage-top,
   .stage-bottom {
     left: 282px;
@@ -4186,7 +4193,7 @@ select {
   }
 }
 
-@media (max-width: 1000px) {
+@container labellab-page (max-width: 1000px) {
   .workbench-bar {
     margin: 0;
   }
@@ -4197,7 +4204,7 @@ select {
   }
 }
 
-@media (max-width: 700px) {
+@container labellab-page (max-width: 700px) {
   .header-icon-action {
     width: 44px;
     min-width: 44px;
@@ -4309,7 +4316,7 @@ select {
   }
 }
 
-@media (min-width: 1001px) {
+@container labellab-page (min-width: 1001px) {
   .workspace-layout {
     position: relative;
     display: block;
@@ -4346,14 +4353,10 @@ select {
     overflow-y: auto;
   }
 
-  .library-panel.tool-panel.is-open {
-    display: flex;
-    width: 278px;
-  }
-
+  .library-panel.tool-panel.is-open,
   .controls-panel.tool-panel.is-open {
     display: flex;
-    width: 300px;
+    width: 278px;
   }
 
 
@@ -4387,13 +4390,10 @@ select {
   }
 }
 
-@media (min-width: 1001px) and (max-width: 1250px) {
-  .library-panel.tool-panel.is-open {
-    width: 246px;
-  }
-
+@container labellab-page (min-width: 1001px) and (max-width: 1250px) {
+  .library-panel.tool-panel.is-open,
   .controls-panel.tool-panel.is-open {
-    width: 270px;
+    width: 246px;
   }
 
   .workspace-layout.has-tool-panel .stage-top,
@@ -4402,7 +4402,7 @@ select {
   }
 }
 
-@media (max-width: 1000px) {
+@container labellab-page (max-width: 1000px) {
   .workspace-layout {
     display: flex;
     flex-direction: column;
@@ -4558,7 +4558,7 @@ select {
 
 /* Opening a drawer must not resize or refit the product. Drawers float above
    the fixed canvas instead of participating in its layout geometry. */
-@media (min-width: 1001px) {
+@container labellab-page (min-width: 1001px) {
   .workspace-layout.has-tool-panel .stage-top,
   .workspace-layout.has-tool-panel .stage-bottom {
     left: 98px;
@@ -4570,7 +4570,7 @@ select {
   }
 }
 
-@media (min-width: 1001px) and (max-width: 1250px) {
+@container labellab-page (min-width: 1001px) and (max-width: 1250px) {
   .workspace-layout.has-tool-panel .stage-top,
   .workspace-layout.has-tool-panel .stage-bottom {
     left: 98px;
@@ -4676,15 +4676,15 @@ select {
 .creative-space[data-style="white"] .render-panel-submit:not(:disabled):hover { background: #24272c; }
 .creative-space[data-style="white"] .render-panel-cost { color: #f1f2f4; }
 @keyframes render-panel-spin { to { transform: rotate(360deg); } }
-@media (min-width: 1001px) {
+@container labellab-page (min-width: 1001px) {
   .render-sidebar { max-height: calc(100% - 40px); overflow-y: auto; scrollbar-width: thin; }
   .workspace-layout.has-render-panel .vertical-tools { right: 316px; }
   .workspace-layout.has-tool-panel .stage-top { left: 396px; }
 }
-@media (min-width: 1001px) and (max-width: 1250px) {
+@container labellab-page (min-width: 1001px) and (max-width: 1250px) {
   .workspace-layout.has-tool-panel .stage-top { left: 364px; }
 }
-@media (max-width: 1000px) {
+@container labellab-page (max-width: 1000px) {
   .render-sidebar { position: relative; top: auto; right: auto; order: 0; width: 100%; }
   .render-panel-preview { max-height: 260px; width: calc(260px * var(--render-frame-aspect)); max-width: 100%; margin-inline: auto; }
   .render-panel-preview canvas { max-height: 260px; width: auto; max-width: 100%; margin-inline: auto; }
@@ -4692,7 +4692,7 @@ select {
 @media (prefers-reduced-motion: reduce) {
   .render-panel-toggle input, .render-panel-toggle input::after { transition: none; }
 }
-@media (max-width: 700px) {
+@container labellab-page (max-width: 700px) {
   .site-header .header-cta { display: none; }
   .editor-rail button { flex: 1 0 0; min-width: 44px; }
   .editor-rail-divider { display: none; }
@@ -4710,7 +4710,7 @@ select {
 .camera-preset.animated-preset { display:flex; align-items:center; gap:6px; background:#fff; color:#b53256; }
 .camera-preset.animated-preset.is-active { background:#fff; color:#b53256; }
 .camera-preset-dot { display:none; }
-@media (max-width: 900px) {
+@container labellab-page (max-width: 900px) {
   .camera-presets { max-width:calc(100vw - 32px); overflow-x:auto; scrollbar-width:none; }
   .camera-presets::-webkit-scrollbar { display:none; }
   .camera-preset { padding-inline:7px; }
@@ -4723,11 +4723,11 @@ select {
 .camera-mode-frame .camera-preset.is-active { background:#f6c0d7; color:#b53256; }
 .camera-mode-frame .camera-preset.animated-preset { background:#fff; color:#b53256; }
 .camera-mode-frame .camera-preset.animated-preset:disabled { opacity:.45; cursor:not-allowed; }
-@media (max-width: 900px) { .camera-presets { position:static; transform:none; max-width:calc(100vw - 32px); } }
+@container labellab-page (max-width: 900px) { .camera-presets { position:static; transform:none; max-width:calc(100vw - 32px); } }
 
 /* Desktop keeps the compact preset dock centered while the mouse and keyboard
    remain the primary navigation controls. */
-@media (min-width: 1001px) {
+@container labellab-page (min-width: 1001px) {
   .stage-bottom { left: 98px; right: 316px; bottom: 18px; justify-content: center; gap: 0; }
   .stage-bottom > .camera-presets { position: static; transform: none; }
   .stage-bottom > .zoom-tools { position: absolute; right: 0; }
@@ -4739,7 +4739,7 @@ select {
    Scoped with home-* classes so the 3D studio remains independent.
    ======================================================================== */
 .home-shell {
-  --home-unit: calc(1px * var(--home-scale, 1));
+  --home-unit: 1px;
   --home-berry: #d7195c;
   --home-berry-deep: #a90f45;
   --home-ink: #281d25;
@@ -4749,8 +4749,7 @@ select {
   --home-line: rgba(255, 255, 255, 0.68);
   --home-shadow: 0 calc(20 * var(--home-unit)) calc(48 * var(--home-unit)) rgba(89, 10, 38, 0.17), 0 calc(4 * var(--home-unit)) calc(14 * var(--home-unit)) rgba(89, 10, 38, 0.08);
   --home-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  /* Geometry scales proportionally; type has independent readable bounds.
-     Laptop floors protect legibility and desktop ceilings keep emphasis calm. */
+  /* DesktopViewport scales geometry and type together from this desktop size. */
   --home-text: clamp(15px, calc(8px + 10 * var(--home-unit)), 18px);
   --home-ui: clamp(15px, calc(9px + 8 * var(--home-unit)), 17px);
   --home-meta: clamp(13px, calc(7px + 8 * var(--home-unit)), 15px);
@@ -4916,7 +4915,7 @@ select {
 @keyframes home-sparkle { 0%,100% { opacity: .35; transform: scale(.8) rotate(0); } 50% { opacity: 1; transform: scale(1.2) rotate(25deg); } }
 @keyframes home-icon-pulse { 0%,100% { transform: translateY(0); } 50% { transform: translateY(calc(-3 * var(--home-unit))) rotate(-2deg); } }
 @keyframes home-today-pulse { 0%,100% { box-shadow: 0 0 0 calc(4 * var(--home-unit)) #dc1d6022; } 50% { box-shadow: 0 0 0 calc(7 * var(--home-unit)) #dc1d6010; } }
-@media (max-width: 860px) {
+@container labellab-page (max-width: 860px) {
   .home-shell { --home-unit: 1px; --home-text: calc(16 * var(--home-unit)); --home-ui: calc(16 * var(--home-unit)); --home-meta: calc(14 * var(--home-unit)); --home-label: calc(12 * var(--home-unit)); --home-heading: calc(24 * var(--home-unit)); --home-feature-title: calc(32 * var(--home-unit)); height: auto; min-height: 100dvh; overflow-x: hidden; overflow-y: visible; }
   .home-frame { position: relative; width: 100%; height: auto; }
   .home-dashboard { display: grid; grid-template-columns: 1fr; height: auto; min-height: auto; padding: calc(16 * var(--home-unit)); gap: calc(16 * var(--home-unit)); }
@@ -4941,7 +4940,7 @@ select {
   .home-promo-card { min-height: calc(300 * var(--home-unit)); }
   .home-right-column { grid-column: auto; }
 }
-@media (max-width: 520px) {
+@container labellab-page (max-width: 520px) {
   .home-showcase { min-height: calc(570 * var(--home-unit)); }
   .home-showcase-topline { left: calc(14 * var(--home-unit)); right: calc(14 * var(--home-unit)); }
   .home-hero-caption { left: calc(14 * var(--home-unit)); right: calc(14 * var(--home-unit)); bottom: calc(14 * var(--home-unit)); }
@@ -4957,10 +4956,10 @@ select {
 }
 
 /* Both routes reserve the same shared site header height. */
-@media (min-width: 1001px) {
+@container labellab-page (min-width: 1001px) {
   .creative-space {
-    height: calc(100dvh - var(--app-header-height));
-    min-height: calc(100dvh - var(--app-header-height));
+    height: calc(var(--labellab-page-height, 100dvh) - var(--app-header-height));
+    min-height: calc(var(--labellab-page-height, 100dvh) - var(--app-header-height));
   }
 }
 .studio-project-actions { display: flex; align-items: center; gap: 8px; pointer-events: auto; }
@@ -4968,15 +4967,57 @@ select {
 .studio-project-actions button:hover { background: #5d17395c; }
 .creative-space[data-style="white"] .studio-project-actions button { color: #503c48; border-color: #816a7a44; background: #ffffffaa; }
 .studio-style-switch { display: inline-flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 10px 0 14px; border: 1px solid #ffffff66; border-radius: 10px; background: #5d173933; color: #fff; backdrop-filter: blur(14px); font: 500 13px/1.3 var(--font-ui); }
-.studio-style-track { display: inline-flex; align-items: center; gap: 2px; min-height: 30px; padding: 2px; border-radius: 999px; background: #fff; }
-.studio-style-track button { min-height: 26px; padding: 0 13px; border: 0; border-radius: 999px; background: transparent; color: #31242b; font: 600 12px/1 var(--font-ui); }
-.studio-style-track button:hover { background: #f8e9ef; }
-.studio-style-track button.is-active { color: #fff; background: #d5456b; box-shadow: none; }
+.studio-project-actions button.studio-style-toggle {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 0;
+  flex: 0 0 auto;
+  width: 118px;
+  height: 30px;
+  min-height: 30px;
+  padding: 2px;
+  border: 0;
+  border-radius: 999px;
+  color: #31242b;
+  background: #fff;
+  box-shadow: none;
+  backdrop-filter: none;
+  font: 600 12px/1 var(--font-ui);
+  transition: background-color 300ms ease, color 300ms ease;
+}
+.studio-style-thumb {
+  position: absolute;
+  z-index: -1;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 4px) / 2);
+  border-radius: inherit;
+  background: #d5456b;
+  transform: translateX(0);
+  pointer-events: none;
+  transition: transform 300ms cubic-bezier(.22, .61, .36, 1), background-color 300ms ease;
+}
+.studio-style-label {
+  display: block;
+  text-align: center;
+  pointer-events: none;
+  transition: color 300ms ease;
+}
+.studio-style-label-pink { color: #fff; }
+.studio-style-label-white { color: #31242b; }
+.studio-style-toggle[aria-checked="true"] .studio-style-thumb { transform: translateX(100%); background-color: #fff; }
+.studio-style-toggle[aria-checked="true"] .studio-style-label-pink { color: #6c5962; }
+.studio-style-toggle[aria-checked="true"] .studio-style-label-white { color: #503c48; }
 .creative-space[data-style="white"] .studio-style-switch { color: #503c48; border-color: #816a7a44; background: #ffffffaa; }
-.creative-space[data-style="white"] .studio-style-track { background: #f0ecec; }
-.creative-space[data-style="white"] .studio-style-track button { color: #6c5962; }
-.creative-space[data-style="white"] .studio-style-track button:hover { background: #fff; }
-.creative-space[data-style="white"] .studio-style-track button.is-active { color: #503c48; background: #fff; box-shadow: 0 1px 5px #5c173326; }
+.creative-space[data-style="white"] .studio-project-actions button.studio-style-toggle { color: #6c5962; background: #f0ecec; }
+.studio-style-switch { transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease; }
+@media (prefers-reduced-motion: reduce) {
+  .studio-style-switch, .studio-project-actions button.studio-style-toggle, .studio-style-thumb, .studio-style-label { transition: none; }
+}
 .creative-space[data-style="white"] .camera-presets { border-color: #e6dedf; background: #fff; box-shadow: 0 4px 16px #5c17331c; }
 .creative-space[data-style="white"] .camera-mode-frame-green { border-color: #d8cdd2; }
 .creative-space[data-style="white"] .camera-mode-frame .camera-preset { color: #6c5962; }
@@ -5003,19 +5044,19 @@ select {
 .creative-space[data-style="white"] :is(.pro-tag, .file-tag) { color: #6a6670; border-color: #d8d8de; background: #ececf1; }
 .creative-space[data-style="white"] .render-panel-preview { border-color: #d8d8de; }
 .creative-space[data-style="white"] .artwork-library :is(.outline-button, .quiet-button) { border-color: #d8d8de; background: #ffffff99; }
-@media (min-width: 1001px) {
+@container labellab-page (min-width: 1001px) {
   .workspace-layout.has-render-panel .stage-top { right: 316px; }
 }
 .stage-ui-layer > .stage-top { pointer-events: none; gap: 12px; }
 .stage-top > .mode-switch { pointer-events: auto; }
-@media (max-width: 1250px) {
+@container labellab-page (max-width: 1250px) {
   .studio-project-actions > button { width: 40px; padding: 0; justify-content: center; }
   .studio-project-actions > button span { display: none; }
   .studio-style-switch { gap: 4px; padding-inline: 4px; }
   .studio-style-switch > span { display: none; }
-  .studio-style-track button { min-width: 36px; padding-inline: 7px; }
+  .studio-project-actions button.studio-style-toggle { width: 92px; }
 }
-@media (max-width: 700px) {
+@container labellab-page (max-width: 700px) {
   .studio-project-actions > button { width: 44px; min-height: 44px; }
   .studio-style-switch { min-height: 44px; }
 }

@@ -13,13 +13,13 @@ import {
   Sparkles,
   Zap,
 } from "lucide-react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useState } from "react";
 import MovingGrid from "./MovingGrid";
 import SiteHeader from "./SiteHeader";
 import CoinPricing from "./CoinPricing";
 import UserProfileCard from "./UserProfileCard";
 import HomeModelDemo from "./HomeModelDemo";
-import { LAB_MODELS } from "@/lib/labellab/catalog";
+import { FEATURED_MODELS } from "@/lib/labellab/catalog";
 import { LABELLAB_UPDATES } from "@/lib/labellab/updates";
 import { PROFILE_PREVIEW } from "@/lib/labellab/profile-preview";
 
@@ -36,33 +36,11 @@ const week = [
 ] as const;
 
 export default function HomePage() {
-  const shellRef = useRef<HTMLElement>(null);
   const [claimed, setClaimed] = useState(false);
-  const [featuredModel, setFeaturedModel] = useState(LAB_MODELS[0]);
-
-  useLayoutEffect(() => {
-    const shell = shellRef.current;
-    if (!shell) return;
-
-    // Scale design units rather than a composited page texture, so the complete
-    // composition fits while the browser paints text at its final pixel size.
-    const fitDesktop = (width: number, height: number) => {
-      if (width <= 860 || width === 0 || height === 0) return;
-      const scale = Math.min(1, width / 1920, height / 1080);
-      shell.style.setProperty("--home-scale", String(scale));
-    };
-
-    const { width, height } = shell.getBoundingClientRect();
-    fitDesktop(width, height);
-    const observer = new ResizeObserver(([entry]) => {
-      fitDesktop(entry.contentRect.width, entry.contentRect.height);
-    });
-    observer.observe(shell);
-    return () => observer.disconnect();
-  }, []);
+  const [featuredModel, setFeaturedModel] = useState(FEATURED_MODELS[0]);
 
   return (
-    <main className="home-shell" ref={shellRef}>
+    <main className="home-shell">
       <MovingGrid enabled />
       <div className="home-frame">
         <SiteHeader activePage="home" />
@@ -86,7 +64,7 @@ export default function HomePage() {
                   <h2>Bring your next label to life.</h2>
                 </div>
                 <div className="home-scene-dots" role="group" aria-label="Featured mockup models">
-                  {LAB_MODELS.map((model) => (
+                  {FEATURED_MODELS.map((model) => (
                     <button
                       key={model.id}
                       className={model.id === featuredModel.id ? "is-active" : ""}
@@ -130,7 +108,7 @@ export default function HomePage() {
             </article>
 
             <article className="home-card home-promo-card">
-              <Image src="/home/promo-banner-3d.jpg" alt="Colorful 3D packaging mockups" fill sizes="(max-width: 1240px) 70vw, 48vw" />
+              <Image src="/home/promo-banner-3d.jpg" alt="Colorful 3D packaging mockups" fill loading="eager" sizes="(max-width: 1240px) 70vw, 48vw" />
               <div className="home-promo-overlay" />
               <div className="home-promo-content">
                 <span className="home-promo-tag"><Sparkles size={12} /> Limited event</span>

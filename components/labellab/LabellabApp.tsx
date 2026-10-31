@@ -31,7 +31,12 @@ import {
   X,
 } from "lucide-react";
 import {
+  getDefaultFamilyVariant,
+  getLabModelFamily,
+  getLabModelFamilyById,
+  filterLabModelFamilies,
   LAB_MODELS,
+  LAB_MODEL_FAMILIES,
   getLabModel,
   getModelMaterialDefaults,
 } from "@/lib/labellab/catalog";
@@ -54,6 +59,7 @@ import SceneCanvas, { type SceneCanvasHandle } from "./SceneCanvas";
 import MovingGrid from "./MovingGrid";
 import RenderPanel from "./RenderPanel";
 import SiteHeader from "./SiteHeader";
+import ModelVariantsPanel from "./ModelVariantsPanel";
 
 type Modal = "projects" | "guide" | null;
 type EditorTool = "models" | "artwork" | "scene" | "materials";
@@ -118,6 +124,7 @@ export default function LabellabApp() {
   const [hydrated, setHydrated] = useState(false);
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
+  const [activeFamilyId, setActiveFamilyId] = useState<string | null>(null);
   const [activeTool, setActiveTool] = useState<EditorTool | null>("models");
   const [modal, setModal] = useState<Modal>(null);
   const [status, setStatus] = useState<MockupStatus["phase"]>("loading-model");
@@ -139,22 +146,23 @@ export default function LabellabApp() {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const workspaceLayoutRef = useRef<HTMLDivElement>(null);
+  const libraryPanelRef = useRef<HTMLElement>(null);
   const artworkRef = useRef<string | undefined>(undefined);
   const resultRef = useRef<string | undefined>(undefined);
   const modelMaterials = useRef(
     new Map<string, ReturnType<typeof getModelMaterialDefaults>>(),
   );
   const model = getLabModel(settings.modelId);
+  const originalArtwork = model.appearance.slots?.label?.baseColorMap;
+  const currentArtwork = artwork ?? originalArtwork;
   const studio = settings.sceneMode === "studio";
   const whiteStyle = settings.style === "white";
   const ready = status === "ready";
-  const models = LAB_MODELS.filter(
-    (item) =>
-      (filter === "all" || item.category === filter) &&
-      `${item.name} ${item.description} ${item.volume}`
-        .toLowerCase()
-        .includes(query.toLowerCase()),
-  );
+  const modelFamilies = filterLabModelFamilies(query, filter);
+  const activeFamily = getLabModelFamilyById(activeFamilyId);
+  const variantsOpen = activeTool === "models" && !modal && !!activeFamily && activeFamily.variants.length > 1 &&
+    modelFamilies.some((family) => family.id === activeFamily.id);
   const update = <K extends keyof ScenePreferences>(
     key: K,
     value: ScenePreferences[K],
@@ -209,6 +217,8 @@ export default function LabellabApp() {
 
   const chooseModel = (id: string) => {
     if (exportBusy) return;
+    const family = getLabModelFamily(id);
+    setActiveFamilyId(family && family.variants.length > 1 ? family.id : null);
     if (id === settings.modelId) return;
     modelMaterials.current.set(settings.modelId, {
       liquidColor: settings.liquidColor,
@@ -224,6 +234,14 @@ export default function LabellabApp() {
     }));
     clearArtwork();
     setStatus("loading-model");
+  };
+  const openFamily = (familyId: string) => {
+    if (exportBusy) return;
+    const family = getLabModelFamilyById(familyId);
+    if (!family) return;
+    setActiveFamilyId(family.variants.length > 1 ? family.id : null);
+    const defaultVariant = getDefaultFamilyVariant(family);
+    if (defaultVariant?.available && defaultVariant.modelId) chooseModel(defaultVariant.modelId);
   };
   const clearArtwork = () => {
     if (artworkRef.current) releaseLocalArtwork(artworkRef.current);
@@ -318,6 +336,7 @@ export default function LabellabApp() {
     setSettings((value) => ({ ...value, sceneMode: mode }));
   };
   const selectTool = (tool: EditorTool) => {
+    setActiveFamilyId(null);
     setActiveTool((current) => (current === tool ? null : tool));
   };
   const reset = () => {
@@ -325,6 +344,7 @@ export default function LabellabApp() {
     clearArtwork();
     modelMaterials.current.clear();
     setSettings({ ...DEFAULT_PREFERENCES });
+    setActiveFamilyId(null);
     setActiveCamera("animated");
     sceneRef.current?.reset();
     setToast("Default Basil Strawberry scene restored.");
@@ -360,6 +380,7 @@ export default function LabellabApp() {
 
         <div className="workbench">
           <div
+            ref={workspaceLayoutRef}
             className={`workspace-layout ${activeTool ? "has-tool-panel" : "canvas-only"} has-render-panel`}
           >
             <nav className="editor-rail" aria-label="Studio tools" inert={exportBusy}>
@@ -396,6 +417,7 @@ export default function LabellabApp() {
             </nav>
 
             <aside
+              ref={libraryPanelRef}
               className={`library-panel tool-panel ${activeTool === "models" || activeTool === "artwork" ? "is-open" : ""}`}
               inert={exportBusy}
               aria-label={activeTool === "artwork" ? "Artwork" : "Model library"}
@@ -404,7 +426,7 @@ export default function LabellabApp() {
               <div className="panel-title">
                 <h2>{activeTool === "artwork" ? "Artwork" : "Model library"}</h2>
                 {activeTool === "models" && (
-                  <span className="count-badge">{LAB_MODELS.length}</span>
+                  <span className="count-badge">{LAB_MODEL_FAMILIES.length}</span>
                 )}
               </div>
               {activeTool === "models" ? (
@@ -415,7 +437,7 @@ export default function LabellabApp() {
                       placeholder="Search packaging..."
                       aria-label="Search packaging"
                       value={query}
-                      onChange={(e) => setQuery(e.target.value)}
+                      onChange={(e) => { setQuery(e.target.value); setActiveFamilyId(null); }}
                     />
                   </label>
                   <div className="category-filters" aria-label="Filter packaging">
@@ -423,7 +445,7 @@ export default function LabellabApp() {
                       <button
                         key={category.id}
                         aria-pressed={filter === category.id}
-                        onClick={() => setFilter(category.id)}
+                        onClick={() => { setFilter(category.id); setActiveFamilyId(null); }}
                       >
                         {category.label}
                       </button>
@@ -433,42 +455,45 @@ export default function LabellabApp() {
                     className={`models-grid ${modelLibrary.grid}`}
                     data-tone={studio ? "neutral" : settings.style}
                   >
-                    {models.map((item, index) => (
+                    {modelFamilies.map((family, index) => {
+                      const selected = family.variants.some(
+                        (variant) => variant.modelId === model.id,
+                      );
+                      return (
                       <button
-                        className={`model-card ${modelLibrary.card} ${item.id === model.id ? "selected" : ""}`}
-                        key={item.id}
-                        aria-label={`${item.name}, ${item.volume}, ${item.category === "can" ? "aluminum can" : item.category === "glass" ? "glass bottle" : "PET bottle"}`}
-                        aria-pressed={item.id === model.id}
-                        onClick={() => chooseModel(item.id)}
+                        className={`model-card ${modelLibrary.card} ${selected ? "selected" : ""}`}
+                        key={family.id}
+                        aria-label={`${family.name}, ${family.description}`}
+                        aria-pressed={selected}
+                        aria-expanded={family.variants.length > 1 ? variantsOpen && activeFamilyId === family.id : undefined}
+                        aria-controls={variantsOpen && activeFamilyId === family.id ? "model-variants-panel" : undefined}
+                        onClick={() => openFamily(family.id)}
                       >
                         <div
                           className={`model-image ${modelLibrary.image}`}
                         >
                           <img
-                            src={item.poster}
+                            src={family.poster}
                             alt=""
                             loading={index === 0 ? "eager" : "lazy"}
                           />
-                          {item.id === model.id && (
+                          {selected && (
                             <span className="selected-check">
                               <Check size={12} />
                             </span>
                           )}
                         </div>
                         <strong className={modelLibrary.name}>
-                          {item.volume} {item.category === "can" ? "CAN" : "BOTTLE"}
+                          {family.name}
                         </strong>
                         <span className={modelLibrary.caption}>
-                          ({item.category === "glass"
-                            ? "Glass bottle"
-                            : item.category === "can"
-                              ? "Alu can"
-                              : "PET bottle"})
+                          ({family.category === "glass" ? "Glass bottle" : family.category === "can" ? "Alu can" : "PET bottle"})
                         </span>
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
-                  {!models.length && (
+                  {!modelFamilies.length && (
                     <div className="empty-state">
                       <Search size={24} />
                       <p>No matching models found.</p>
@@ -485,18 +510,20 @@ export default function LabellabApp() {
                 </>
               ) : (
                 <div className="artwork-library">
-                  <div className="artwork-thumbnail">
-                    <img
-                      src={
-                        artwork ?? model.appearance.slots?.label?.baseColorMap
-                      }
-                      alt="Current label artwork"
-                    />
+                  <div className={`artwork-thumbnail${currentArtwork ? "" : " is-empty"}`}>
+                    {currentArtwork ? (
+                      <img src={currentArtwork} alt="Current label artwork" />
+                    ) : (
+                      <FileImage size={36} strokeWidth={1.25} aria-hidden="true" />
+                    )}
                   </div>
-                  <strong>{artworkName || "Original model artwork"}</strong>
+                  <strong>
+                    {currentArtwork ? artworkName || "Original model artwork" : "No label yet"}
+                  </strong>
                   <p>
-                    Artwork follows the label surface. Use a matching aspect
-                    ratio to keep your design in proportion.
+                    {currentArtwork
+                      ? "Artwork follows the label surface. Use a matching aspect ratio to keep your design in proportion."
+                      : "Upload your artwork to add a label."}
                   </p>
                   <button
                     className="outline-button"
@@ -507,7 +534,7 @@ export default function LabellabApp() {
                   </button>
                   {artwork && (
                     <button className="quiet-button" onClick={clearArtwork}>
-                      Restore original artwork
+                      {originalArtwork ? "Restore original artwork" : "Remove artwork"}
                     </button>
                   )}
                 </div>
@@ -521,10 +548,23 @@ export default function LabellabApp() {
                 onChange={(e) => void upload(e.target.files?.[0])}
               />
               <div className="library-bottom">
-                <span className="tiny-dot" /> {models.length} {models.length === 1 ? "model available" : "models available"}
+                <span className="tiny-dot" /> {modelFamilies.length} {modelFamilies.length === 1 ? "packaging family" : "packaging families"}
                 <span>More models coming soon</span>
               </div>
             </aside>
+
+            {variantsOpen && activeFamily && (
+                <ModelVariantsPanel
+                  family={activeFamily}
+                  modelId={model.id}
+                  tone={studio ? "neutral" : settings.style}
+                  libraryRef={libraryPanelRef}
+                  layoutRef={workspaceLayoutRef}
+                  busy={exportBusy}
+                  onChoose={chooseModel}
+                  onDismiss={() => setActiveFamilyId(null)}
+                />
+              )}
 
             <div
               className={`preview-stage ${studio ? "studio-stage" : ""}`}
@@ -564,24 +604,18 @@ export default function LabellabApp() {
                   <div className="studio-project-actions" role="group" aria-label="Project actions">
                     {!studio && <div className="studio-style-switch" role="group" aria-label="Preview style">
                       <span>Style</span>
-                      <div className="studio-style-track">
-                        <button
-                          type="button"
-                          className={!whiteStyle ? "is-active" : ""}
-                          aria-pressed={!whiteStyle}
-                          onClick={() => update("style", "pink")}
-                        >
-                          Pink
-                        </button>
-                        <button
-                          type="button"
-                          className={whiteStyle ? "is-active" : ""}
-                          aria-pressed={whiteStyle}
-                          onClick={() => update("style", "white")}
-                        >
-                          White
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        className="studio-style-toggle"
+                        role="switch"
+                        aria-checked={whiteStyle}
+                        aria-label="White preview style"
+                        onClick={() => update("style", whiteStyle ? "pink" : "white")}
+                      >
+                        <span className="studio-style-label studio-style-label-pink">Pink</span>
+                        <span className="studio-style-label studio-style-label-white">White</span>
+                        <span className="studio-style-thumb" aria-hidden="true" />
+                      </button>
                     </div>}
                     <button type="button" onClick={reset} aria-label="Restore default scene" title="Restore default scene">
                       <RotateCcw size={16} /><span>Restore defaults</span>
@@ -977,6 +1011,7 @@ export default function LabellabApp() {
                     aria-label={`Open ${project.name}`}
                     onClick={() => {
                       clearArtwork();
+                      setActiveFamilyId(null);
                       setSettings(project.settings);
                       setActiveCamera(
                         project.settings.sceneMode === "studio"

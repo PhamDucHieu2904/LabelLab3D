@@ -1,0 +1,37 @@
+.viewport {
+  width: 100%;
+  height: 100dvh;
+  overflow: clip;
+}
+
+.surface {
+  container: labellab-page / inline-size;
+  width: var(--labellab-page-width, 100%);
+  height: var(--labellab-page-height, 100dvh);
+  zoom: var(--labellab-scale, 1);
+}
+
+.surface > main { height: 100%; }
+
+/* Studio retains its original working UI size. The common header continues
+   using Home's approved page scale; every workspace element shares this
+   second logical surface, rather than resizing individual controls. */
+@container labellab-page (min-width: 1001px) {
+  .surface[data-layout="studio"] > main > :global(.creative-space) {
+    --labellab-page-width: var(--labellab-workspace-width);
+    --labellab-page-height: var(--labellab-studio-page-height);
+    container: labellab-page / inline-size;
+    width: var(--labellab-workspace-width);
+    height: var(--labellab-workspace-height);
+    min-height: 0;
+    zoom: var(--labellab-workspace-scale, 1);
+  }
+}
+
+/* Only mobile has a separate composition. All desktop sizes share the same
+   logical layout, including the header, typography, panels and controls. */
+@media (max-width: 860px) {
+  .viewport { height: auto; min-height: 100dvh; overflow: visible; }
+  .surface { width: 100%; height: auto; min-height: 100dvh; zoom: 1; }
+  .surface > main { height: auto; }
+}

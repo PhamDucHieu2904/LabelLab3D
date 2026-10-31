@@ -62,7 +62,7 @@
 .usageAmount img { width: 17px; height: 17px; object-fit: contain; }
 .empty { margin: 8px 0; color: var(--profile-muted); font-size: 14px; }
 
-@media (max-width: 860px) {
+@container labellab-page (max-width: 860px) {
   .card { grid-template-rows: auto auto auto minmax(122px, 1fr); gap: 16px; padding: 20px; }
   .iconButton { width: 44px; height: 44px; }
   .avatar { width: 64px; height: 64px; }

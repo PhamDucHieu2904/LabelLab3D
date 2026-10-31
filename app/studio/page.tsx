@@ -1,4 +1,5 @@
 import LabellabApp from "@/components/labellab/LabellabApp";
+import DesktopViewport from "@/components/labellab/DesktopViewport";
 export default function Studio() {
-  return <LabellabApp />;
+  return <DesktopViewport layout="studio"><LabellabApp /></DesktopViewport>;
 }

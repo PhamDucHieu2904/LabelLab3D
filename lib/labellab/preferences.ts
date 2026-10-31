@@ -36,7 +36,16 @@ export const DEFAULT_PREFERENCES: Readonly<ScenePreferences> = Object.freeze({
   highlight: true,
 });
 export type PreferencesStorage = Pick<Storage, "getItem" | "setItem">;
-const modelIds = ["basil-strawberry", "can-mango", "pet-aloe"];
+const modelIds = [
+  "basil-strawberry",
+  "can-mango",
+  "pet-aloe",
+  "can-180",
+  "can-250-short",
+  "can-250-slim",
+  "can-320",
+  "can-500",
+];
 const color = (value: unknown, fallback: string) =>
   typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
 const bounded = (value: unknown, fallback: number, min: number, max: number) =>

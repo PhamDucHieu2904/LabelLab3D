@@ -36,8 +36,8 @@ const copy = {
     action: "Login",
   },
   register: {
-    title: "Let’s make it real.",
-    description: "Create your account. Bring your next idea to life.",
+    title: "Create account",
+    description: "",
     action: "Create account",
   },
   forgot: {
@@ -111,7 +111,7 @@ function AuthDialog({ initialMode, onDismiss }: {
       ref={dialogRef}
       className={styles.dialog}
       aria-labelledby={titleId}
-      aria-describedby={mode === "login" ? undefined : descriptionId}
+      aria-describedby={mode === "forgot" ? descriptionId : undefined}
       onClose={(event) => {
         if (!event.currentTarget.open) onDismiss();
       }}
@@ -242,14 +242,14 @@ function AuthForm({ mode, initialEmail, titleId, descriptionId, onSwitchMode }: 
 
   return (
     <>
-      {mode === "login" ? (
+      {mode !== "forgot" ? (
         <h2 className="sr-only" ref={headingRef} tabIndex={-1} id={titleId}>{content.title}</h2>
       ) : <div className={styles.intro}>
-        <span className={styles.eyebrow}>{mode === "forgot" ? "LET’S GET YOU BACK IN" : "YOUR NEXT IDEA STARTS HERE"}</span>
+        <span className={styles.eyebrow}>LET’S GET YOU BACK IN</span>
         <h2 ref={headingRef} tabIndex={-1} id={titleId}>{content.title}</h2>
         <p id={descriptionId}>{content.description}</p>
       </div>}
-      <form ref={formRef} className={`${styles.form} ${mode === "login" ? styles.compactForm : ""}`} onSubmit={submit} noValidate>
+      <form ref={formRef} className={`${styles.form} ${mode !== "forgot" ? styles.compactForm : ""}`} onSubmit={submit} noValidate>
         {mode === "register" && (
           <div className={styles.field}>
             <label htmlFor={`${fieldId}-name`}>Your name</label>
