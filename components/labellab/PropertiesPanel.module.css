@@ -1,0 +1,102 @@
+.root {
+  --prop-ink: #fff;
+  --prop-muted: #fff0f4;
+  --prop-line: #ffffff42;
+  --prop-field: #76123236;
+  --prop-soft: #ffffff12;
+  --prop-active: #fff9ef;
+  --prop-active-ink: #772440;
+  --prop-track: #ffffff36;
+  color: var(--prop-ink);
+  min-width: 0;
+  padding-top: 2px;
+  font-size: 12px;
+}
+.root[data-theme="white"], .root[data-theme="studio"] {
+  --prop-ink: #34383e;
+  --prop-muted: #62656d;
+  --prop-line: #d9dce1;
+  --prop-field: #fff;
+  --prop-soft: #e9ebef80;
+  --prop-active: #373b43;
+  --prop-active-ink: #fff;
+  --prop-track: #dfe2e7;
+}
+.artworkOffset { margin: -3px 0 13px; }
+.artworkOffset .numberField { margin-bottom: 0; }
+.artworkOffset .numberBox input { width: 43px; }
+.parts { display: flex; gap: 3px; padding: 4px; border: 1px solid var(--prop-line); border-radius: 12px; background: var(--prop-field); }
+.parts button { display: flex; flex: 1; min-width: 0; min-height: 47px; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 5px 2px; border: 0; border-radius: 8px; color: var(--prop-muted); background: transparent; font-size: 11px; line-height: 1.1; cursor: pointer; transition: background 150ms, color 150ms; }
+.parts button:hover { background: var(--prop-soft); }
+.parts button[aria-pressed="true"] { color: var(--prop-active-ink); background: var(--prop-active); font-weight: 650; box-shadow: 0 2px 6px #0000000a; }
+.sectionHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin: 20px 0 17px; }
+.sectionHeading h3 { margin: 0; color: var(--prop-ink); font-size: 14px; font-weight: 650; line-height: 1.4; letter-spacing: -.015em; }
+.sectionHeading p { margin: 4px 0 0; color: var(--prop-muted); font-size: 11px; line-height: 1.5; }
+.reset { display: grid; place-items: center; flex-shrink: 0; width: 28px; height: 28px; padding: 0; border: 1px solid var(--prop-line); border-radius: 8px; background: transparent; color: var(--prop-muted); cursor: pointer; }
+.reset:hover { background: var(--prop-soft); color: var(--prop-ink); }
+.typeField { display: grid; gap: 8px; font-weight: 550; }
+.typeField > span:first-child { display: flex; justify-content: space-between; gap: 6px; align-items: center; }
+.selectWrap { display: flex; position: relative; align-items: center; gap: 8px; min-width: 0; padding: 0 10px; border: 1px solid var(--prop-line); border-radius: 9px; background: var(--prop-field); }
+.selectWrap > svg { flex: 0 0 auto; pointer-events: none; }
+.selectWrap select { appearance: none; width: 100%; min-width: 0; height: 39px; padding: 0; border: 0; outline-offset: 6px; border-radius: 4px; color: var(--prop-ink); background: transparent; font: inherit; font-size: 12px; cursor: pointer; }
+.selectWrap select option { color: #34383e; background: #fff; }
+.typeDescription { margin: 7px 0 17px; color: var(--prop-muted); font-size: 11px; line-height: 1.55; }
+.presetHeading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.presetHeading > span:last-child { color: var(--prop-muted); font-size: 10px; text-align: right; }
+.presets { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; margin-bottom: 15px; }
+.presets button { display: grid; justify-items: center; align-content: start; gap: 6px; min-width: 0; padding: 4px 1px; border: 0; border-radius: 7px; background: transparent; color: var(--prop-muted); cursor: pointer; }
+.presets button:hover { background: var(--prop-soft); }
+.presets button > span:last-child { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; line-height: 1.5; }
+.presets button[aria-pressed="true"] { color: var(--prop-ink); font-weight: 650; }
+.presetColor { display: grid; place-items: center; width: 29px; height: 29px; border: 2px solid #ffffffb3; border-radius: 50%; box-shadow: 0 1px 3px #00000010; color: #fff; }
+.presetColor svg { border-radius: 50%; background: #29263099; padding: 1px; }
+.presets button[aria-pressed="true"] .presetColor { outline: 1px solid var(--prop-ink); outline-offset: 2px; }
+.colorRow { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px; min-height: 36px; }
+.colorRow > label { color: var(--prop-ink); }
+.colorBox { display: flex; align-items: center; gap: 7px; padding: 4px 5px 4px 8px; border: 1px solid var(--prop-line); border-radius: 9px; background: var(--prop-field); }
+.colorBox input[type="text"] { width: 65px; min-width: 0; border: 0; border-radius: 3px; padding: 2px 0; color: var(--prop-ink); background: transparent; font-family: inherit; font-size: 11px; font-variant-numeric: tabular-nums; }
+.colorBox input[type="color"] { width: 25px; min-width: 25px; height: 25px; min-height: 25px; border: 0; border-radius: 5px; padding: 0; background: transparent; cursor: pointer; }
+.colorBox input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.colorBox input[type="color"]::-webkit-color-swatch { border: 1px solid #ffffff6b; border-radius: 5px; }
+.divider { height: 1px; background: var(--prop-line); margin-bottom: 17px; }
+.controlGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 14px; row-gap: 13px; }
+.numberField { min-width: 0; margin-bottom: 8px; }
+.numberHeading { display: flex; flex-wrap: wrap; gap: 7px 4px; align-items: center; justify-content: space-between; min-height: 26px; }
+.numberHeading > label { color: var(--prop-ink); font-size: 11px; line-height: 1.45; }
+.numberBox { display: inline-flex; align-items: center; justify-content: flex-end; gap: 1px; height: 26px; padding: 0 5px; border: 1px solid var(--prop-line); border-radius: 6px; background: var(--prop-field); font-size: 10px; }
+.numberBox input { width: 31px; height: 24px; min-width: 0; padding: 0; border: 0; border-radius: 3px; background: transparent; color: var(--prop-ink); font: inherit; font-size: 11px; font-variant-numeric: tabular-nums; text-align: right; appearance: textfield; -moz-appearance: textfield; }
+.numberBox input::-webkit-inner-spin-button, .numberBox input::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.numberBox > span { color: var(--prop-muted); }
+.controlGrid .numberHeading { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; }
+.controlGrid .numberHeading > label { min-height: 16px; }
+.controlGrid .numberBox { width: 100%; height: 30px; padding: 0 8px; justify-content: space-between; }
+.controlGrid .numberBox input { width: 100%; height: 28px; text-align: left; }
+.root input.slider { display: block; width: 100%; height: 22px; padding: 0; margin: 4px 0 0; border: 0; border-radius: 0; appearance: none; background: linear-gradient(to right, var(--prop-ink) 0 var(--property-fill), var(--prop-track) var(--property-fill) 100%) center / 100% 2px no-repeat; cursor: pointer; }
+.slider::-webkit-slider-thumb { appearance: none; width: 9px; height: 9px; border: 0; border-radius: 50%; background: var(--prop-ink); box-shadow: 0 1px 3px #0000001a; }
+.slider::-moz-range-thumb { width: 9px; height: 9px; border: 0; border-radius: 50%; background: var(--prop-ink); }
+.advanced { margin-top: 8px; border-top: 1px solid var(--prop-line); }
+.advanced summary { display: flex; justify-content: space-between; align-items: center; min-height: 43px; gap: 8px; color: var(--prop-ink); cursor: pointer; font-size: 11px; list-style: none; }
+.advanced summary::-webkit-details-marker { display: none; }
+.advanced[open] summary > svg { transform: rotate(180deg); }
+.advancedFields { display: grid; gap: 7px; padding-bottom: 7px; }
+.surfaceType { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; padding: 12px; border: 1px solid var(--prop-line); border-radius: 10px; background: var(--prop-soft); }
+.surfaceType span { display: grid; gap: 5px; color: var(--prop-ink); font-size: 12px; }
+.surfaceType small { color: var(--prop-muted); font-size: 10px; }
+.help { color: var(--prop-muted); margin: 15px 0 3px; font-size: 11px; line-height: 1.65; }
+.root :is(input, select, button, summary):focus-visible { outline: 2px solid var(--prop-ink); outline-offset: 3px; }
+@container labellab-page (max-width: 1000px) {
+  .parts button { min-height: 48px; flex-direction: row; font-size: 12px; }
+  .controlGrid { gap: 14px 20px; }
+  .numberHeading > label, .numberBox input { font-size: 12px; }
+  .numberBox { min-height: 32px; }
+  .numberBox input { height: 30px; }
+  .selectWrap select { height: 44px; }
+  .reset { width: 36px; height: 36px; }
+  .presets button { min-height: 48px; }
+  .presets button > span:last-child { font-size: 11px; }
+  .colorBox input[type="color"] { width: 32px; min-width: 32px; height: 32px; min-height: 32px; }
+  .root input.slider { height: 28px; }
+  .slider::-webkit-slider-thumb { width: 14px; height: 14px; }
+  .slider::-moz-range-thumb { width: 14px; height: 14px; }
+}
+@media (prefers-reduced-motion: reduce) { .parts button { transition: none; } }

@@ -6,6 +6,18 @@ export interface LiveMaterialValues {
   metalness?: number;
   roughness?: number;
   textureOffsetX?: number;
+  /** Optional, opt-in beverage volume controls. Missing optics retain authored shaders. */
+  liquidOptics?: LiveLiquidOptics;
+  sparkling?: number;
+}
+export interface LiveLiquidOptics {
+  clarity: number;
+  density: number;
+  turbidity: number;
+  brightness: number;
+  scattering: number;
+  roughness: number;
+  ior: number;
 }
 export type LiveMaterialOverrides = Record<string, LiveMaterialValues>;
 

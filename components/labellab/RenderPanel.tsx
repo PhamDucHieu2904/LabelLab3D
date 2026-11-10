@@ -79,7 +79,7 @@ export default function RenderPanel({ settings, onChange, canvasRef, ready, busy
       onClick={onOpenMaterials}
     >
       <SlidersHorizontal size={17} aria-hidden="true" />
-      Material properties
+      Properties
     </button>
     </div>
   );

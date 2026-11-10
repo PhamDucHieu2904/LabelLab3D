@@ -1,0 +1,98 @@
+[
+  {
+    "method": "Runtime.executionContextCreated",
+    "params": {
+      "context": {
+        "id": 1,
+        "origin": "://",
+        "name": "",
+        "uniqueId": "-7356470458604924381.3560345254544773017",
+        "auxData": {
+          "isDefault": true,
+          "type": "default",
+          "frameId": "83C486BBE6742301105CC3C2FDE53512"
+        }
+      }
+    }
+  },
+  {
+    "method": "Page.frameStartedNavigating",
+    "params": {
+      "frameId": "83C486BBE6742301105CC3C2FDE53512",
+      "url": "http://127.0.0.1:3076/",
+      "loaderId": "9D36125F09E192B352946BB6FE98D40D",
+      "navigationType": "differentDocument"
+    }
+  },
+  {
+    "method": "Page.frameStartedLoading",
+    "params": {
+      "frameId": "83C486BBE6742301105CC3C2FDE53512"
+    }
+  },
+  {
+    "method": "Runtime.executionContextsCleared",
+    "params": {}
+  },
+  {
+    "method": "Runtime.executionContextsCleared",
+    "params": {}
+  },
+  {
+    "method": "Page.frameNavigated",
+    "params": {
+      "frame": {
+        "id": "83C486BBE6742301105CC3C2FDE53512",
+        "loaderId": "9D36125F09E192B352946BB6FE98D40D",
+        "url": "http://127.0.0.1:3076/",
+        "domainAndRegistry": "",
+        "securityOrigin": "http://127.0.0.1:3076",
+        "securityOriginDetails": {
+          "isLocalhost": true
+        },
+        "mimeType": "text/html",
+        "adFrameStatus": {
+          "adFrameType": "none"
+        },
+        "secureContextType": "SecureLocalhost",
+        "crossOriginIsolatedContextType": "NotIsolated",
+        "gatedAPIFeatures": []
+      },
+      "type": "Navigation"
+    }
+  },
+  {
+    "method": "Runtime.executionContextCreated",
+    "params": {
+      "context": {
+        "id": 2,
+        "origin": "http://127.0.0.1:3076",
+        "name": "",
+        "uniqueId": "8714424151110663996.5299029590149742244",
+        "auxData": {
+          "isDefault": true,
+          "type": "default",
+          "frameId": "83C486BBE6742301105CC3C2FDE53512"
+        }
+      }
+    }
+  },
+  {
+    "method": "Page.domContentEventFired",
+    "params": {
+      "timestamp": 586475.481744
+    }
+  },
+  {
+    "method": "Page.loadEventFired",
+    "params": {
+      "timestamp": 586475.481828
+    }
+  },
+  {
+    "method": "Page.frameStoppedLoading",
+    "params": {
+      "frameId": "83C486BBE6742301105CC3C2FDE53512"
+    }
+  }
+]

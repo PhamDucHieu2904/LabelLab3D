@@ -1,0 +1,134 @@
+{
+  "id": "glass-290-pullcap-chia",
+  "src": "/models/bottles/glass-290-pullcap-chia.glb",
+  "sourceName": "Glass 290ml napkeo model (Chia) web.glb",
+  "sourceBytes": 486356,
+  "sourceSha256": "e25ddba5f804ac90b1bee3be9ad6c89cb7c822d44fdc0b6245807e081e55ea8b",
+  "bytes": 151512,
+  "sha256": "087aaea0b0c509e8c78b67cbed8ee2ab64eecda06cd6463d1f30e4086fc73b93",
+  "binarySha256": "6893fdc4129347e1608f59124342baa8351456d99191034a74ba0de50233c417",
+  "sourceToMetres": 0.1,
+  "units": "metres",
+  "volumeMl": 290,
+  "defaultLiquid": "chia",
+  "blankLabel": "white",
+  "materialSlots": {
+    "body": [
+      "Body",
+      "GlassBase",
+      "Neck"
+    ],
+    "cap": [
+      "SilverCap"
+    ],
+    "label": [
+      "PaperLabel"
+    ],
+    "liquid": [
+      "Water"
+    ],
+    "inclusions": [
+      "Chia Seeds"
+    ]
+  },
+  "geometryRepair": {
+    "capSourceBlend": "D:/3D model/Model Bottle Can/Blender Model 1/Glass 290ml napkeo model (Basil).blend",
+    "capSourceBlendSha256": "b4c6f87355124e9c3d0633e32faad535b8e78e98eb0e7442a200d78149099475",
+    "capEvaluatedArtifact": "artifacts/pullcap-cap-evaluated.glb",
+    "capEvaluatedVertices": 5630,
+    "capEvaluatedTriangles": 9176,
+    "labelRadialOffsetMetres": 0.0001,
+    "zeroAreaTrianglesRemoved": 256,
+    "neckShell": {
+      "thicknessMetres": 0.0013,
+      "addedTriangles": 704,
+      "outerSurfaceUnchanged": true,
+      "sourceNode": "Neck"
+    },
+    "waterBottom": {
+      "addedTriangles": 0,
+      "method": "authored source closed",
+      "sourceClosed": true
+    },
+    "waterTop": {
+      "sourceClosed": true,
+      "topFacesUpward": true
+    }
+  },
+  "compression": {
+    "extension": "KHR_draco_mesh_compression",
+    "encoder": "draco3dgltf 1.5.7",
+    "method": "edgebreaker",
+    "precisionBits": {
+      "POSITION": 18,
+      "NORMAL": 14,
+      "TEXCOORD_0": 16
+    },
+    "lossless": false,
+    "simplification": false,
+    "uncompressedBytes": 732160,
+    "savedPercent": 79.31,
+    "triangles": 29170,
+    "topologyPreserved": true,
+    "maxPositionErrorMeters": 3.768609427904622e-7,
+    "maxNormalAngleDegrees": 0.023582069098144302,
+    "maxUvError": 0.00000768899917602539,
+    "maxUvErrorAt4096px": 0.031494140625,
+    "sceneSha256": "97100c97bc9f9fecd4910b0d0ec5e113cdfc0e66d49b4e8128524b6352314ef8",
+    "decodedPositionHashes": [
+      "f17a37c5a5aebfb6440a63952c389e7b19be31f84a5a5e8b67b1fd28d9d10d0c",
+      "0b20204bdb0384b74261a40ee22178a994057a6fc8a929218fb41887ea7b310b",
+      "dad3321c7db6b6a1fa9a54987db8cb96f6240ec29462c7a3edb56b1860581348",
+      "0f582e86106a147151b89c46fde63e06627f1e15bc994bb611c6698902948df4",
+      "7ac123e8061715e5949d355155bc73737ef34760ed28bebad2e7f0198ebaae86",
+      "c45653968a5a6346ad2993d14c478fb7869f9287265f046cec67fc3deb7836a0",
+      "ad13d693dd255555884ac9292e06abd17a82ee8b0090cf876f556b2a6645b72b",
+      "05a6aa39a306143e7b67041632b9b844c4e9ce8f1db410eb41c9311599175f66",
+      "5c02c72913bb4313fea2ba6dc0fccf0987aa660915047be3dc9a4e1e27fd8953"
+    ],
+    "decodedAttributeHashes": [
+      {
+        "POSITION": "f17a37c5a5aebfb6440a63952c389e7b19be31f84a5a5e8b67b1fd28d9d10d0c",
+        "NORMAL": "fecd4abe98528145ccac6b71657899667788788f25c84bf4dae6e0e37b24a610",
+        "TEXCOORD_0": "5e721d57d204bf47f9020034b5944e8838096d5d9b1cfb04fa07c8ac8ffe7c03"
+      },
+      {
+        "POSITION": "0b20204bdb0384b74261a40ee22178a994057a6fc8a929218fb41887ea7b310b",
+        "NORMAL": "4f492bdda317b41b7b9291f366806941f73f36d43fc92d6442b1b6a7a11f54d8",
+        "TEXCOORD_0": "9f89e57a90d21d100b394688388b5cecefc868158bce3853b6c8147d4ac1d2db"
+      },
+      {
+        "POSITION": "dad3321c7db6b6a1fa9a54987db8cb96f6240ec29462c7a3edb56b1860581348",
+        "NORMAL": "d12455e907932835dd18b4d140007719bc62c60c106a6833b38a0cbc920f9e82",
+        "TEXCOORD_0": "8734f737ef275d939592ec06db64169848f57cc06318b5892520aef66266ecb5"
+      },
+      {
+        "POSITION": "0f582e86106a147151b89c46fde63e06627f1e15bc994bb611c6698902948df4",
+        "NORMAL": "7314c25ce5514e1b9814aac017de119b658125d884a6f7ed0ecdafd17a49ee4e",
+        "TEXCOORD_0": "8d1393b3ee6ba7368cbe973a5c138b1e8b495f426d06df3227aea1dcd1ba0c93"
+      },
+      {
+        "POSITION": "7ac123e8061715e5949d355155bc73737ef34760ed28bebad2e7f0198ebaae86",
+        "NORMAL": "fab7b99bdf74dfebb6d3b2867e254b880af845ac88474aa9f4d43f9c8a5561ff",
+        "TEXCOORD_0": "c14823f2f0317794c5c23ed1f83d83c7cca0b5996705a1591350da17d9998060"
+      },
+      {
+        "POSITION": "c45653968a5a6346ad2993d14c478fb7869f9287265f046cec67fc3deb7836a0",
+        "NORMAL": "f5ffb906696a9196e940ef182ab552da4615155c6434cd3e2af9b62fd60acd2c"
+      },
+      {
+        "POSITION": "ad13d693dd255555884ac9292e06abd17a82ee8b0090cf876f556b2a6645b72b",
+        "NORMAL": "e31d945fa776840c08e30ea0cbf3e5fadbd3781425205a3237e860f294781bfc"
+      },
+      {
+        "POSITION": "05a6aa39a306143e7b67041632b9b844c4e9ce8f1db410eb41c9311599175f66",
+        "NORMAL": "a72b055b7602598e2b6ffa52dee0e52f40738f22fe8285cff4c4978b9aa3cff1"
+      },
+      {
+        "POSITION": "5c02c72913bb4313fea2ba6dc0fccf0987aa660915047be3dc9a4e1e27fd8953",
+        "NORMAL": "8c59c04810dfd4ccdf487832519f458f3db34c877b5a5c0c1591728bcc2823eb",
+        "TEXCOORD_0": "786e7ba235ef54a2416da2574afe4e6f98efb6a2f725f1f18303a01fbf84088e"
+      }
+    ]
+  }
+}

@@ -1,7 +1,7 @@
 import type { ProductAppearance, ProductAsset } from '../viewer-config';
 
 export function mockupModelKey(asset: ProductAsset): string {
-  return JSON.stringify([asset.id, asset.src, asset.orientation, asset.materialSlots, asset.textureSamplers]);
+  return JSON.stringify([asset.id, asset.src, asset.orientation, asset.materialSlots, asset.textureSamplers, asset.sparkling]);
 }
 
 /** Same stable scene signature is checked by React and the committed runtime. */

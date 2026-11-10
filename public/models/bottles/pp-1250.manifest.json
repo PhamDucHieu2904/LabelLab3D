@@ -1,0 +1,70 @@
+{
+  "id": "pp-1250",
+  "src": "/models/bottles/pp-1250.glb",
+  "sourceName": "PP 1.25L Model bottle web.glb",
+  "sourceBytes": 2565936,
+  "sourceSha256": "e8e6cea62cd4fba157840669f65d24eadd531cee62043f34f0bb57274b249fd9",
+  "bytes": 310932,
+  "sha256": "035b192ed3e97cb3ddb532820e9858d54a2894ada8f33cb4bf1ebb01b8cda766",
+  "binarySha256": "58cbd13352ca883ca581777ff2e24fb2caa365410d270a48899e89fd70d66798",
+  "units": "metres",
+  "sourceToMetres": 0.1,
+  "volumeMl": 1250,
+  "packaging": "pp",
+  "materialSlots": {
+    "body": [
+      "PPBody"
+    ],
+    "cap": [
+      "Cap"
+    ],
+    "label": [
+      "Label"
+    ]
+  },
+  "defaultLiquid": null,
+  "compression": {
+    "extension": "KHR_draco_mesh_compression",
+    "encoder": "draco3dgltf 1.5.7",
+    "method": "edgebreaker",
+    "precisionBits": {
+      "POSITION": 18,
+      "NORMAL": 14,
+      "TEXCOORD_0": 16
+    },
+    "lossless": false,
+    "simplification": false,
+    "uncompressedBytes": 2566272,
+    "savedPercent": 87.88,
+    "triangles": 77116,
+    "topologyPreserved": true,
+    "maxPositionErrorMeters": 5.907716035883037e-7,
+    "maxNormalAngleDegrees": 0.026268577635066626,
+    "maxUvError": 0.00000768899917602539,
+    "maxUvErrorAt4096px": 0.031494140625,
+    "sceneSha256": "ed16716bdac17ef6731854661e5d09d24dbae8461e9ba0d318cb4a262cb2733d",
+    "decodedPositionHashes": [
+      "5d1b7a840e88084e73b0f2b5ed795dfc6a3b0ed25ece41f5669c94a9995bc2be",
+      "470efd865333db2dca3cde62b98e68b7600c4c66dccd1423d389966a70315557",
+      "31362d002da384b659d6294ec1c0749ec81b1aafd5d9a459307448b30fe14612"
+    ],
+    "decodedAttributeHashes": [
+      {
+        "POSITION": "5d1b7a840e88084e73b0f2b5ed795dfc6a3b0ed25ece41f5669c94a9995bc2be",
+        "NORMAL": "6005301a1f6d700060456b110ad143e8bfbe98032f552e44a410d479552e9202",
+        "TEXCOORD_0": "340d1ed2f0e70f579039211561884c038f00c05b32f88a0202d5d9847904a6f3",
+        "TEXCOORD_1": "8865253dda1d46520fdf9d3b6de6d9a528803f1d329da4e95134b69410ebb462"
+      },
+      {
+        "POSITION": "470efd865333db2dca3cde62b98e68b7600c4c66dccd1423d389966a70315557",
+        "NORMAL": "2d759b289ab5a2ea8f436fb5d059c708b67ade378ed0df58b4f7f5db87c5486b",
+        "TEXCOORD_0": "cf33e949a3c327ddc83afc35cf0a69e0de5d0e9a178f83842b6945c031b12f95"
+      },
+      {
+        "POSITION": "31362d002da384b659d6294ec1c0749ec81b1aafd5d9a459307448b30fe14612",
+        "NORMAL": "d0fc2e4c197b54c65c20a14b292b6b4aa94f5323df4858f8e31ca842cbc13d34",
+        "TEXCOORD_0": "caddf53b03bc04fe4ab622f45b5365a688eb2b6583e80b8b00197aa7d40ebd2d"
+      }
+    ]
+  }
+}

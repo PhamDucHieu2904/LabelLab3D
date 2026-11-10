@@ -1,0 +1,69 @@
+{
+  "id": "pp-500-2",
+  "src": "/models/bottles/pp-500-2.glb",
+  "sourceName": "500mlPPbottel2 web.glb",
+  "sourceBytes": 1984320,
+  "sourceSha256": "f17437871434d2415cebc82b53def4efaf1a392333d2cb968ca76e7147003338",
+  "bytes": 281520,
+  "sha256": "01e555a858b48129db3c9252efd2c2ac95e4043f5e1f16a1d53d53cc308dd5c2",
+  "binarySha256": "b60f7dfaaa9120a54daa951aa17872d546171e047cfab0bf02d1faecf48cfc66",
+  "units": "metres",
+  "sourceToMetres": 0.1,
+  "volumeMl": 500,
+  "packaging": "pp",
+  "materialSlots": {
+    "body": [
+      "Body"
+    ],
+    "cap": [
+      "Cap"
+    ],
+    "label": [
+      "Label"
+    ]
+  },
+  "defaultLiquid": null,
+  "compression": {
+    "extension": "KHR_draco_mesh_compression",
+    "encoder": "draco3dgltf 1.5.7",
+    "method": "edgebreaker",
+    "precisionBits": {
+      "POSITION": 18,
+      "NORMAL": 14,
+      "TEXCOORD_0": 16
+    },
+    "lossless": false,
+    "simplification": false,
+    "uncompressedBytes": 1984684,
+    "savedPercent": 85.82,
+    "triangles": 64824,
+    "topologyPreserved": true,
+    "maxPositionErrorMeters": 4.42915777917256e-7,
+    "maxNormalAngleDegrees": 0.025891615449964128,
+    "maxUvError": 0.00000768899917602539,
+    "maxUvErrorAt4096px": 0.031494140625,
+    "sceneSha256": "2bda5326e94241e623aff50ef7ab92be190a3c0900d0e2e5dcf19a0bad76074c",
+    "decodedPositionHashes": [
+      "c4900296ae302f37644ef3c3d5aeb259ec0b868ec2458307d87cc3a3fa4bcefa",
+      "209d63b6aed0ee274754bc752be47f02d4728c062acf7f1994641bc437ddff23",
+      "6a4e453d6118571349fbb7a5b66729405d90f0f80d72ced9b46f96e8b6af56b8"
+    ],
+    "decodedAttributeHashes": [
+      {
+        "POSITION": "c4900296ae302f37644ef3c3d5aeb259ec0b868ec2458307d87cc3a3fa4bcefa",
+        "NORMAL": "4ac8c62e7419a1c351e0687fe3c33dece50e831313370032039c2f8eac1138b7",
+        "TEXCOORD_0": "694289f3e4cc5eae26bfb63ed647ea81d3798b29a03c8b8ded1ca43ffc74eb75"
+      },
+      {
+        "POSITION": "209d63b6aed0ee274754bc752be47f02d4728c062acf7f1994641bc437ddff23",
+        "NORMAL": "a367388334d35ec89813032c55534445da6e0f4e4a26a0ac67da6ca1d91689de",
+        "TEXCOORD_0": "f6280087f79a626ec56a5b623e88828276cd9be64dc989d2455358384db31c21"
+      },
+      {
+        "POSITION": "6a4e453d6118571349fbb7a5b66729405d90f0f80d72ced9b46f96e8b6af56b8",
+        "NORMAL": "6f4b8e42927e60a9d09144e4eac7dff91d9e2970b8dd2d4a737c766e7b41232d",
+        "TEXCOORD_0": "eda2058890c93b138b12fdb80ac5d4238526e1e14f031cc421f90491046f2524"
+      }
+    ]
+  }
+}

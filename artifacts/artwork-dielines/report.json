@@ -1,0 +1,223 @@
+[
+  {
+    "modelId": "can-180",
+    "device": "pc",
+    "width": 708.609375,
+    "height": 446,
+    "inside": true,
+    "guide": null
+  },
+  {
+    "modelId": "can-180",
+    "device": "laptop",
+    "width": 504.14605712890625,
+    "height": 317.3104248046875,
+    "inside": true,
+    "guide": null
+  },
+  {
+    "modelId": "can-250-short",
+    "device": "pc",
+    "width": 708.609375,
+    "height": 295.25,
+    "inside": true,
+    "guide": null
+  },
+  {
+    "modelId": "can-250-short",
+    "device": "laptop",
+    "width": 504.14605712890625,
+    "height": 210.05807495117188,
+    "inside": true,
+    "guide": null
+  },
+  {
+    "modelId": "pet-nata-watermelon",
+    "device": "pc",
+    "width": 708.609375,
+    "height": 181.6875,
+    "inside": true,
+    "guide": null
+  },
+  {
+    "modelId": "pet-nata-watermelon",
+    "device": "laptop",
+    "width": 504.14605712890625,
+    "height": 129.2630615234375,
+    "inside": true,
+    "guide": null
+  },
+  {
+    "modelId": "pet-320-full-nata",
+    "device": "pc",
+    "width": 708.609375,
+    "height": 429.984375,
+    "inside": true,
+    "guide": null
+  },
+  {
+    "modelId": "pet-320-full-nata",
+    "device": "laptop",
+    "width": 504.14605712890625,
+    "height": 305.916015625,
+    "inside": true,
+    "guide": null
+  },
+  {
+    "modelId": "pet-1500-juice",
+    "device": "pc",
+    "width": 545.515625,
+    "height": 473.640625,
+    "inside": true,
+    "guide": null
+  },
+  {
+    "modelId": "pet-1500-juice",
+    "device": "laptop",
+    "width": 388.11163330078125,
+    "height": 336.9755859375,
+    "inside": true,
+    "guide": null
+  },
+  {
+    "modelId": "pp-1000",
+    "device": "pc",
+    "width": 708.609375,
+    "height": 429.890625,
+    "inside": true,
+    "guide": null
+  },
+  {
+    "modelId": "pp-1000",
+    "device": "laptop",
+    "width": 504.14605712890625,
+    "height": 305.8492431640625,
+    "inside": true,
+    "guide": null
+  },
+  {
+    "modelId": "pp-1000-2",
+    "device": "pc",
+    "width": 543.59375,
+    "height": 473.640625,
+    "inside": true,
+    "guide": null
+  },
+  {
+    "modelId": "pp-1000-2",
+    "device": "laptop",
+    "width": 386.74432373046875,
+    "height": 336.9755859375,
+    "inside": true,
+    "guide": null
+  },
+  {
+    "modelId": "glass-290-milk",
+    "device": "pc",
+    "width": 708.609375,
+    "height": 466.640625,
+    "inside": true,
+    "guide": {
+      "src": "/assets/dielines/glass-290-screwcap.svg",
+      "loaded": true,
+      "pointerEvents": "none",
+      "width": 708.609375,
+      "height": 466.640625
+    }
+  },
+  {
+    "modelId": "glass-290-milk",
+    "device": "laptop",
+    "width": 504.14605712890625,
+    "height": 331.995361328125,
+    "inside": true,
+    "guide": {
+      "src": "/assets/dielines/glass-290-screwcap.svg",
+      "loaded": true,
+      "pointerEvents": "none",
+      "width": 504.14605712890625,
+      "height": 331.995361328125
+    }
+  },
+  {
+    "modelId": "glass-290-pullcap-milk",
+    "device": "pc",
+    "width": 708.609375,
+    "height": 408.8125,
+    "inside": true,
+    "guide": {
+      "src": "/assets/dielines/glass-290-pullcap.svg",
+      "loaded": true,
+      "pointerEvents": "none",
+      "width": 708.609375,
+      "height": 408.8125
+    }
+  },
+  {
+    "modelId": "glass-290-pullcap-milk",
+    "device": "laptop",
+    "width": 504.14605712890625,
+    "height": 290.85308837890625,
+    "inside": true,
+    "guide": {
+      "src": "/assets/dielines/glass-290-pullcap.svg",
+      "loaded": true,
+      "pointerEvents": "none",
+      "width": 504.14605712890625,
+      "height": 290.85308837890625
+    }
+  },
+  {
+    "modelId": "glass-485-milk",
+    "device": "pc",
+    "width": 708.609375,
+    "height": 354.296875,
+    "inside": true,
+    "guide": {
+      "src": "/assets/dielines/glass-485.svg",
+      "loaded": true,
+      "pointerEvents": "none",
+      "width": 708.609375,
+      "height": 354.296875
+    }
+  },
+  {
+    "modelId": "glass-485-milk",
+    "device": "laptop",
+    "width": 504.14605712890625,
+    "height": 252.0674591064453,
+    "inside": true,
+    "guide": {
+      "src": "/assets/dielines/glass-485.svg",
+      "loaded": true,
+      "pointerEvents": "none",
+      "width": 504.14605712890625,
+      "height": 252.0674591064453
+    }
+  },
+  {
+    "savedCropMigration": {
+      "dieline": {
+        "width": 195,
+        "height": 50,
+        "unit": "mm"
+      },
+      "width": 4096,
+      "height": 1050,
+      "magenta": 0
+    }
+  },
+  {
+    "guideExport": {
+      "dieline": {
+        "width": 169,
+        "height": 97.5,
+        "unit": "mm",
+        "guideSrc": "/assets/dielines/glass-290-pullcap.svg"
+      },
+      "width": 4096,
+      "height": 2363,
+      "magenta": 0
+    }
+  }
+]

@@ -1,11 +1,26 @@
 /* Card proportions and color follow the supplied Demo.svg. Keep the whole
    card enclosed, with a white image well and centered packaging captions. */
+.panel {
+  --library-ink: #fff;
+  --library-line: #ffffff88;
+  --library-control: #ffffff12;
+  --library-hover: #ffffff2e;
+}
+
+.panel[data-tone="white"], .panel[data-tone="neutral"] {
+  --library-ink: #403a43;
+  --library-line: #bfc5cb;
+  --library-control: #ffffffb3;
+  --library-hover: #e5e8eb;
+}
+
 .grid:global(.models-grid) {
   --card-surface: #ea3b6d;
   --card-ink: #fff;
   --card-line: rgb(255 255 255 / 85%);
   --card-accent: #a8244a;
   gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
 }
 
@@ -99,4 +114,75 @@
   color: #fff;
   background: var(--card-accent);
   box-shadow: none;
+}
+
+.panel .footer:global(.library-bottom) {
+  flex-shrink: 0;
+  padding-top: 12px;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--library-line);
+  color: var(--library-ink);
+}
+
+.pagination span {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pagination button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--library-line);
+  border-radius: 7px;
+  color: inherit;
+  background: var(--library-control);
+  transition: background 150ms ease;
+}
+
+.pagination button:hover:not(:disabled) { background: var(--library-hover); }
+.pagination button:focus-visible { outline: 2px solid var(--library-ink); outline-offset: 2px; }
+.pagination button:disabled { opacity: .35; cursor: default; }
+
+/* Fit all four rows and the pager inside the desktop shelf; keep mobile cards natural-sized. */
+@container labellab-page (min-width: 1001px) {
+  .panel[data-panel="models"]:global(.library-panel.tool-panel) { overflow-y: hidden; }
+  .panel[data-panel="models"] > :global(.panel-title),
+  .panel[data-panel="models"] > :global(.search-box),
+  .panel[data-panel="models"] > :global(.category-filters) { flex-shrink: 0; }
+  .grid:global(.models-grid) {
+    flex: 1;
+    min-height: 0;
+    grid-template-rows: repeat(4, minmax(0, 1fr));
+    align-items: stretch;
+  }
+  .grid:global(.models-grid) .card:global(.model-card) {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+  .grid:global(.models-grid) .card:global(.model-card) .image {
+    flex: 1;
+    min-height: 0;
+    aspect-ratio: auto;
+  }
+  .grid:global(.models-grid) .card:global(.model-card) .name,
+  .grid:global(.models-grid) .card:global(.model-card) .caption { flex-shrink: 0; }
+}
+
+@container labellab-page (max-width: 1000px) {
+  .pagination button { min-width: 44px; min-height: 44px; }
 }

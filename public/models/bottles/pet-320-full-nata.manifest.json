@@ -1,0 +1,63 @@
+{
+  "id": "pet-320-full-nata",
+  "src": "/models/bottles/pet-320-full-nata.glb",
+  "sourceName": "Pet 320ml Model Full Label - Web.glb",
+  "sourceBytes": 11430844,
+  "sourceSha256": "d19f5613831232e2d1293e6769cda0adfcb5cf6e8664881c487173b816bdda7f",
+  "bytes": 1114788,
+  "sha256": "69818a5b328dfe4cf546a766b50e2708d52a029c037f90d96cf67019bcac56bc",
+  "binarySha256": "638e989c413f178e762c5644926e5453b4e277a934d44351ae44e4881a635790",
+  "sourceToMetres": 0.1,
+  "units": "metres",
+  "volumeMl": 320,
+  "defaultLiquid": "nata-de-coco",
+  "materialSlots": {
+    "body": [
+      "320mlBottleBody"
+    ],
+    "cap": [
+      "PlasticCap"
+    ],
+    "label": [
+      "Label"
+    ],
+    "liquid": [
+      "NataDeCocoWater"
+    ],
+    "inclusions": [
+      "Nata de coco"
+    ],
+    "ring": [
+      "Ring"
+    ]
+  },
+  "compression": {
+    "extension": "KHR_draco_mesh_compression",
+    "encoder": "draco3dgltf 1.5.7",
+    "method": "edgebreaker",
+    "precisionBits": {
+      "POSITION": 18,
+      "NORMAL": 14,
+      "TEXCOORD_0": 16
+    },
+    "lossless": false,
+    "simplification": false,
+    "uncompressedBytes": 11431844,
+    "savedPercent": 90.25,
+    "triangles": 214240,
+    "topologyPreserved": true,
+    "maxPositionErrorMeters": 3.3719217148288496e-7,
+    "maxNormalAngleDegrees": 0.02083175098468322,
+    "maxUvError": 0.000007718801498413086,
+    "maxUvErrorAt4096px": 0.0316162109375,
+    "sceneSha256": "379a2088cc040403a0abb3236c4f0ea2571ac38a47c0b118e33f615e596a1a6a",
+    "decodedPositionHashes": [
+      "88025faea3ffdb92b2698319eec47ab54d83a80f047f2a4296056297f940091c",
+      "3f269614d9df609310cf2af54eed5df8856387948a5c970f4086facf3dab554b",
+      "14b32edd47d4ad695f79d52a0534293f25d53e93be26b1dd65b9a6cf48cc85cf",
+      "8073833b8185b243b4285a7a66200635542670f36fe6a400886ae72bf7dee693",
+      "054b3bdd515b1ad8a72bd739068fb9b0e6a3dbb62e368f1f139fc8a9803baf01",
+      "577fcfe3975eb424b85bdba2e8b281df2aab864c2c7fb7b2dd34221b2c0a59ed"
+    ]
+  }
+}

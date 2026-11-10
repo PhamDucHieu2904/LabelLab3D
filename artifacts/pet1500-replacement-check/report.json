@@ -1,0 +1,588 @@
+{
+  "baseline": {
+    "options": {},
+    "glError": 0,
+    "materials": [
+      {
+        "mesh": "Cube004",
+        "material": "PlasticBody",
+        "type": "MeshPhysicalMaterial",
+        "visible": true,
+        "color": "ffffff",
+        "roughness": 0.075,
+        "transmission": 0,
+        "thickness": 0.0008,
+        "ior": 1.47,
+        "shader": "nata-pet-v1:shell:1"
+      },
+      {
+        "mesh": "Cube004_1",
+        "material": "Ring",
+        "type": "MeshPhysicalMaterial",
+        "visible": true,
+        "color": "fff9ed",
+        "roughness": 0.075,
+        "transmission": 0,
+        "thickness": 0.0008,
+        "ior": 1.47,
+        "shader": "nata-pet-v1:ring:2"
+      },
+      {
+        "mesh": "Cap",
+        "material": "PlasticCap",
+        "type": "MeshStandardMaterial",
+        "visible": true,
+        "color": "ffffff",
+        "roughness": 0.29,
+        "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}"
+      },
+      {
+        "mesh": "Label",
+        "material": "Label",
+        "type": "MeshStandardMaterial",
+        "visible": true,
+        "color": "ffffff",
+        "roughness": 0.28,
+        "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}"
+      },
+      {
+        "mesh": "Water",
+        "material": "Water",
+        "type": "MeshPhysicalMaterial",
+        "visible": true,
+        "color": "ffffff",
+        "roughness": 0.12,
+        "transmission": 1,
+        "thickness": 0.4188434815406799,
+        "ior": 1.335,
+        "shader": "nata-pet-v1:liquid:3"
+      },
+      {
+        "mesh": "nata-liquid-scattering-back",
+        "material": "Water",
+        "type": "MeshPhysicalMaterial",
+        "visible": true,
+        "color": "f2bd4c",
+        "roughness": 0.12,
+        "transmission": 0,
+        "thickness": 0.025,
+        "ior": 1.35,
+        "shader": "nata-pet-v1:scattering:3"
+      }
+    ],
+    "frames": {
+      "initial": {
+        "samples": {},
+        "materials": [
+          {
+            "mesh": "Cube004",
+            "material": "PlasticBody",
+            "type": "MeshPhysicalMaterial",
+            "visible": true,
+            "color": "ffffff",
+            "roughness": 0.075,
+            "transmission": 0,
+            "thickness": 0.0008,
+            "ior": 1.47,
+            "shader": "nata-pet-v1:shell:1"
+          },
+          {
+            "mesh": "Cube004_1",
+            "material": "Ring",
+            "type": "MeshPhysicalMaterial",
+            "visible": true,
+            "color": "fff9ed",
+            "roughness": 0.075,
+            "transmission": 0,
+            "thickness": 0.0008,
+            "ior": 1.47,
+            "shader": "nata-pet-v1:ring:2"
+          },
+          {
+            "mesh": "Cap",
+            "material": "PlasticCap",
+            "type": "MeshStandardMaterial",
+            "visible": true,
+            "color": "ffffff",
+            "roughness": 0.29,
+            "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}"
+          },
+          {
+            "mesh": "Label",
+            "material": "Label",
+            "type": "MeshStandardMaterial",
+            "visible": true,
+            "color": "ffffff",
+            "roughness": 0.28,
+            "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}"
+          },
+          {
+            "mesh": "Water",
+            "material": "Water",
+            "type": "MeshPhysicalMaterial",
+            "visible": true,
+            "color": "ffffff",
+            "roughness": 0.12,
+            "transmission": 1,
+            "thickness": 0.4188434815406799,
+            "ior": 1.335,
+            "shader": "nata-pet-v1:liquid:3"
+          },
+          {
+            "mesh": "nata-liquid-scattering-back",
+            "material": "Water",
+            "type": "MeshPhysicalMaterial",
+            "visible": true,
+            "color": "f2bd4c",
+            "roughness": 0.12,
+            "transmission": 0,
+            "thickness": 0.025,
+            "ior": 1.35,
+            "shader": "nata-pet-v1:scattering:3"
+          }
+        ]
+      }
+    }
+  },
+  "pooled": {
+    "options": {
+      "pooled": true
+    },
+    "glError": 0,
+    "materials": [
+      {
+        "mesh": "Cube004",
+        "material": "PlasticBody",
+        "type": "MeshPhysicalMaterial",
+        "visible": true,
+        "color": "ffffff",
+        "roughness": 0.075,
+        "transmission": 0,
+        "thickness": 0.0008,
+        "ior": 1.47,
+        "shader": "nata-pet-v1:shell:1"
+      },
+      {
+        "mesh": "Cube004_1",
+        "material": "Ring",
+        "type": "MeshPhysicalMaterial",
+        "visible": true,
+        "color": "fff9ed",
+        "roughness": 0.075,
+        "transmission": 0,
+        "thickness": 0.0008,
+        "ior": 1.47,
+        "shader": "nata-pet-v1:ring:2"
+      },
+      {
+        "mesh": "Cap",
+        "material": "PlasticCap",
+        "type": "MeshStandardMaterial",
+        "visible": true,
+        "color": "ffffff",
+        "roughness": 0.29,
+        "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}"
+      },
+      {
+        "mesh": "Label",
+        "material": "Label",
+        "type": "MeshStandardMaterial",
+        "visible": true,
+        "color": "ffffff",
+        "roughness": 0.28,
+        "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}"
+      },
+      {
+        "mesh": "Water",
+        "material": "Water",
+        "type": "MeshPhysicalMaterial",
+        "visible": true,
+        "color": "ffffff",
+        "roughness": 0.12,
+        "transmission": 1,
+        "thickness": 0.4188434815406799,
+        "ior": 1.335,
+        "shader": "nata-pet-v1:liquid:3"
+      },
+      {
+        "mesh": "nata-liquid-scattering-back",
+        "material": "Water",
+        "type": "MeshPhysicalMaterial",
+        "visible": true,
+        "color": "f2bd4c",
+        "roughness": 0.12,
+        "transmission": 0,
+        "thickness": 0.025,
+        "ior": 1.35,
+        "shader": "nata-pet-v1:scattering:3"
+      }
+    ],
+    "frames": {
+      "initial": {
+        "samples": {},
+        "materials": [
+          {
+            "mesh": "Cube004",
+            "material": "PlasticBody",
+            "type": "MeshPhysicalMaterial",
+            "visible": true,
+            "color": "ffffff",
+            "roughness": 0.075,
+            "transmission": 0,
+            "thickness": 0.0008,
+            "ior": 1.47,
+            "shader": "nata-pet-v1:shell:1"
+          },
+          {
+            "mesh": "Cube004_1",
+            "material": "Ring",
+            "type": "MeshPhysicalMaterial",
+            "visible": true,
+            "color": "fff9ed",
+            "roughness": 0.075,
+            "transmission": 0,
+            "thickness": 0.0008,
+            "ior": 1.47,
+            "shader": "nata-pet-v1:ring:2"
+          },
+          {
+            "mesh": "Cap",
+            "material": "PlasticCap",
+            "type": "MeshStandardMaterial",
+            "visible": true,
+            "color": "ffffff",
+            "roughness": 0.29,
+            "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}"
+          },
+          {
+            "mesh": "Label",
+            "material": "Label",
+            "type": "MeshStandardMaterial",
+            "visible": true,
+            "color": "ffffff",
+            "roughness": 0.28,
+            "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}"
+          },
+          {
+            "mesh": "Water",
+            "material": "Water",
+            "type": "MeshPhysicalMaterial",
+            "visible": true,
+            "color": "ffffff",
+            "roughness": 0.12,
+            "transmission": 1,
+            "thickness": 0.4188434815406799,
+            "ior": 1.335,
+            "shader": "nata-pet-v1:liquid:3"
+          },
+          {
+            "mesh": "nata-liquid-scattering-back",
+            "material": "Water",
+            "type": "MeshPhysicalMaterial",
+            "visible": true,
+            "color": "f2bd4c",
+            "roughness": 0.12,
+            "transmission": 0,
+            "thickness": 0.025,
+            "ior": 1.35,
+            "shader": "nata-pet-v1:scattering:3"
+          }
+        ]
+      }
+    }
+  },
+  "above": {
+    "options": {
+      "above": true
+    },
+    "glError": 0,
+    "materials": [
+      {
+        "mesh": "Cube004",
+        "material": "PlasticBody",
+        "type": "MeshPhysicalMaterial",
+        "visible": true,
+        "color": "ffffff",
+        "roughness": 0.075,
+        "transmission": 0,
+        "thickness": 0.0008,
+        "ior": 1.47,
+        "shader": "nata-pet-v1:shell:1"
+      },
+      {
+        "mesh": "Cube004_1",
+        "material": "Ring",
+        "type": "MeshPhysicalMaterial",
+        "visible": true,
+        "color": "fff9ed",
+        "roughness": 0.075,
+        "transmission": 0,
+        "thickness": 0.0008,
+        "ior": 1.47,
+        "shader": "nata-pet-v1:ring:2"
+      },
+      {
+        "mesh": "Cap",
+        "material": "PlasticCap",
+        "type": "MeshStandardMaterial",
+        "visible": true,
+        "color": "ffffff",
+        "roughness": 0.29,
+        "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}"
+      },
+      {
+        "mesh": "Label",
+        "material": "Label",
+        "type": "MeshStandardMaterial",
+        "visible": true,
+        "color": "ffffff",
+        "roughness": 0.28,
+        "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}"
+      },
+      {
+        "mesh": "Water",
+        "material": "Water",
+        "type": "MeshPhysicalMaterial",
+        "visible": true,
+        "color": "ffffff",
+        "roughness": 0.12,
+        "transmission": 1,
+        "thickness": 0.4188434815406799,
+        "ior": 1.335,
+        "shader": "nata-pet-v1:liquid:3"
+      },
+      {
+        "mesh": "nata-liquid-scattering-back",
+        "material": "Water",
+        "type": "MeshPhysicalMaterial",
+        "visible": true,
+        "color": "f2bd4c",
+        "roughness": 0.12,
+        "transmission": 0,
+        "thickness": 0.025,
+        "ior": 1.35,
+        "shader": "nata-pet-v1:scattering:3"
+      }
+    ],
+    "frames": {
+      "initial": {
+        "samples": {},
+        "materials": [
+          {
+            "mesh": "Cube004",
+            "material": "PlasticBody",
+            "type": "MeshPhysicalMaterial",
+            "visible": true,
+            "color": "ffffff",
+            "roughness": 0.075,
+            "transmission": 0,
+            "thickness": 0.0008,
+            "ior": 1.47,
+            "shader": "nata-pet-v1:shell:1"
+          },
+          {
+            "mesh": "Cube004_1",
+            "material": "Ring",
+            "type": "MeshPhysicalMaterial",
+            "visible": true,
+            "color": "fff9ed",
+            "roughness": 0.075,
+            "transmission": 0,
+            "thickness": 0.0008,
+            "ior": 1.47,
+            "shader": "nata-pet-v1:ring:2"
+          },
+          {
+            "mesh": "Cap",
+            "material": "PlasticCap",
+            "type": "MeshStandardMaterial",
+            "visible": true,
+            "color": "ffffff",
+            "roughness": 0.29,
+            "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}"
+          },
+          {
+            "mesh": "Label",
+            "material": "Label",
+            "type": "MeshStandardMaterial",
+            "visible": true,
+            "color": "ffffff",
+            "roughness": 0.28,
+            "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}"
+          },
+          {
+            "mesh": "Water",
+            "material": "Water",
+            "type": "MeshPhysicalMaterial",
+            "visible": true,
+            "color": "ffffff",
+            "roughness": 0.12,
+            "transmission": 1,
+            "thickness": 0.4188434815406799,
+            "ior": 1.335,
+            "shader": "nata-pet-v1:liquid:3"
+          },
+          {
+            "mesh": "nata-liquid-scattering-back",
+            "material": "Water",
+            "type": "MeshPhysicalMaterial",
+            "visible": true,
+            "color": "f2bd4c",
+            "roughness": 0.12,
+            "transmission": 0,
+            "thickness": 0.025,
+            "ior": 1.35,
+            "shader": "nata-pet-v1:scattering:3"
+          }
+        ]
+      }
+    }
+  },
+  "under": {
+    "options": {
+      "under": true
+    },
+    "glError": 0,
+    "materials": [
+      {
+        "mesh": "Cube004",
+        "material": "PlasticBody",
+        "type": "MeshPhysicalMaterial",
+        "visible": true,
+        "color": "ffffff",
+        "roughness": 0.075,
+        "transmission": 0,
+        "thickness": 0.0008,
+        "ior": 1.47,
+        "shader": "nata-pet-v1:shell:1"
+      },
+      {
+        "mesh": "Cube004_1",
+        "material": "Ring",
+        "type": "MeshPhysicalMaterial",
+        "visible": true,
+        "color": "fff9ed",
+        "roughness": 0.075,
+        "transmission": 0,
+        "thickness": 0.0008,
+        "ior": 1.47,
+        "shader": "nata-pet-v1:ring:2"
+      },
+      {
+        "mesh": "Cap",
+        "material": "PlasticCap",
+        "type": "MeshStandardMaterial",
+        "visible": true,
+        "color": "ffffff",
+        "roughness": 0.29,
+        "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}"
+      },
+      {
+        "mesh": "Label",
+        "material": "Label",
+        "type": "MeshStandardMaterial",
+        "visible": true,
+        "color": "ffffff",
+        "roughness": 0.28,
+        "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}"
+      },
+      {
+        "mesh": "Water",
+        "material": "Water",
+        "type": "MeshPhysicalMaterial",
+        "visible": true,
+        "color": "ffffff",
+        "roughness": 0.12,
+        "transmission": 1,
+        "thickness": 0.4188434815406799,
+        "ior": 1.335,
+        "shader": "nata-pet-v1:liquid:3"
+      },
+      {
+        "mesh": "nata-liquid-scattering-back",
+        "material": "Water",
+        "type": "MeshPhysicalMaterial",
+        "visible": true,
+        "color": "f2bd4c",
+        "roughness": 0.12,
+        "transmission": 0,
+        "thickness": 0.025,
+        "ior": 1.35,
+        "shader": "nata-pet-v1:scattering:3"
+      }
+    ],
+    "frames": {
+      "initial": {
+        "samples": {},
+        "materials": [
+          {
+            "mesh": "Cube004",
+            "material": "PlasticBody",
+            "type": "MeshPhysicalMaterial",
+            "visible": true,
+            "color": "ffffff",
+            "roughness": 0.075,
+            "transmission": 0,
+            "thickness": 0.0008,
+            "ior": 1.47,
+            "shader": "nata-pet-v1:shell:1"
+          },
+          {
+            "mesh": "Cube004_1",
+            "material": "Ring",
+            "type": "MeshPhysicalMaterial",
+            "visible": true,
+            "color": "fff9ed",
+            "roughness": 0.075,
+            "transmission": 0,
+            "thickness": 0.0008,
+            "ior": 1.47,
+            "shader": "nata-pet-v1:ring:2"
+          },
+          {
+            "mesh": "Cap",
+            "material": "PlasticCap",
+            "type": "MeshStandardMaterial",
+            "visible": true,
+            "color": "ffffff",
+            "roughness": 0.29,
+            "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}"
+          },
+          {
+            "mesh": "Label",
+            "material": "Label",
+            "type": "MeshStandardMaterial",
+            "visible": true,
+            "color": "ffffff",
+            "roughness": 0.28,
+            "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}"
+          },
+          {
+            "mesh": "Water",
+            "material": "Water",
+            "type": "MeshPhysicalMaterial",
+            "visible": true,
+            "color": "ffffff",
+            "roughness": 0.12,
+            "transmission": 1,
+            "thickness": 0.4188434815406799,
+            "ior": 1.335,
+            "shader": "nata-pet-v1:liquid:3"
+          },
+          {
+            "mesh": "nata-liquid-scattering-back",
+            "material": "Water",
+            "type": "MeshPhysicalMaterial",
+            "visible": true,
+            "color": "f2bd4c",
+            "roughness": 0.12,
+            "transmission": 0,
+            "thickness": 0.025,
+            "ior": 1.35,
+            "shader": "nata-pet-v1:scattering:3"
+          }
+        ]
+      }
+    }
+  }
+}

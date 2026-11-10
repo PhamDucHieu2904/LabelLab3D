@@ -1,0 +1,966 @@
+{
+  "fixed-front-direct": {
+    "options": {},
+    "samples": {
+      "underside": [
+        238,
+        228,
+        212,
+        255
+      ],
+      "side": [
+        236,
+        240,
+        248,
+        255
+      ]
+    },
+    "materials": [
+      {
+        "mesh": "Cylinder007",
+        "material": "Body",
+        "type": "MeshPhysicalMaterial",
+        "userData": {
+          "bottleProfile": "glass-290-v1"
+        },
+        "visible": true,
+        "renderOrder": 20,
+        "color": "ffffff",
+        "roughness": 0.042,
+        "transmission": 1,
+        "thickness": 0.014252662316773428,
+        "ior": 1.52,
+        "side": 0,
+        "depthWrite": true,
+        "transparent": true,
+        "shader": "basil-web-polished-shell-v1",
+        "matrix": [
+          0.18918817168219187,
+          0,
+          0,
+          0,
+          0,
+          0.4978635853946709,
+          0,
+          0,
+          0,
+          0,
+          0.18918817168219187,
+          0,
+          0,
+          0.0006732720549809112,
+          -1.1276493764984192e-8,
+          1
+        ]
+      },
+      {
+        "mesh": "Cylinder007_1",
+        "material": "GlassBase",
+        "type": "MeshPhysicalMaterial",
+        "userData": {
+          "bottleProfile": "glass-290-v1"
+        },
+        "visible": true,
+        "renderOrder": 20,
+        "color": "ffffff",
+        "roughness": 0.042,
+        "transmission": 1,
+        "thickness": 0.014252662316773428,
+        "ior": 1.52,
+        "side": 0,
+        "depthWrite": true,
+        "transparent": true,
+        "shader": "basil-web-polished-shell-v1",
+        "matrix": [
+          0.18918817168219187,
+          0,
+          0,
+          0,
+          0,
+          0.4978635853946709,
+          0,
+          0,
+          0,
+          0,
+          0.18918817168219187,
+          0,
+          0,
+          0.0006732720549809112,
+          -1.1276493764984192e-8,
+          1
+        ]
+      },
+      {
+        "mesh": "Cap",
+        "material": "SilverCap",
+        "type": "MeshPhysicalMaterial",
+        "userData": {
+          "bottleProfile": "glass-290-v1"
+        },
+        "visible": true,
+        "renderOrder": 30,
+        "color": "c0c0c0",
+        "roughness": 0.5527864098548889,
+        "transmission": 0,
+        "thickness": 0,
+        "ior": 1.5,
+        "side": 2,
+        "depthWrite": true,
+        "transparent": false,
+        "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}",
+        "matrix": [
+          0.042218114818883594,
+          0,
+          -0.06392586151094314,
+          0,
+          0,
+          0.016570247726546312,
+          0,
+          0,
+          0.06392586151094314,
+          0,
+          0.042218114818883594,
+          0,
+          0,
+          0.48342975227345364,
+          -1.1276493764984192e-8,
+          1
+        ]
+      },
+      {
+        "mesh": "Label",
+        "material": "PaperLabel",
+        "type": "MeshStandardMaterial",
+        "userData": {
+          "bottleProfile": "glass-290-v1"
+        },
+        "visible": true,
+        "renderOrder": 30,
+        "color": "ffffff",
+        "roughness": 0.28,
+        "side": 2,
+        "depthWrite": true,
+        "transparent": false,
+        "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}",
+        "matrix": [
+          0.5531817762039469,
+          0,
+          0,
+          0,
+          0,
+          0.5531817762039469,
+          0,
+          0,
+          0,
+          0,
+          0.5531817762039469,
+          0,
+          0,
+          -0.5002806990352826,
+          -1.1276493764984192e-8,
+          1
+        ]
+      },
+      {
+        "mesh": "Neck",
+        "material": "Neck",
+        "type": "MeshPhysicalMaterial",
+        "userData": {
+          "bottleProfile": "glass-290-v1",
+          "basilWebNeckWallMetres": 0.0013
+        },
+        "visible": true,
+        "renderOrder": 20,
+        "color": "ffffff",
+        "roughness": 0.042,
+        "transmission": 1,
+        "thickness": 0.0026,
+        "ior": 1.52,
+        "side": 0,
+        "depthWrite": true,
+        "transparent": true,
+        "shader": "pullcap-hollow-glass-neck-v1",
+        "matrix": [
+          0.18918817168219187,
+          0,
+          0,
+          0,
+          0,
+          0.4978635853946709,
+          0,
+          0,
+          0,
+          0,
+          0.18918817168219187,
+          0,
+          0,
+          0.0006732720549809112,
+          -1.1276493764984192e-8,
+          1
+        ]
+      },
+      {
+        "mesh": "Water",
+        "material": "Water",
+        "type": "MeshPhysicalMaterial",
+        "userData": {
+          "bottleProfile": "glass-290-v1",
+          "bottleLiquidKind": "milk"
+        },
+        "visible": true,
+        "renderOrder": 0,
+        "color": "fff5e4",
+        "roughness": 0.28,
+        "transmission": 0,
+        "thickness": 0.035,
+        "ior": 1.333,
+        "side": 0,
+        "depthWrite": true,
+        "transparent": false,
+        "shader": "basil-web-milk-reservoir-v2",
+        "matrix": [
+          0.18837713791233537,
+          0,
+          0,
+          0,
+          0,
+          0.49572929467720733,
+          0,
+          0,
+          0,
+          0,
+          0.18837713791233537,
+          0,
+          0,
+          0.0006732720549809112,
+          -1.1276493764984192e-8,
+          1
+        ]
+      }
+    ],
+    "frames": {
+      "initial": {
+        "samples": {
+          "underside": [
+            238,
+            228,
+            212,
+            255
+          ],
+          "side": [
+            236,
+            240,
+            248,
+            255
+          ]
+        },
+        "materials": [
+          {
+            "mesh": "Cylinder007",
+            "material": "Body",
+            "type": "MeshPhysicalMaterial",
+            "userData": {
+              "bottleProfile": "glass-290-v1"
+            },
+            "visible": true,
+            "renderOrder": 20,
+            "color": "ffffff",
+            "roughness": 0.042,
+            "transmission": 1,
+            "thickness": 0.014252662316773428,
+            "ior": 1.52,
+            "side": 0,
+            "depthWrite": true,
+            "transparent": true,
+            "shader": "basil-web-polished-shell-v1",
+            "matrix": [
+              0.18918817168219187,
+              0,
+              0,
+              0,
+              0,
+              0.4978635853946709,
+              0,
+              0,
+              0,
+              0,
+              0.18918817168219187,
+              0,
+              0,
+              0.0006732720549809112,
+              -1.1276493764984192e-8,
+              1
+            ]
+          },
+          {
+            "mesh": "Cylinder007_1",
+            "material": "GlassBase",
+            "type": "MeshPhysicalMaterial",
+            "userData": {
+              "bottleProfile": "glass-290-v1"
+            },
+            "visible": true,
+            "renderOrder": 20,
+            "color": "ffffff",
+            "roughness": 0.042,
+            "transmission": 1,
+            "thickness": 0.014252662316773428,
+            "ior": 1.52,
+            "side": 0,
+            "depthWrite": true,
+            "transparent": true,
+            "shader": "basil-web-polished-shell-v1",
+            "matrix": [
+              0.18918817168219187,
+              0,
+              0,
+              0,
+              0,
+              0.4978635853946709,
+              0,
+              0,
+              0,
+              0,
+              0.18918817168219187,
+              0,
+              0,
+              0.0006732720549809112,
+              -1.1276493764984192e-8,
+              1
+            ]
+          },
+          {
+            "mesh": "Cap",
+            "material": "SilverCap",
+            "type": "MeshPhysicalMaterial",
+            "userData": {
+              "bottleProfile": "glass-290-v1"
+            },
+            "visible": true,
+            "renderOrder": 30,
+            "color": "c0c0c0",
+            "roughness": 0.5527864098548889,
+            "transmission": 0,
+            "thickness": 0,
+            "ior": 1.5,
+            "side": 2,
+            "depthWrite": true,
+            "transparent": false,
+            "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}",
+            "matrix": [
+              0.042218114818883594,
+              0,
+              -0.06392586151094314,
+              0,
+              0,
+              0.016570247726546312,
+              0,
+              0,
+              0.06392586151094314,
+              0,
+              0.042218114818883594,
+              0,
+              0,
+              0.48342975227345364,
+              -1.1276493764984192e-8,
+              1
+            ]
+          },
+          {
+            "mesh": "Label",
+            "material": "PaperLabel",
+            "type": "MeshStandardMaterial",
+            "userData": {
+              "bottleProfile": "glass-290-v1"
+            },
+            "visible": true,
+            "renderOrder": 30,
+            "color": "ffffff",
+            "roughness": 0.28,
+            "side": 2,
+            "depthWrite": true,
+            "transparent": false,
+            "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}",
+            "matrix": [
+              0.5531817762039469,
+              0,
+              0,
+              0,
+              0,
+              0.5531817762039469,
+              0,
+              0,
+              0,
+              0,
+              0.5531817762039469,
+              0,
+              0,
+              -0.5002806990352826,
+              -1.1276493764984192e-8,
+              1
+            ]
+          },
+          {
+            "mesh": "Neck",
+            "material": "Neck",
+            "type": "MeshPhysicalMaterial",
+            "userData": {
+              "bottleProfile": "glass-290-v1",
+              "basilWebNeckWallMetres": 0.0013
+            },
+            "visible": true,
+            "renderOrder": 20,
+            "color": "ffffff",
+            "roughness": 0.042,
+            "transmission": 1,
+            "thickness": 0.0026,
+            "ior": 1.52,
+            "side": 0,
+            "depthWrite": true,
+            "transparent": true,
+            "shader": "pullcap-hollow-glass-neck-v1",
+            "matrix": [
+              0.18918817168219187,
+              0,
+              0,
+              0,
+              0,
+              0.4978635853946709,
+              0,
+              0,
+              0,
+              0,
+              0.18918817168219187,
+              0,
+              0,
+              0.0006732720549809112,
+              -1.1276493764984192e-8,
+              1
+            ]
+          },
+          {
+            "mesh": "Water",
+            "material": "Water",
+            "type": "MeshPhysicalMaterial",
+            "userData": {
+              "bottleProfile": "glass-290-v1",
+              "bottleLiquidKind": "milk"
+            },
+            "visible": true,
+            "renderOrder": 0,
+            "color": "fff5e4",
+            "roughness": 0.28,
+            "transmission": 0,
+            "thickness": 0.035,
+            "ior": 1.333,
+            "side": 0,
+            "depthWrite": true,
+            "transparent": false,
+            "shader": "basil-web-milk-reservoir-v2",
+            "matrix": [
+              0.18837713791233537,
+              0,
+              0,
+              0,
+              0,
+              0.49572929467720733,
+              0,
+              0,
+              0,
+              0,
+              0.18837713791233537,
+              0,
+              0,
+              0.0006732720549809112,
+              -1.1276493764984192e-8,
+              1
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "fixed-front-pooled": {
+    "options": {
+      "pooled": true
+    },
+    "samples": {
+      "underside": [
+        238,
+        228,
+        212,
+        255
+      ],
+      "side": [
+        236,
+        240,
+        248,
+        255
+      ]
+    },
+    "materials": [
+      {
+        "mesh": "Cylinder007",
+        "material": "Body",
+        "type": "MeshPhysicalMaterial",
+        "userData": {
+          "bottleProfile": "glass-290-v1"
+        },
+        "visible": true,
+        "renderOrder": 20,
+        "color": "ffffff",
+        "roughness": 0.042,
+        "transmission": 1,
+        "thickness": 0.014252662316773428,
+        "ior": 1.52,
+        "side": 0,
+        "depthWrite": true,
+        "transparent": true,
+        "shader": "basil-web-polished-shell-v1",
+        "matrix": [
+          0.18918817168219187,
+          0,
+          0,
+          0,
+          0,
+          0.4978635853946709,
+          0,
+          0,
+          0,
+          0,
+          0.18918817168219187,
+          0,
+          0,
+          0.0006732720549809112,
+          -1.1276493764984192e-8,
+          1
+        ]
+      },
+      {
+        "mesh": "Cylinder007_1",
+        "material": "GlassBase",
+        "type": "MeshPhysicalMaterial",
+        "userData": {
+          "bottleProfile": "glass-290-v1"
+        },
+        "visible": true,
+        "renderOrder": 20,
+        "color": "ffffff",
+        "roughness": 0.042,
+        "transmission": 1,
+        "thickness": 0.014252662316773428,
+        "ior": 1.52,
+        "side": 0,
+        "depthWrite": true,
+        "transparent": true,
+        "shader": "basil-web-polished-shell-v1",
+        "matrix": [
+          0.18918817168219187,
+          0,
+          0,
+          0,
+          0,
+          0.4978635853946709,
+          0,
+          0,
+          0,
+          0,
+          0.18918817168219187,
+          0,
+          0,
+          0.0006732720549809112,
+          -1.1276493764984192e-8,
+          1
+        ]
+      },
+      {
+        "mesh": "Cap",
+        "material": "SilverCap",
+        "type": "MeshPhysicalMaterial",
+        "userData": {
+          "bottleProfile": "glass-290-v1"
+        },
+        "visible": true,
+        "renderOrder": 30,
+        "color": "c0c0c0",
+        "roughness": 0.5527864098548889,
+        "transmission": 0,
+        "thickness": 0,
+        "ior": 1.5,
+        "side": 2,
+        "depthWrite": true,
+        "transparent": false,
+        "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}",
+        "matrix": [
+          0.042218114818883594,
+          0,
+          -0.06392586151094314,
+          0,
+          0,
+          0.016570247726546312,
+          0,
+          0,
+          0.06392586151094314,
+          0,
+          0.042218114818883594,
+          0,
+          0,
+          0.48342975227345364,
+          -1.1276493764984192e-8,
+          1
+        ]
+      },
+      {
+        "mesh": "Label",
+        "material": "PaperLabel",
+        "type": "MeshStandardMaterial",
+        "userData": {
+          "bottleProfile": "glass-290-v1"
+        },
+        "visible": true,
+        "renderOrder": 30,
+        "color": "ffffff",
+        "roughness": 0.28,
+        "side": 2,
+        "depthWrite": true,
+        "transparent": false,
+        "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}",
+        "matrix": [
+          0.5531817762039469,
+          0,
+          0,
+          0,
+          0,
+          0.5531817762039469,
+          0,
+          0,
+          0,
+          0,
+          0.5531817762039469,
+          0,
+          0,
+          -0.5002806990352826,
+          -1.1276493764984192e-8,
+          1
+        ]
+      },
+      {
+        "mesh": "Neck",
+        "material": "Neck",
+        "type": "MeshPhysicalMaterial",
+        "userData": {
+          "bottleProfile": "glass-290-v1",
+          "basilWebNeckWallMetres": 0.0013
+        },
+        "visible": true,
+        "renderOrder": 20,
+        "color": "ffffff",
+        "roughness": 0.042,
+        "transmission": 1,
+        "thickness": 0.0026,
+        "ior": 1.52,
+        "side": 0,
+        "depthWrite": true,
+        "transparent": true,
+        "shader": "pullcap-hollow-glass-neck-v1",
+        "matrix": [
+          0.18918817168219187,
+          0,
+          0,
+          0,
+          0,
+          0.4978635853946709,
+          0,
+          0,
+          0,
+          0,
+          0.18918817168219187,
+          0,
+          0,
+          0.0006732720549809112,
+          -1.1276493764984192e-8,
+          1
+        ]
+      },
+      {
+        "mesh": "Water",
+        "material": "Water",
+        "type": "MeshPhysicalMaterial",
+        "userData": {
+          "bottleProfile": "glass-290-v1",
+          "bottleLiquidKind": "milk"
+        },
+        "visible": true,
+        "renderOrder": 0,
+        "color": "fff5e4",
+        "roughness": 0.28,
+        "transmission": 0,
+        "thickness": 0.035,
+        "ior": 1.333,
+        "side": 0,
+        "depthWrite": true,
+        "transparent": false,
+        "shader": "basil-web-milk-reservoir-v2",
+        "matrix": [
+          0.18837713791233537,
+          0,
+          0,
+          0,
+          0,
+          0.49572929467720733,
+          0,
+          0,
+          0,
+          0,
+          0.18837713791233537,
+          0,
+          0,
+          0.0006732720549809112,
+          -1.1276493764984192e-8,
+          1
+        ]
+      }
+    ],
+    "frames": {
+      "initial": {
+        "samples": {
+          "underside": [
+            238,
+            228,
+            212,
+            255
+          ],
+          "side": [
+            236,
+            240,
+            248,
+            255
+          ]
+        },
+        "materials": [
+          {
+            "mesh": "Cylinder007",
+            "material": "Body",
+            "type": "MeshPhysicalMaterial",
+            "userData": {
+              "bottleProfile": "glass-290-v1"
+            },
+            "visible": true,
+            "renderOrder": 20,
+            "color": "ffffff",
+            "roughness": 0.042,
+            "transmission": 1,
+            "thickness": 0.014252662316773428,
+            "ior": 1.52,
+            "side": 0,
+            "depthWrite": true,
+            "transparent": true,
+            "shader": "basil-web-polished-shell-v1",
+            "matrix": [
+              0.18918817168219187,
+              0,
+              0,
+              0,
+              0,
+              0.4978635853946709,
+              0,
+              0,
+              0,
+              0,
+              0.18918817168219187,
+              0,
+              0,
+              0.0006732720549809112,
+              -1.1276493764984192e-8,
+              1
+            ]
+          },
+          {
+            "mesh": "Cylinder007_1",
+            "material": "GlassBase",
+            "type": "MeshPhysicalMaterial",
+            "userData": {
+              "bottleProfile": "glass-290-v1"
+            },
+            "visible": true,
+            "renderOrder": 20,
+            "color": "ffffff",
+            "roughness": 0.042,
+            "transmission": 1,
+            "thickness": 0.014252662316773428,
+            "ior": 1.52,
+            "side": 0,
+            "depthWrite": true,
+            "transparent": true,
+            "shader": "basil-web-polished-shell-v1",
+            "matrix": [
+              0.18918817168219187,
+              0,
+              0,
+              0,
+              0,
+              0.4978635853946709,
+              0,
+              0,
+              0,
+              0,
+              0.18918817168219187,
+              0,
+              0,
+              0.0006732720549809112,
+              -1.1276493764984192e-8,
+              1
+            ]
+          },
+          {
+            "mesh": "Cap",
+            "material": "SilverCap",
+            "type": "MeshPhysicalMaterial",
+            "userData": {
+              "bottleProfile": "glass-290-v1"
+            },
+            "visible": true,
+            "renderOrder": 30,
+            "color": "c0c0c0",
+            "roughness": 0.5527864098548889,
+            "transmission": 0,
+            "thickness": 0,
+            "ior": 1.5,
+            "side": 2,
+            "depthWrite": true,
+            "transparent": false,
+            "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}",
+            "matrix": [
+              0.042218114818883594,
+              0,
+              -0.06392586151094314,
+              0,
+              0,
+              0.016570247726546312,
+              0,
+              0,
+              0.06392586151094314,
+              0,
+              0.042218114818883594,
+              0,
+              0,
+              0.48342975227345364,
+              -1.1276493764984192e-8,
+              1
+            ]
+          },
+          {
+            "mesh": "Label",
+            "material": "PaperLabel",
+            "type": "MeshStandardMaterial",
+            "userData": {
+              "bottleProfile": "glass-290-v1"
+            },
+            "visible": true,
+            "renderOrder": 30,
+            "color": "ffffff",
+            "roughness": 0.28,
+            "side": 2,
+            "depthWrite": true,
+            "transparent": false,
+            "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}",
+            "matrix": [
+              0.5531817762039469,
+              0,
+              0,
+              0,
+              0,
+              0.5531817762039469,
+              0,
+              0,
+              0,
+              0,
+              0.5531817762039469,
+              0,
+              0,
+              -0.5002806990352826,
+              -1.1276493764984192e-8,
+              1
+            ]
+          },
+          {
+            "mesh": "Neck",
+            "material": "Neck",
+            "type": "MeshPhysicalMaterial",
+            "userData": {
+              "bottleProfile": "glass-290-v1",
+              "basilWebNeckWallMetres": 0.0013
+            },
+            "visible": true,
+            "renderOrder": 20,
+            "color": "ffffff",
+            "roughness": 0.042,
+            "transmission": 1,
+            "thickness": 0.0026,
+            "ior": 1.52,
+            "side": 0,
+            "depthWrite": true,
+            "transparent": true,
+            "shader": "pullcap-hollow-glass-neck-v1",
+            "matrix": [
+              0.18918817168219187,
+              0,
+              0,
+              0,
+              0,
+              0.4978635853946709,
+              0,
+              0,
+              0,
+              0,
+              0.18918817168219187,
+              0,
+              0,
+              0.0006732720549809112,
+              -1.1276493764984192e-8,
+              1
+            ]
+          },
+          {
+            "mesh": "Water",
+            "material": "Water",
+            "type": "MeshPhysicalMaterial",
+            "userData": {
+              "bottleProfile": "glass-290-v1",
+              "bottleLiquidKind": "milk"
+            },
+            "visible": true,
+            "renderOrder": 0,
+            "color": "fff5e4",
+            "roughness": 0.28,
+            "transmission": 0,
+            "thickness": 0.035,
+            "ior": 1.333,
+            "side": 0,
+            "depthWrite": true,
+            "transparent": false,
+            "shader": "basil-web-milk-reservoir-v2",
+            "matrix": [
+              0.18837713791233537,
+              0,
+              0,
+              0,
+              0,
+              0.49572929467720733,
+              0,
+              0,
+              0,
+              0,
+              0.18837713791233537,
+              0,
+              0,
+              0.0006732720549809112,
+              -1.1276493764984192e-8,
+              1
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

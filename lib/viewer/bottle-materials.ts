@@ -1,14 +1,17 @@
 import * as THREE from 'three';
 import { liquidColorUpdates } from './material-adjustments';
 import type { ProductAsset } from '../viewer-config';
-import { aloeTransmissionClearRadiance, correctAloeTransmissionClear, createAloeBottleMaterialContext } from './aloe-bottle-materials';
+import { createAloeBottleMaterialContext } from './aloe-bottle-materials';
 import { basilMaterialRole, createBasilBottleMaterialContext, prepareBasilHighLayers } from './basil-bottle-materials';
 import { basilWebMaterialRole, beginBasilWebRender, endBasilWebRender, createBasilWebBottleMaterialContext, prepareBasilWebLayers } from './basil-web-materials';
 import { addBottleBackdropProjection, createBottleBackdropUniforms, updateBottleBackdropUniforms } from './bottle-backdrop';
+import { glass280MaterialRole, createGlass280MaterialContext, prepareGlass280Layers } from './glass-280-materials';
+import { preparePetRingGeometry } from './pet-ring-geometry';
+import { configurePetRingMaterial, isPetRingMaterial } from './pet-ring-material';
 
 type BottleRole = 'body' | 'ring' | 'liquid' | 'liquid-back' | 'inclusions' | 'cap' | 'label';
 const PROFILE = 'nata-pet-v1';
-const bottleProfiles = new Set([PROFILE, 'aloe-pet-v1']);
+const bottleProfiles = new Set([PROFILE, 'aloe-pet-v1', 'juice-pet-v1', 'energy-pet-v1']);
 const roles = new Set<BottleRole>(['body', 'liquid', 'inclusions', 'cap', 'label']);
 
 /** Metres and linear-radiance controls, independent of the flavor/background color. */
@@ -21,37 +24,6 @@ export const NATA_PET_OPTICS = Object.freeze({
   jellyFadeStart: 0.01,
   jellyFadeEnd: 0.024,
 });
-
-/** Frosted molded PET rim: neutral haze builds along a longer grazing path. */
-export const NATA_PET_RING = Object.freeze({
-  tint: '#fff9ed',
-  roughness: 0.19,
-  opticalThicknessMetres: 0.0009,
-  extinctionPerMetre: 240,
-  minimumViewCosine: 0.2,
-});
-
-/** The thinner Aloe neck ring has less bulk haze and a polished refractive finish. */
-export const ALOE_PET_RING = Object.freeze({
-  tint: '#fffdf7',
-  roughness: 0.085,
-  transmission: 0.93,
-  opticalThicknessMetres: 0.0008,
-  extinctionPerMetre: 90,
-  minimumViewCosine: 0.24,
-});
-
-export function aloeRingHaze(viewCosine: number, basemapAlpha = 0): number {
-  const cosine = THREE.MathUtils.clamp(Math.abs(viewCosine), ALOE_PET_RING.minimumViewCosine, 1);
-  const transmittance = Math.exp(-ALOE_PET_RING.extinctionPerMetre * ALOE_PET_RING.opticalThicknessMetres / cosine);
-  return 1 - (1 - THREE.MathUtils.clamp(basemapAlpha, 0, 1)) * transmittance;
-}
-
-export function nataRingHaze(viewCosine: number, basemapAlpha = 0): number {
-  const cosine = THREE.MathUtils.clamp(Math.abs(viewCosine), NATA_PET_RING.minimumViewCosine, 1);
-  const transmittance = Math.exp(-NATA_PET_RING.extinctionPerMetre * NATA_PET_RING.opticalThicknessMetres / cosine);
-  return 1 - (1 - THREE.MathUtils.clamp(basemapAlpha, 0, 1)) * transmittance;
-}
 
 /** Unity's artistic vivid scattering is exposure-independent; keep its hue without HDRP EV100 gain. */
 export function nataScatteringColor(juice: THREE.Color): THREE.Color {
@@ -69,14 +41,16 @@ export function nataJellyReveal(depthMetres: number): number {
 
 /** The authored/exported profile is explicit; ordinary cans and other PETs retain their PBR. */
 export function bottleMaterialRole(asset: ProductAsset, mesh: THREE.Mesh, material: THREE.Material): BottleRole | undefined {
+  const glass280 = glass280MaterialRole(asset, mesh, material);
+  if (glass280) return glass280;
   const webBasil = basilWebMaterialRole(asset, mesh, material);
   if (webBasil) return webBasil;
   const basil = basilMaterialRole(asset, mesh, material);
   if (basil) return basil;
+  if (isPetRingMaterial(asset, material)) return 'ring';
   if (asset.packaging !== 'pet' || (!bottleProfiles.has(material.userData.bottleProfile) && !bottleProfiles.has(mesh.userData.bottleProfile))) return;
   const entry = Object.entries(asset.materialSlots ?? {}).find(([, names]) => names.includes(material.name))
     ?? Object.entries(asset.materialSlots ?? {}).find(([, names]) => names.includes(mesh.name));
-  if (entry?.[0] === 'body' && (material.userData.nataRing === true || material.userData.aloeRing === true)) return 'ring';
   if (entry?.[0] === 'liquid' && (mesh.userData.nataLiquidBack === true || mesh.userData.aloeLiquidBack === true)) return 'liquid-back';
   return entry && roles.has(entry[0] as BottleRole) ? entry[0] as BottleRole : undefined;
 }
@@ -84,6 +58,8 @@ export function bottleMaterialRole(asset: ProductAsset, mesh: THREE.Mesh, materi
 /** One opaque back surface provides the scattering reservoir for rough refraction.
  * Geometry is shared with the authored liquid; no topology or Blender asset is changed. */
 export function prepareBottleLayers(root: THREE.Object3D, asset: ProductAsset): void {
+  preparePetRingGeometry(root, asset);
+  prepareGlass280Layers(root, asset);
   prepareBasilWebLayers(root, asset);
   prepareBasilHighLayers(root, asset);
   if (asset.packaging !== 'pet') return;
@@ -164,7 +140,9 @@ export function configureBottleRenderOrder(root: THREE.Object3D, asset: ProductA
     if (role) {
       const aloe = node.userData.bottleProfile === 'aloe-pet-v1' ||
         (Array.isArray(node.material) ? node.material : [node.material]).some(material => material.userData.bottleProfile === 'aloe-pet-v1');
-      const webBasil = node.userData.basilProfile === 'basil-web-v1';
+      const webBasil = node.userData.basilProfile === 'basil-web-v1' || ['glass-290-v1', 'glass-300-v1'].includes(node.userData.bottleProfile) ||
+        (Array.isArray(node.material) ? node.material : [node.material]).some(material =>
+          material.userData.basilProfile === 'basil-web-v1' || ['glass-290-v1', 'glass-300-v1'].includes(material.userData.bottleProfile));
       node.renderOrder = role === 'body' || role === 'ring' ? 20 : role === 'liquid' ? (webBasil ? 0 : 10) : role === 'inclusions' ? (aloe || webBasil ? 1 : 0) : role === 'liquid-back' ? 0 : 30;
       if (aloe && (role === 'inclusions' || role === 'liquid-back')) configureAloeCaptureOnlyLayer(node);
     }
@@ -205,6 +183,8 @@ vec3 nataTowardCamera() {
 
 /** Colored scattering plus Three's opaque color pyramid gives actual rough refraction. */
 export function createBottleMaterialContext(root: THREE.Object3D, asset: ProductAsset) {
+  const glass280 = createGlass280MaterialContext(root, asset);
+  if (glass280) return glass280;
   const webBasil = createBasilWebBottleMaterialContext(root, asset);
   if (webBasil) return webBasil;
   const basil = createBasilBottleMaterialContext(root, asset);
@@ -243,6 +223,11 @@ export function createBottleMaterialContext(root: THREE.Object3D, asset: Product
         return;
       }
       if (role === 'label') {
+        if (material.userData.bottleProfile === 'juice-pet-v1') {
+          material.polygonOffset = true;
+          material.polygonOffsetFactor = -1;
+          material.polygonOffsetUnits = -1;
+        }
         // Three captures only the opaque queue for physical transmission.
         // Print still covers the bottle at alpha 1 in the final queue, but can
         // no longer be sampled into the exposed liquid at the neck/label edge.
@@ -267,83 +252,8 @@ export function createBottleMaterialContext(root: THREE.Object3D, asset: Product
         material.depthWrite = true; material.depthTest = true;
         return;
       }
-      if (role === 'ring') {
-        if (aloe) {
-          material.color.set(ALOE_PET_RING.tint); material.roughness = ALOE_PET_RING.roughness;
-          material.opacity = 1; material.transparent = true; material.depthWrite = false;
-          const metricToLocal = mesh.matrixWorld.clone().invert();
-          const metricToWorld = new THREE.Matrix4();
-          const uniforms = {
-            aloeRingOpticalDepth: { value: ALOE_PET_RING.extinctionPerMetre * ALOE_PET_RING.opticalThicknessMetres },
-            aloeRingMinimumViewCosine: { value: ALOE_PET_RING.minimumViewCosine },
-            aloeRingWorldThickness: { value: Number(ALOE_PET_RING.opticalThicknessMetres) },
-            aloeClearRadiance: { value: 1 },
-          };
-          if (material instanceof THREE.MeshPhysicalMaterial) {
-            material.ior = 1.47; material.transmission = ALOE_PET_RING.transmission;
-            material.thickness = ALOE_PET_RING.opticalThicknessMetres;
-            material.attenuationColor.set('#ffffff'); material.attenuationDistance = Infinity;
-          }
-          material.onBeforeRender = (renderer, _scene, _camera, _geometry, renderedObject) => {
-            uniforms.aloeClearRadiance.value = aloeTransmissionClearRadiance(renderer);
-            // Use the actual pooled draw's scale, without stretching the ray by
-            // the source Body mesh's retained nonuniform Blender transform.
-            metricToWorld.copy(renderedObject.matrixWorld).multiply(metricToLocal);
-            uniforms.aloeRingWorldThickness.value = ALOE_PET_RING.opticalThicknessMetres * metricToWorld.getMaxScaleOnAxis();
-          };
-          material.onBeforeCompile = shader => {
-            Object.assign(shader.uniforms, uniforms);
-            shader.fragmentShader = shader.fragmentShader.replace('#include <common>', /* glsl */`#include <common>
-              uniform float aloeRingOpticalDepth;
-              uniform float aloeRingMinimumViewCosine;
-              uniform float aloeRingWorldThickness;
-              uniform float aloeClearRadiance;
-            `).replace('#include <transmission_pars_fragment>',
-              correctAloeTransmissionClear(THREE.ShaderChunk.transmission_pars_fragment).replace(
-                'return normalize( refractionVector ) * thickness * modelScale;',
-                'return normalize( refractionVector ) * aloeRingWorldThickness;'))
-              .replace('#include <transmission_fragment>', THREE.ShaderChunk.transmission_fragment.replace(
-                'material.transmission = transmission;',
-                'material.transmission = transmission * (1.0 - diffuseColor.a);'))
-              .replace('#include <opaque_fragment>', /* glsl */`
-                float ringCosine = clamp(abs(dot(normal, geometryViewDir)), aloeRingMinimumViewCosine, 1.0);
-                float ringHazeAlpha = 1.0 - (1.0 - diffuseColor.a) * exp(-aloeRingOpticalDepth / ringCosine);
-                float ringFresnel = pow(1.0 - saturate(dot(normal, geometryViewDir)), 5.0);
-                float ringHighlight = clamp(max(max(totalSpecular.r, totalSpecular.g), totalSpecular.b), 0.0, 1.0);
-                float ringAlpha = clamp(ringHazeAlpha + ringFresnel * 0.15 + ringHighlight * 0.55, 0.0, 1.0);
-                #ifdef USE_TRANSMISSION
-                  // The refracted scene already contains its own radiance.
-                  // Only clear pixels need alpha haze; opaque basemap marks
-                  // retain their diffuse plastic instead of becoming clear.
-                  ringAlpha = mix(ringAlpha, 1.0, material.transmissionAlpha);
-                  gl_FragColor = vec4((totalSpecular + totalDiffuse) / max(ringAlpha, 0.001), ringAlpha);
-                #else
-                  gl_FragColor = vec4((totalSpecular + totalDiffuse * ringHazeAlpha) / max(ringAlpha, 0.001), ringAlpha);
-                #endif
-              `);
-          };
-          material.customProgramCacheKey = () => 'aloe-pet-v1:ring:4';
-          return;
-        }
-        material.color.set(NATA_PET_RING.tint); material.roughness = NATA_PET_RING.roughness;
-        if (material instanceof THREE.MeshPhysicalMaterial) material.ior = 1.47;
-        material.opacity = 1; material.transparent = true; material.depthWrite = false;
-        material.onBeforeCompile = shader => {
-          shader.uniforms.nataRingOpticalDepth = { value: NATA_PET_RING.extinctionPerMetre * NATA_PET_RING.opticalThicknessMetres };
-          shader.uniforms.nataRingMinimumViewCosine = { value: NATA_PET_RING.minimumViewCosine };
-          shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float nataRingOpticalDepth;\nuniform float nataRingMinimumViewCosine;')
-            .replace('#include <opaque_fragment>', /* glsl */`
-              float ringCosine = clamp(abs(dot(normal, geometryViewDir)), nataRingMinimumViewCosine, 1.0);
-              // Keep the supplied basemap alpha, then add the missing bulk haze
-              // of molded PET. A grazing view crosses more plastic than a front view.
-              float ringHazeAlpha = 1.0 - (1.0 - diffuseColor.a) * exp(-nataRingOpticalDepth / ringCosine);
-              float ringFresnel = pow(1.0 - saturate(dot(normal, geometryViewDir)), 5.0);
-              float ringHighlight = clamp(max(max(totalSpecular.r, totalSpecular.g), totalSpecular.b), 0.0, 1.0);
-              float ringAlpha = clamp(ringHazeAlpha + ringFresnel * 0.18 + ringHighlight * 0.5, 0.0, 1.0);
-              gl_FragColor = vec4((totalSpecular + totalDiffuse * ringHazeAlpha) / max(ringAlpha, 0.001), ringAlpha);
-            `);
-        };
-        material.customProgramCacheKey = () => `${PROFILE}:ring:2`;
+      if (role === 'ring' && material instanceof THREE.MeshPhysicalMaterial) {
+        configurePetRingMaterial(material, mesh);
         return;
       }
       if (role === 'body') {

@@ -1,0 +1,59 @@
+{
+  "id": "pet-1000-juice",
+  "src": "/models/bottles/pet-1000-juice.glb",
+  "sourceName": "Pet 1L Bottle Model_web.glb",
+  "sourceBytes": 2565128,
+  "sourceSha256": "21417d493e33a2f3d8f13e689bc871332bfc2bbb44d0a868fced6b89823bed01",
+  "bytes": 445064,
+  "sha256": "1a738acdd83cf21bce3c73544057677bee027d71a14e2a1d4d88e9bb661c89a1",
+  "binarySha256": "e90705a2975b5ef4581408a3b50966c0689f4c4c1218b20cc8891b7a7bf8a48a",
+  "sourceToMetres": 0.1,
+  "units": "metres",
+  "volumeMl": 1000,
+  "defaultLiquid": "fruit-juice",
+  "materialSlots": {
+    "body": [
+      "PlasticBody"
+    ],
+    "cap": [
+      "PlasticCap"
+    ],
+    "label": [
+      "Label"
+    ],
+    "liquid": [
+      "Water"
+    ],
+    "ring": [
+      "Ring"
+    ]
+  },
+  "compression": {
+    "extension": "KHR_draco_mesh_compression",
+    "encoder": "draco3dgltf 1.5.7",
+    "method": "edgebreaker",
+    "precisionBits": {
+      "POSITION": 18,
+      "NORMAL": 14,
+      "TEXCOORD_0": 16
+    },
+    "lossless": false,
+    "simplification": false,
+    "uncompressedBytes": 2566020,
+    "savedPercent": 82.66,
+    "triangles": 86548,
+    "topologyPreserved": true,
+    "maxPositionErrorMeters": 5.613927195445636e-7,
+    "maxNormalAngleDegrees": 0.02970197276990159,
+    "maxUvError": 0.00000768899917602539,
+    "maxUvErrorAt4096px": 0.031494140625,
+    "sceneSha256": "71cc131da935839b27cddc6e63a55fa81974b9e8464999a36d70713c2153e024",
+    "decodedPositionHashes": [
+      "f0488acf544baef16fa414813257944e1571c8574a2f944b5b7c6118efecb0c9",
+      "bd0752ed905dce10ea623a697d9ea1ac2f2f7ea10befbc856d8d3a4bbcbbbebc",
+      "bd11af72898fded2f3a02feddf0de514b3553a7b7ad94330faa2ebecff91db96",
+      "4514ba2fd3775ac7c5c4b1db7584386447af045e99d6b861000d947135de24b9",
+      "fca4f9534bf68e8745a0d5141ec5bbcf287cd5a5bcfbb9767584ec208a4bec5a"
+    ]
+  }
+}

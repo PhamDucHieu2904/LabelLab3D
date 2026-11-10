@@ -1,5 +1,10 @@
 import * as THREE from 'three';
 
+/** Rotated meshes can have large empty local-box corners, especially inclusions. */
+export function measureProductBounds(root: THREE.Object3D): THREE.Box3 {
+  return new THREE.Box3().setFromObject(root, true);
+}
+
 export interface ProductFramingFrame {
   orientation: THREE.Quaternion;
   scale: number;

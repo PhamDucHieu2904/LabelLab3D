@@ -1,0 +1,195 @@
+{
+  "results": {
+    "red": {
+      "glError": 0,
+      "materials": [
+        {
+          "name": "pet-ring",
+          "type": "MeshPhysicalMaterial",
+          "color": "ffffff",
+          "roughness": 0.085,
+          "metalness": 0,
+          "thickness": 0.0024,
+          "transmission": 0.96,
+          "ior": 1.57,
+          "program": "pet-solid-ring-v2"
+        }
+      ],
+      "bounds": [
+        [
+          -0.015222887508571148,
+          0.05488533526659012,
+          -0.01520277839154005
+        ],
+        [
+          0.015178983099758625,
+          0.057196035981178284,
+          0.015189814381301403
+        ]
+      ],
+      "alpha": {
+        "clear": 0,
+        "partial": 0,
+        "opaque": 800000
+      },
+      "sample": [
+        239.73626666666667,
+        91.3908,
+        82.26813333333334
+      ]
+    },
+    "amber": {
+      "glError": 0,
+      "materials": [
+        {
+          "name": "Ring",
+          "type": "MeshPhysicalMaterial",
+          "color": "ffffff",
+          "roughness": 0.085,
+          "metalness": 0,
+          "thickness": 0.0024,
+          "transmission": 0.96,
+          "ior": 1.57,
+          "program": "pet-solid-ring-v2"
+        }
+      ],
+      "bounds": [
+        [
+          -0.016440391540527344,
+          0.15303754806518557,
+          -0.016440391540527344
+        ],
+        [
+          0.016440391540527344,
+          0.15542478561401368,
+          0.016440391540527344
+        ]
+      ],
+      "alpha": {
+        "clear": 0,
+        "partial": 0,
+        "opaque": 800000
+      },
+      "sample": [
+        231.63026666666667,
+        185.51213333333334,
+        95.11373333333333
+      ]
+    },
+    "clear": {
+      "glError": 0,
+      "materials": [
+        {
+          "name": "Ring",
+          "type": "MeshPhysicalMaterial",
+          "color": "ffffff",
+          "roughness": 0.085,
+          "metalness": 0,
+          "thickness": 0.0024,
+          "transmission": 0.96,
+          "ior": 1.57,
+          "program": "pet-solid-ring-v2"
+        }
+      ],
+      "bounds": [
+        [
+          -0.01431032675741335,
+          0.19970971301813734,
+          -0.01431032675741335
+        ],
+        [
+          0.014310276212677308,
+          0.20243134698825999,
+          0.01431032675741335
+        ]
+      ],
+      "alpha": {
+        "clear": 0,
+        "partial": 0,
+        "opaque": 800000
+      },
+      "sample": [
+        218.32706666666667,
+        218.6132,
+        219.13773333333333
+      ]
+    },
+    "transparent": {
+      "glError": 0,
+      "materials": [
+        {
+          "name": "pet-ring",
+          "type": "MeshPhysicalMaterial",
+          "color": "ffffff",
+          "roughness": 0.085,
+          "metalness": 0,
+          "thickness": 0.0024,
+          "transmission": 0.96,
+          "ior": 1.57,
+          "program": "pet-solid-ring-v2"
+        }
+      ],
+      "bounds": [
+        [
+          -0.015222887508571148,
+          0.05488533526659012,
+          -0.01520277839154005
+        ],
+        [
+          0.015178983099758625,
+          0.057196035981178284,
+          0.015189814381301403
+        ]
+      ],
+      "alpha": {
+        "clear": 713077,
+        "partial": 86923,
+        "opaque": 0
+      },
+      "sample": [
+        0,
+        0,
+        0
+      ]
+    },
+    "matte": {
+      "glError": 0,
+      "materials": [
+        {
+          "name": "Ring",
+          "type": "MeshPhysicalMaterial",
+          "color": "ffffff",
+          "roughness": 0.085,
+          "metalness": 0,
+          "thickness": 0.0024,
+          "transmission": 0.96,
+          "ior": 1.57,
+          "program": "pet-solid-ring-v2"
+        }
+      ],
+      "bounds": [
+        [
+          -0.016440391540527344,
+          0.15303754806518557,
+          -0.016440391540527344
+        ],
+        [
+          0.016440391540527344,
+          0.15542478561401368,
+          0.016440391540527344
+        ]
+      ],
+      "alpha": {
+        "clear": 98647,
+        "partial": 5096,
+        "opaque": 696257
+      },
+      "sample": [
+        215.4264,
+        152.56933333333333,
+        39.2672
+      ]
+    }
+  },
+  "errors": []
+}

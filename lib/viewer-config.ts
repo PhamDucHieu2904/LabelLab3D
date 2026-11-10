@@ -1,6 +1,6 @@
 import { isLocalArtwork } from './labellab/local-artwork';
 /** Serializable contracts shared by the storefront viewer and a future admin. */
-export type PackagingKind = 'can' | 'pet' | 'glass' | 'pouch' | 'other';
+export type PackagingKind = 'can' | 'pet' | 'pp' | 'glass' | 'pouch' | 'other';
 export type Vector3Tuple = [number, number, number];
 export type ViewerToneMapping = 'neutral' | 'agx' | 'aces';
 export interface TextureSampler {
@@ -38,8 +38,12 @@ export interface ProductAsset {
   materialSlots?: Record<string, string[]>;
   /** UV addressing belongs to each model slot, independently of the uploaded artwork. */
   textureSamplers?: Record<string, TextureSampler>;
+  /** Model has a calibrated liquid volume for real gas-bubble particles. */
+  sparkling?: boolean;
   /** Euler correction in radians for assets that do not use glTF's +Y-up convention. */
   orientation?: Vector3Tuple;
+  /** Use measured bounds when authored Unity camera distances are too tight for this asset. */
+  cameraFraming?: 'bounds';
 }
 
 export interface MaterialOverride {
@@ -223,7 +227,7 @@ export function resolveViewerPresentation(input: ViewerPresentationInput = {}): 
 
 export function resolveMaterialOverride(input: MaterialOverride): MaterialOverride {
   const result: MaterialOverride = {};
-  if (input.textureOffsetX !== undefined) result.textureOffsetX = number(input.textureOffsetX, 0, -0.5, 0.5);
+  if (input.textureOffsetX !== undefined) result.textureOffsetX = number(input.textureOffsetX, 0, -1, 1);
   if (input.color !== undefined) result.color = color(input.color, '#ffffff');
   for (const key of ['metalness', 'roughness', 'clearcoat', 'clearcoatRoughness', 'transmission', 'opacity'] as const) {
     if (input[key] !== undefined) result[key] = number(input[key], 0, 0, 1);

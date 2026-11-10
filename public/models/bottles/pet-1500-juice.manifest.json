@@ -1,0 +1,87 @@
+{
+  "id": "pet-1500-juice",
+  "src": "/models/bottles/pet-1500-juice.glb",
+  "sourceName": "Pet 1500ml model full label web.glb",
+  "sourceBytes": 4735760,
+  "sourceSha256": "4358cf5401ac012c5f8c37fa99f558ad58f3d548aa4b879a564c2e2e8fabbbd5",
+  "bytes": 744348,
+  "sha256": "cf33053a9e4f7b978d31c4c828cb52ead629d58bdde135c1b590a678c7e261a4",
+  "binarySha256": "cf2bb481fe9f11ddfa06e3a0fc7f9ad43337b813267e18f49d7863bd421b67e5",
+  "units": "metres",
+  "sourceToMetres": 0.1,
+  "volumeMl": 1500,
+  "packaging": "pet",
+  "materialSlots": {
+    "body": [
+      "PlasticBody"
+    ],
+    "cap": [
+      "PlasticCap"
+    ],
+    "label": [
+      "Label"
+    ],
+    "liquid": [
+      "Water"
+    ],
+    "ring": [
+      "Ring"
+    ]
+  },
+  "defaultLiquid": "fruit-juice",
+  "compression": {
+    "extension": "KHR_draco_mesh_compression",
+    "encoder": "draco3dgltf 1.5.7",
+    "method": "edgebreaker",
+    "precisionBits": {
+      "POSITION": 18,
+      "NORMAL": 14,
+      "TEXCOORD_0": 16
+    },
+    "lossless": false,
+    "simplification": false,
+    "uncompressedBytes": 4736888,
+    "savedPercent": 84.29,
+    "triangles": 156300,
+    "topologyPreserved": true,
+    "maxPositionErrorMeters": 6.412498439340788e-7,
+    "maxNormalAngleDegrees": 0.031757281558252734,
+    "maxUvError": 0.00000762939453125,
+    "maxUvErrorAt4096px": 0.03125,
+    "sceneSha256": "b2f0273b74a1dc623972dcd2dafc0370f436ce1f45e6ccdadbecbf9db0587a67",
+    "decodedPositionHashes": [
+      "23192ad6dd76b3762d74850ee8cc04418139f3a16d0c50c8c2d02f963dc44e54",
+      "b10522293a74a92310409250000b05e52ed827e82c0c8e376b5d1dfa61dcc3ea",
+      "40d0530ab456981bd0326c0f312c4e60e398d7b951391fe65d89bfaeb1e806ba",
+      "ade5a4d70ae7374eb8b26cc9dc4ed00d4e0d6e1abd051f57a6271c016b6bb2d0",
+      "50721dde957d1be81c694d74f10d5eee0e510a29f5f580b1dee64f73e57f5bce"
+    ],
+    "decodedAttributeHashes": [
+      {
+        "POSITION": "23192ad6dd76b3762d74850ee8cc04418139f3a16d0c50c8c2d02f963dc44e54",
+        "NORMAL": "590506856a26778a0800955f2c7888c7bccc513a8d3c3bb06942cc58d49827b7",
+        "TEXCOORD_0": "6b31f77ebde6afbded76959127f8881c8d44d25ef0f51e2e05a3b1a4b8b50aee"
+      },
+      {
+        "POSITION": "b10522293a74a92310409250000b05e52ed827e82c0c8e376b5d1dfa61dcc3ea",
+        "NORMAL": "3f713e3d630f6f9b0eddac4cc2c5aea484572ff3df63b1bc3f039904c2a0da93",
+        "TEXCOORD_0": "1407b11947a234190ffd6be9c5e5049e7c1f06818eaea81db2be453904482faa"
+      },
+      {
+        "POSITION": "40d0530ab456981bd0326c0f312c4e60e398d7b951391fe65d89bfaeb1e806ba",
+        "NORMAL": "5646d20f5951c023c341e8b5909330d6abcd83474725a25286d8411d0b32ebca",
+        "TEXCOORD_0": "f8eea26a0ba5c1663a0f0c91960bafb570906bef693a206e8a2c6a3ddef9cc19"
+      },
+      {
+        "POSITION": "ade5a4d70ae7374eb8b26cc9dc4ed00d4e0d6e1abd051f57a6271c016b6bb2d0",
+        "NORMAL": "e8e3d671232356c47d738dfa4ad33ef6692464f6ef9d2741096ab6dc29774814",
+        "TEXCOORD_0": "59cd6eec1b6db294c395694c35475407d8f1f13e62750dc218c02afe5a717e65"
+      },
+      {
+        "POSITION": "50721dde957d1be81c694d74f10d5eee0e510a29f5f580b1dee64f73e57f5bce",
+        "NORMAL": "cc6978197dc31108acb32b8d7c757419784e97b8d80f6aac02f0d53f7bba5865",
+        "TEXCOORD_0": "4c0a5981cf3b08275d0af9d156ba49e6ca9673e777504de6335bd54ba8f10ad1"
+      }
+    ]
+  }
+}

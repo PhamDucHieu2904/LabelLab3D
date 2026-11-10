@@ -1,0 +1,120 @@
+{
+  "id": "glass-485-milk",
+  "src": "/models/bottles/glass-485-milk.glb",
+  "sourceName": "485ml bottle - Original Label UV preserved - Quads.glb",
+  "sourceBytes": 1939300,
+  "sourceSha256": "ee863a42d7e1f641171b2272e484bdedc22414680149a8de8e51ca22d94d9c39",
+  "bytes": 421916,
+  "sha256": "a6a9502f9a277391e3c7b8004e2d89e3ae05a6e9cc2ad5462cf800d957b256a8",
+  "binarySha256": "fa126494d87636b4a757cbf85f6d587d1230e657981b05201c8910f1c6f07229",
+  "sourceToMetres": 0.1,
+  "units": "metres",
+  "volumeMl": 485,
+  "packaging": "glass",
+  "defaultLiquid": "milk",
+  "blankLabel": "white",
+  "neckOptics": {
+    "tracer": "pullcap-hollow-glass-neck-v1",
+    "wallThicknessMetres": 0.001,
+    "geometrySource": "authored Neck",
+    "innerShellAdded": false
+  },
+  "baseOptics": {
+    "profile": "glass-300-base-clear-v2",
+    "geometrySource": "authored GlassBase"
+  },
+  "geometry": {
+    "sourcePartsRetained": [
+      "Body",
+      "Neck",
+      "GlassBase",
+      "Cap",
+      "Label",
+      "Water"
+    ],
+    "triangles": 74602
+  },
+  "materialSlots": {
+    "body": [
+      "Body",
+      "Neck",
+      "GlassBase"
+    ],
+    "cap": [
+      "Cap"
+    ],
+    "label": [
+      "Label"
+    ],
+    "liquid": [
+      "Water"
+    ]
+  },
+  "compression": {
+    "extension": "KHR_draco_mesh_compression",
+    "encoder": "draco3dgltf 1.5.7",
+    "method": "edgebreaker",
+    "precisionBits": {
+      "POSITION": 18,
+      "NORMAL": 14,
+      "TEXCOORD_0": 16
+    },
+    "lossless": false,
+    "simplification": false,
+    "uncompressedBytes": 1941072,
+    "savedPercent": 78.26,
+    "triangles": 74602,
+    "topologyPreserved": true,
+    "maxPositionErrorMeters": 4.769127042989079e-7,
+    "maxNormalAngleDegrees": 0.029435465845153205,
+    "maxUvError": 0.00000768899917602539,
+    "maxUvErrorAt4096px": 0.031494140625,
+    "sceneSha256": "310f1af816dcb627e2203d771f38496eb2d5d25d9228a9dd1c6dbca6497c4ebf",
+    "decodedPositionHashes": [
+      "393fe56988ea72ff99eef72879f35b1ac1193fab6d4f5012105cd9c890e14d71",
+      "566e6903451b5a09ca4b1a8460734fa8c9fe726d649f78806eb735b3d924608d",
+      "7014c3bda99debbc04d17793afb472661a384f72623c7e197942ca097e3c8256",
+      "f094debf550b903a40da09c2c378a328078480a1fff908f814f5459e7bd52520",
+      "bef9bdaa88b4a9d74c72791dd9067f2062e08e82389b725e1c2b20af9cadf207",
+      "9f30a124f16d6960d06642e36e3f7af3cf8c74f46b635a7ee3987e76c3cd806d",
+      "cf9c23960d70249cbd1b4830abb9dad9c216874c0a2f22a037ee9a535bcc02e1"
+    ],
+    "decodedAttributeHashes": [
+      {
+        "POSITION": "393fe56988ea72ff99eef72879f35b1ac1193fab6d4f5012105cd9c890e14d71",
+        "NORMAL": "de21df7e6d7ec9e2585eed6f5dd451629da4a639fb5999a20739061dbb90250c",
+        "TEXCOORD_0": "c40c576e1249ef81d0e186856081176f720692773164947b07843cfb97066afc"
+      },
+      {
+        "POSITION": "566e6903451b5a09ca4b1a8460734fa8c9fe726d649f78806eb735b3d924608d",
+        "NORMAL": "86bd830c29ca539dc964b9c4080db1ef33f723808a71c2ac2f5ecd4f67e1a302",
+        "TEXCOORD_0": "02d0b992c5a7f3289ec3ad676f72cdaebf58a3fe681c8b4272290a4d719efd5d"
+      },
+      {
+        "POSITION": "7014c3bda99debbc04d17793afb472661a384f72623c7e197942ca097e3c8256",
+        "NORMAL": "a6183b0703968b6f76c0dd8f6c2afa78dbb67b14e146797e76f79ebf7da6c25b",
+        "TEXCOORD_0": "06dc898671ee013f94a9ede96a991f130c50ea1f62fc9c64269faae4f092b743"
+      },
+      {
+        "POSITION": "f094debf550b903a40da09c2c378a328078480a1fff908f814f5459e7bd52520",
+        "NORMAL": "f34321d8f8b08ba298e2b62f50b3d2a3b5832373dc9aa9edc3cbf65e758ac151",
+        "TEXCOORD_0": "07c1f03b52805e8622d015214002cde2594be5816286f890840d4ad40f2c5d1f"
+      },
+      {
+        "POSITION": "bef9bdaa88b4a9d74c72791dd9067f2062e08e82389b725e1c2b20af9cadf207",
+        "NORMAL": "45a77a081486fc75c4d78798402c23d826ffb4263061127555b9e8d6f5f56709",
+        "TEXCOORD_0": "c8b5846d081a1c0be3065f370a442885577adda5531c94666eb723c7b87793c3"
+      },
+      {
+        "POSITION": "9f30a124f16d6960d06642e36e3f7af3cf8c74f46b635a7ee3987e76c3cd806d",
+        "NORMAL": "d90c685532e5b1544a56540dbe58d6c66c7fcc0f531b2f7a2f99a0e104e8af34",
+        "TEXCOORD_0": "c71caa33a6ba17f031d77cd3aae9618c0366c3dd1441c99916442bf47318d66e"
+      },
+      {
+        "POSITION": "cf9c23960d70249cbd1b4830abb9dad9c216874c0a2f22a037ee9a535bcc02e1",
+        "NORMAL": "2cdc39bca95fa1323410498fbd4245590187ab7726461367440c711754151d67",
+        "TEXCOORD_0": "c558e31bafdbbb9edda13fe3c15a3ee95d3437d13ca8241468c37fc263b46f52"
+      }
+    ]
+  }
+}

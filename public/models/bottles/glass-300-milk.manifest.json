@@ -1,0 +1,110 @@
+{
+  "id": "glass-300-milk",
+  "src": "/models/bottles/glass-300-milk.glb",
+  "sourceName": "Glass 300ml bottle model web.glb",
+  "sourceBytes": 9043360,
+  "sourceSha256": "d03d2198f6ece1e19e772f3aacf6738b574a86db49efaa1113e813fd3f62b11b",
+  "bytes": 1322368,
+  "sha256": "9b979b9d16b8460c5d554d1f46b3a995761c543a6d8b1d11133bf7428a84bb40",
+  "binarySha256": "17533f05621b31f62a6759456a16193f8668904ecac7ecf4f67d6677bde830a0",
+  "neckOptics": {
+    "tracer": "pullcap-hollow-glass-neck-v1",
+    "wallThicknessMetres": 0.001,
+    "geometrySource": "authored Neck",
+    "innerShellAdded": false
+  },
+  "sourceToMetres": 0.1,
+  "units": "metres",
+  "volumeMl": 300,
+  "defaultLiquid": "milk",
+  "blankLabel": "white",
+  "geometry": {
+    "sourcePartsRetained": [
+      "Base",
+      "Body",
+      "Cap",
+      "Label",
+      "Neck",
+      "Water"
+    ],
+    "beadIslands": 400,
+    "triangles": 254068
+  },
+  "materialSlots": {
+    "body": [
+      "Body",
+      "Base",
+      "Neck"
+    ],
+    "cap": [
+      "Cap"
+    ],
+    "label": [
+      "Label"
+    ],
+    "liquid": [
+      "Water"
+    ]
+  },
+  "compression": {
+    "extension": "KHR_draco_mesh_compression",
+    "encoder": "draco3dgltf 1.5.7",
+    "method": "edgebreaker",
+    "precisionBits": {
+      "POSITION": 18,
+      "NORMAL": 14,
+      "TEXCOORD_0": 16
+    },
+    "lossless": false,
+    "simplification": false,
+    "uncompressedBytes": 9044892,
+    "savedPercent": 85.38,
+    "triangles": 254068,
+    "topologyPreserved": true,
+    "maxPositionErrorMeters": 4.1716436951911397e-7,
+    "maxNormalAngleDegrees": 0.02763355792934364,
+    "maxUvError": 0.000007636845111846924,
+    "maxUvErrorAt4096px": 0.031280517578125,
+    "sceneSha256": "6f535a849837d7d8c6bbca06d848d22a6746eddae9a5b518fee2a8bb86417e0e",
+    "decodedPositionHashes": [
+      "df23b6ae24d873bed7a916b1d3b804ebbc24846e3ca2df30283da96982c4a1b0",
+      "ba4e0219ce3dfbfeb427f21397b3d7635701a2078569202ff64b1635a6bd3f02",
+      "3bce6b4f60e47adc870d35a725ee8299410b27942bda81f1be519b9953b102d0",
+      "9ce263389c8e1802c3e814b1e1c344505400c67c37a4cc4ce9f5ff7b91b2dc01",
+      "5a4d31124b02bb30bbd56b4c09fc20e6a0213d5e434bfb3e44d7694dd0ed6684",
+      "79f3f690dc7bd0359121f2a90e5f4e2488183c0358c14b01d74532fdca732994"
+    ],
+    "decodedAttributeHashes": [
+      {
+        "POSITION": "df23b6ae24d873bed7a916b1d3b804ebbc24846e3ca2df30283da96982c4a1b0",
+        "NORMAL": "a7d8c86b289c4808cb9e7f2e622aae65f3464b51ee7ab7b4cea7a477104b9278",
+        "TEXCOORD_0": "090c5103b87f60c829830cbcaa8a463e0104816a927751749638e10971772ac4"
+      },
+      {
+        "POSITION": "ba4e0219ce3dfbfeb427f21397b3d7635701a2078569202ff64b1635a6bd3f02",
+        "NORMAL": "3b4cb2be43e0ce1a25883168f7f2f8b98f98a82165831469586ca8229452bed6",
+        "TEXCOORD_0": "b4634a1c527a4183d28b5655161ec339a8034bc96204e969b07a4d1fb503b45a"
+      },
+      {
+        "POSITION": "3bce6b4f60e47adc870d35a725ee8299410b27942bda81f1be519b9953b102d0",
+        "NORMAL": "e1ea34088d5378c5e0ff1118b90d0034e29d0e6c5f14fc2bb313e6ba78b7e559",
+        "TEXCOORD_0": "1263e755cf13ba602213c08195585314059ba7c921fd22fa264664c01873965e"
+      },
+      {
+        "POSITION": "9ce263389c8e1802c3e814b1e1c344505400c67c37a4cc4ce9f5ff7b91b2dc01",
+        "NORMAL": "7591b6d899a2714855ea60630a01628dd126f1ce748eb09f188d19ce98f7f16a",
+        "TEXCOORD_0": "913342a39dbfc9cd856751a6d5bd834d7cfb8ed5da2c32683425dc4c0231e20d"
+      },
+      {
+        "POSITION": "5a4d31124b02bb30bbd56b4c09fc20e6a0213d5e434bfb3e44d7694dd0ed6684",
+        "NORMAL": "cd52f69eff51a2c0dc1049c3a9b8ab456a696834a08c07294c341b93b2642ff1",
+        "TEXCOORD_0": "8f1864d8cf1201227c17e83fbcf0ed9b78261ac09f0bc57e1c2e03c257b30a4d"
+      },
+      {
+        "POSITION": "79f3f690dc7bd0359121f2a90e5f4e2488183c0358c14b01d74532fdca732994",
+        "NORMAL": "430390e6f040ef55849a1ceb62369bb30d71b32ae82c3406ef1c939a31a90f36",
+        "TEXCOORD_0": "588df3eb42abfa7649835b46bf23849b75c532d6f10242f3290371e309e566e9"
+      }
+    ]
+  }
+}

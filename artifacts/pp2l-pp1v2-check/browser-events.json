@@ -1,0 +1,111 @@
+[
+  {
+    "method": "Runtime.executionContextCreated",
+    "params": {
+      "context": {
+        "id": 1,
+        "origin": "://",
+        "name": "",
+        "uniqueId": "2600657929577887590.891763924124211530",
+        "auxData": {
+          "isDefault": true,
+          "type": "default",
+          "frameId": "6B6C5F5D4E659B5F4311A5375F2B29F0"
+        }
+      }
+    }
+  },
+  {
+    "method": "Page.frameStartedNavigating",
+    "params": {
+      "frameId": "6B6C5F5D4E659B5F4311A5375F2B29F0",
+      "url": "http://127.0.0.1:3088/",
+      "loaderId": "0FB6913FC59E3C1C53FECEEB564B4F59",
+      "navigationType": "differentDocument"
+    }
+  },
+  {
+    "method": "Page.frameStartedLoading",
+    "params": {
+      "frameId": "6B6C5F5D4E659B5F4311A5375F2B29F0"
+    }
+  },
+  {
+    "method": "Runtime.executionContextsCleared",
+    "params": {}
+  },
+  {
+    "method": "Runtime.executionContextsCleared",
+    "params": {}
+  },
+  {
+    "method": "Page.frameNavigated",
+    "params": {
+      "frame": {
+        "id": "6B6C5F5D4E659B5F4311A5375F2B29F0",
+        "loaderId": "0FB6913FC59E3C1C53FECEEB564B4F59",
+        "url": "http://127.0.0.1:3088/",
+        "domainAndRegistry": "",
+        "securityOrigin": "http://127.0.0.1:3088",
+        "securityOriginDetails": {
+          "isLocalhost": true
+        },
+        "mimeType": "text/html",
+        "adFrameStatus": {
+          "adFrameType": "none"
+        },
+        "secureContextType": "SecureLocalhost",
+        "crossOriginIsolatedContextType": "NotIsolated",
+        "gatedAPIFeatures": []
+      },
+      "type": "Navigation"
+    }
+  },
+  {
+    "method": "Runtime.executionContextCreated",
+    "params": {
+      "context": {
+        "id": 2,
+        "origin": "http://127.0.0.1:3088",
+        "name": "",
+        "uniqueId": "-8889431769406452738.8413052262280318378",
+        "auxData": {
+          "isDefault": true,
+          "type": "default",
+          "frameId": "6B6C5F5D4E659B5F4311A5375F2B29F0"
+        }
+      }
+    }
+  },
+  {
+    "method": "Page.domContentEventFired",
+    "params": {
+      "timestamp": 589503.327565
+    }
+  },
+  {
+    "method": "Page.loadEventFired",
+    "params": {
+      "timestamp": 589503.327705
+    }
+  },
+  {
+    "method": "Page.frameStoppedLoading",
+    "params": {
+      "frameId": "6B6C5F5D4E659B5F4311A5375F2B29F0"
+    }
+  },
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "timestamp": 1794282785765.246,
+        "url": "http://127.0.0.1:3088/favicon.ico",
+        "networkRequestId": "33408.34"
+      }
+    }
+  }
+]

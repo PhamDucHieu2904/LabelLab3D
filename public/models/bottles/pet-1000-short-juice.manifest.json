@@ -1,0 +1,78 @@
+{
+  "id": "pet-1000-short-juice",
+  "src": "/models/bottles/pet-1000-short-juice.glb",
+  "sourceName": "Pet 1L bottle model short web.glb",
+  "sourceBytes": 1513820,
+  "sourceSha256": "f82447aabc9e1a37931fcf7bd56363330280ac1ce9312a3e9d55153523cd6aed",
+  "bytes": 272928,
+  "sha256": "e32e4cae0e69c98f21b5fb6e6a5c15dcd4fe041725b84543d01dadfee239f005",
+  "binarySha256": "7a902685ce1fa935ed766faaec815e7a7c4556ca8ea08536a44f2309c338f113",
+  "units": "metres",
+  "sourceToMetres": 0.1,
+  "volumeMl": 1000,
+  "packaging": "pet",
+  "materialSlots": {
+    "body": [
+      "Body"
+    ],
+    "cap": [
+      "Cap"
+    ],
+    "label": [
+      "Label"
+    ],
+    "liquid": [
+      "Water"
+    ]
+  },
+  "defaultLiquid": "fruit-juice",
+  "compression": {
+    "extension": "KHR_draco_mesh_compression",
+    "encoder": "draco3dgltf 1.5.7",
+    "method": "edgebreaker",
+    "precisionBits": {
+      "POSITION": 18,
+      "NORMAL": 14,
+      "TEXCOORD_0": 16
+    },
+    "lossless": false,
+    "simplification": false,
+    "uncompressedBytes": 1514864,
+    "savedPercent": 81.98,
+    "triangles": 53826,
+    "topologyPreserved": true,
+    "maxPositionErrorMeters": 4.666085237216206e-7,
+    "maxNormalAngleDegrees": 0.027087661549644315,
+    "maxUvError": 0.00000768899917602539,
+    "maxUvErrorAt4096px": 0.031494140625,
+    "sceneSha256": "25fe044109b1c4433814a7acdaa468853f88bc649bf34b3870807a55206a5902",
+    "decodedPositionHashes": [
+      "15660c281f4db0b1fdbe13f368eb58bec5c140015d0ae3cd37d227f48f960db6",
+      "03103cf340ee6d462e0b8981bdbc5721ed81978423e0796f1a18c47e2067b829",
+      "14ecd0eb0c49be93cf75d384142bdaa73a75f49bffd631a38eec12776cd180f8",
+      "7258dacb6be4687440282b8fd4bdde2acab7aa7db9bb0e82362442a0cc160a97"
+    ],
+    "decodedAttributeHashes": [
+      {
+        "POSITION": "15660c281f4db0b1fdbe13f368eb58bec5c140015d0ae3cd37d227f48f960db6",
+        "NORMAL": "ff49dd7fd43bc1345d235f8310f76d97ba972668f8dc8b7e261d16eb55df6194",
+        "TEXCOORD_0": "71aeb3bc4ba7ca8b5e4bc92cfeaa56ac1ab091fc2e7def337b51ba79b59f6c98"
+      },
+      {
+        "POSITION": "03103cf340ee6d462e0b8981bdbc5721ed81978423e0796f1a18c47e2067b829",
+        "NORMAL": "860dc51a304e814fe3f4c824d098e0fe145baf6e2d2b58f32531e896e62f8213",
+        "TEXCOORD_0": "388426e415e87207930473c49aa39075f51980ce6f65adc30ebef8c7297629ed"
+      },
+      {
+        "POSITION": "14ecd0eb0c49be93cf75d384142bdaa73a75f49bffd631a38eec12776cd180f8",
+        "NORMAL": "40af219eee09a233ee4e3b486efdc97a6d77c29849c0310ba76ca24c807786db",
+        "TEXCOORD_0": "29376ef4e7c07155116ff5016548a5d8f1ca475e5701bc69111c6580f543aaa6"
+      },
+      {
+        "POSITION": "7258dacb6be4687440282b8fd4bdde2acab7aa7db9bb0e82362442a0cc160a97",
+        "NORMAL": "9c79edddb0a4ba44d0d273460fb34103ea8f574e3ce4cdf93334b8c0c70567e9",
+        "TEXCOORD_0": "fea823464e3204c4b206c301e9e8cad10aad4963bace055af2fe1f2a0e4f131c"
+      }
+    ]
+  }
+}

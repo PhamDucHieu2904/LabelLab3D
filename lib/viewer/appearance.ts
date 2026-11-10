@@ -3,6 +3,9 @@ import * as THREE from 'three';
 import { ProductAppearance, ProductAsset, resolveMaterialOverride, type TextureSampler } from '../viewer-config';
 import { bottleMaterialRole, configureBottleRenderOrder, createBottleMaterialContext, prepareBottleLayers } from './bottle-materials';
 import { liquidColorUpdates, type LiveMaterialOverrides } from './material-adjustments';
+import { configureLiveLiquidOptics, liquidOpticsUpdates } from './liquid-adjustments';
+import { configurePetRingMaterial, isPetRingMaterial } from './pet-ring-material';
+import { createPetRingMaterialContext } from './pet-ring-context';
 
 type MaterialBinding = { mesh: THREE.Mesh; original: THREE.Material; index: number };
 export interface AppearanceHandle {
@@ -80,12 +83,13 @@ export function createAppearanceHandle(root: THREE.Object3D, asset: ProductAsset
   configureBottleRenderOrder(root, asset);
   if (options.renderOrderRoot) configureBottleRenderOrder(options.renderOrderRoot, asset);
   const bottle = createBottleMaterialContext(root, asset);
+  const ringOptics = asset.packaging === 'pet' ? createPetRingMaterialContext(root, asset) : undefined;
   const bindings: MaterialBinding[] = [];
   const ownedMaterials = new Set<THREE.Material>();
   const ownedTextures = new Set<THREE.Texture>();
   let disposed = false;
   let revision = 0;
-  let liveBindings: Array<{ material: THREE.MeshStandardMaterial; slot: string; base: Required<LiveMaterialOverrides[string]>; waterColor: string }> = [];
+  let liveBindings: Array<{ material: THREE.MeshStandardMaterial; slot: string; base: Required<Pick<LiveMaterialOverrides[string], 'color' | 'metalness' | 'roughness' | 'textureOffsetX'>>; waterColor: string }> = [];
   root.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
     const materials = Array.isArray(child.material) ? child.material : [child.material];
@@ -118,10 +122,12 @@ export function createAppearanceHandle(root: THREE.Object3D, asset: ProductAsset
         material.roughness = Number.isFinite(edit.roughness) ? Math.max(0, Math.min(1, edit.roughness!)) : base.roughness;
         if (slot === 'liquid' || slot === 'inclusions') {
           const water = overrides.liquid?.color;
-          liquidColorUpdates.get(material)?.(/^#[0-9a-f]{6}$/i.test(water ?? '') ? water! : waterColor);
+          const nextWaterColor = /^#[0-9a-f]{6}$/i.test(water ?? '') ? water! : waterColor;
+          liquidColorUpdates.get(material)?.(nextWaterColor);
+          liquidOpticsUpdates.get(material)?.(overrides.liquid?.liquidOptics, nextWaterColor);
         }
         if (slot === 'label' && material.map) {
-          material.map.offset.x = Number.isFinite(edit.textureOffsetX) ? Math.max(-0.5, Math.min(0.5, edit.textureOffsetX!)) : base.textureOffsetX;
+          material.map.offset.x = Number.isFinite(edit.textureOffsetX) ? Math.max(-1, Math.min(1, edit.textureOffsetX!)) : base.textureOffsetX;
           material.map.updateMatrix();
         }
       }
@@ -153,7 +159,9 @@ export function createAppearanceHandle(root: THREE.Object3D, asset: ProductAsset
         return requested.get(key)!;
       };
       const nextMaterials = new Map<MaterialBinding, THREE.Material>();
-      const slotFor = (binding: MaterialBinding) => Object.entries(asset.materialSlots ?? {}).find(([, names]) =>
+      // Imported catalogs used to group the neck finish with Body. Give Ring
+      // an independent binding so body pigment/finish never flattens its optics.
+      const slotFor = (binding: MaterialBinding) => isPetRingMaterial(asset, binding.original) ? 'ring' : Object.entries(asset.materialSlots ?? {}).find(([, names]) =>
         names.includes(binding.original.name) || names.includes(binding.mesh.name))?.[0];
       const requiredSlots = new Set(appearance?.requiredSlots ?? []);
       const appliedSlots = new Set<string>();
@@ -178,15 +186,16 @@ export function createAppearanceHandle(root: THREE.Object3D, asset: ProductAsset
         }
         const results = await Promise.allSettled(bindings.map(async (binding) => {
           const slot = slotFor(binding);
+          const ring = isPetRingMaterial(asset, binding.original);
           const bottleRole = bottle && bottleMaterialRole(asset, binding.mesh, binding.original);
-          if (!slot || (!overrides[slot] && !(printTexture && slot === labelSlot) && !bottleRole && !options.editable)) return;
+          if (!slot || (!overrides[slot] && !(printTexture && slot === labelSlot) && !bottleRole && !ring && !options.editable)) return;
           const sampler = asset.textureSamplers?.[slot];
           // Upgrade only a slot asking for physical options; don't flatten all materials.
           const override = resolveMaterialOverride(overrides[slot] ?? {});
           let material: THREE.MeshStandardMaterial;
           if (binding.original instanceof THREE.MeshPhysicalMaterial) material = binding.original.clone();
           else if (binding.original instanceof THREE.MeshStandardMaterial) {
-            if (bottleRole === 'liquid' || (bottleRole === 'body' && binding.original.userData.basilProfile === 'basil-web-v1') || ['transmission', 'ior', 'thickness', 'clearcoat', 'clearcoatRoughness'].some((key) => key in override)) {
+            if (ring || bottleRole === 'liquid' || (options.editable && slot === 'liquid') || (bottleRole === 'body' && binding.original.userData.basilProfile === 'basil-web-v1') || ['transmission', 'ior', 'thickness', 'clearcoat', 'clearcoatRoughness'].some((key) => key in override)) {
               const physical = new THREE.MeshPhysicalMaterial();
               THREE.MeshStandardMaterial.prototype.copy.call(physical, binding.original);
               (physical as THREE.MeshPhysicalMaterial & { defines: Record<string, string> }).defines = { STANDARD: '', PHYSICAL: '' };
@@ -209,10 +218,15 @@ export function createAppearanceHandle(root: THREE.Object3D, asset: ProductAsset
           if (override.baseColorMap) material.map = await loadTexture(override.baseColorMap, true, sampler);
           if (override.normalMap) material.normalMap = await loadTexture(override.normalMap, false, sampler);
           if (override.roughnessMap) material.roughnessMap = await loadTexture(override.roughnessMap, false, sampler);
-          if (bottleRole) bottle.configure(material, binding.mesh, bottleRole, resolveMaterialOverride(overrides.liquid ?? {}).color, resolveMaterialOverride(overrides.cap ?? {}).color);
+          if (ring && material instanceof THREE.MeshPhysicalMaterial) {
+            if (ringOptics) ringOptics.configure(material, binding.mesh);
+            else configurePetRingMaterial(material, binding.mesh);
+          }
+          else if (bottleRole) bottle.configure(material, binding.mesh, bottleRole, resolveMaterialOverride(overrides.liquid ?? {}).color, resolveMaterialOverride(overrides.cap ?? {}).color);
           // Explicit finish edits must survive the calibrated optical defaults.
           if (override.metalness !== undefined) material.metalness = override.metalness;
           if (override.roughness !== undefined) material.roughness = override.roughness;
+          if (options.editable && slot === 'liquid') configureLiveLiquidOptics(material, bottleRole || slot);
           if (slot === 'label' && material.map && (override.textureOffsetX !== undefined || options.editable)) {
             // Offset may also target embedded artwork. Clone only its transform;
             // image data remains shared, the imported sampler stays untouched.
@@ -238,6 +252,10 @@ export function createAppearanceHandle(root: THREE.Object3D, asset: ProductAsset
       }
       restore();
       nextMaterials.forEach((material, binding) => { setMaterial(binding, material); ownedMaterials.add(material); });
+        bindings.forEach(binding => {
+          const material = nextMaterials.get(binding) ?? binding.original;
+          if (slotFor(binding) === 'cap' && material instanceof THREE.MeshStandardMaterial) ringOptics?.registerCap(material);
+        });
       nextTextures.forEach((texture) => ownedTextures.add(texture));
       const waterColor = resolveMaterialOverride(overrides.liquid ?? {}).color ?? bottle?.defaultColor.getStyle() ?? '#ffffff';
       nextMaterials.forEach((material, binding) => {
@@ -247,7 +265,7 @@ export function createAppearanceHandle(root: THREE.Object3D, asset: ProductAsset
         liveBindings.push({ material, slot, waterColor, base: { color: `#${material.color.getHexString()}`, metalness: material.metalness, roughness: material.roughness, textureOffsetX: material.map?.offset.x ?? 0 } });
       });
     },
-    dispose() { if (disposed) return; disposed = true; revision += 1; restore(); bottle?.dispose?.(); },
+    dispose() { if (disposed) return; disposed = true; revision += 1; restore(); bottle?.dispose?.(); ringOptics?.dispose(); },
   };
 }
 

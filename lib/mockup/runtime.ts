@@ -17,10 +17,11 @@ import { createResourcePrefetcher } from '../viewer/resource-prefetch';
 import { createDaylightEnvironment } from '../viewer/environment';
 import { createProductHitRegion, hitVisibleProduct, visibleProductGestureMeshes } from '../viewer/product-hit-region';
 import { renderBottleScene } from '../viewer/bottle-materials';
+import { createEnergyDrinkBubbles, type EnergyBubbleEffect } from '../viewer/energy-bubbles';
 import { setBottleBackdrop } from '../viewer/bottle-backdrop';
 import { setBasilHighBackdrop } from '../viewer/basil-bottle-materials';
 import { isBasilHighAsset, basilHighPresentation } from '../viewer/basil-presentation';
-import { fitMockupCamera, mockupCameraDirection, mockupOrbitBounds, mockupShowcaseBounds, normalizeMockupAspect, unityMockupCameraFocus } from './camera';
+import { authoredMockupCameraFrame, fitMockupCamera, mockupCameraDirection, mockupOrbitBounds, mockupShowcaseBounds, normalizeMockupAspect, unityMockupCameraFocus } from './camera';
 import { UNITY_CAMERA_SMOOTH_TIME, unityCameraDestination, unitySmoothDamp, unitySmoothDampAngle, type UnityCameraPresetId } from './unity-camera-presets';
 import { updateMockupProductDepthRange } from './depth-range';
 import { MOCKUP_FOCAL_FOV } from './focal-length';
@@ -32,6 +33,7 @@ import { createExportRefractionSession } from './export-refraction';
 import { createRefractionAtlas, projectedRefractionRect } from './refraction-atlas';
 import { mockupModelKey, mockupSelectionKey } from './selection';
 import { createStudioGround } from '../labellab/studio-ground';
+import { measureProductBounds } from '../viewer/framing';
 import type { MockupAnimation, MockupBackdropPainter, MockupBackground, MockupCameraPreset, MockupFocalPreset, MockupRuntime, MockupRuntimeOptions, MockupRenderPreviewOptions, MockupStatus } from './contracts';
 
 type LoadedModel = {
@@ -40,6 +42,7 @@ type LoadedModel = {
   recent: (ProductAppearance | undefined)[];
   committedAppearance?: ProductAppearance;
   detachedTextures: Set<THREE.Texture>;
+  bubbles?: EnergyBubbleEffect;
 };
 const modelKey = mockupModelKey;
 const safeColor = (color: string | undefined, fallback: string) => color && /^#[0-9a-f]{6}$/i.test(color) ? color : fallback;
@@ -131,6 +134,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   let disposed = false;
   let contextLost = false;
   let visible = true;
+  let pausedAt: number | null = null;
   let revision = 0;
   let readyRevision = -1;
   let active: LoadedModel | null = null;
@@ -238,7 +242,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     sampleDiagnostics();
     if (!disposed) options.onStatus({ phase, assetId: desired?.asset.id ?? '', appearanceId: desired?.appearance?.id ?? '', selectionKey: desiredKey, revision, hasProduct: Boolean(active), materials: phase === 'ready' ? active?.pool.materialValues?.() : undefined, error, message });
   };
-  const isVisible = () => !disposed && !contextLost && visible && !document.hidden;
+  const isVisible = () => !disposed && !contextLost && visible && !document.hidden && pausedAt === null;
   const moving = () => Boolean(active) && !captureGate.busy && (Boolean(cameraTransition)
     || animation.playing && animation.mode !== 'off'
     || animation.mode === 'showcase' && (dragging || Boolean(returnFrom) || pose.angleTo(targetPose) > 0.00001 && Number.isFinite(lastInputAt)));
@@ -467,6 +471,8 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       } else if (animation.mode === 'turntable' && animation.playing) product.rotation.y = (product.rotation.y + dt * animation.speed * 0.65) % (Math.PI * 2);
       dirty = true;
     }
+    const bubbling = Boolean(active?.bubbles?.animated) && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (bubbling) { active!.bubbles!.update(dt); dirty = true; }
     if (dirty && previewTarget && now - lastDraw >= 1000 / (mobile ? 30 : 60)) {
       const started = performance.now();
       hitRegion.update(animation.mode === 'showcase' ? active?.root ?? null : null, camera, host.clientWidth, host.clientHeight, now, dragging);
@@ -481,7 +487,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     // The transition branch already synchronizes OrbitControls after moving
     // the camera. Avoid damping it twice in the same frame.
     const controlsMoving = transitionAtFrame ? false : controls.update();
-    if ((moving() || controlsMoving || dirty) && !raf) raf = requestAnimationFrame(frame);
+    if ((moving() || bubbling || controlsMoving || dirty) && !raf) raf = requestAnimationFrame(frame);
   }
   const fit = (preset?: MockupCameraPreset, animate = false, targetFov = camera.fov, transitionDuration = 660) => {
     if (!active) return;
@@ -493,10 +499,12 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       : camera.position.clone().sub(controls.target).normalize();
     const tilted = animation.mode === 'showcase' || Math.abs(product.rotation.x) + Math.abs(product.rotation.z) > 0.00001;
     const bounds = tilted ? mockupShowcaseBounds(active.bounds, animation.mode === 'showcase' ? rest : product.quaternion) : mockupOrbitBounds(active.bounds);
-    const nextDistance = authored ? authored.distanceMetres : fitMockupCamera(bounds, direction, aspect, targetFov);
+    const authoredFrame = authored && active.asset.cameraFraming === 'bounds'
+      ? authoredMockupCameraFrame(active.bounds, active.asset, preset as UnityCameraPresetId, aspect) : undefined;
+    const nextDistance = authoredFrame?.distanceMetres ?? (authored ? authored.distanceMetres : fitMockupCamera(bounds, direction, aspect, targetFov));
     const ratio = preset ? 1 : camera.position.distanceTo(controls.target) / Math.max(fitDistance, 0.0001);
     fitDistance = nextDistance;
-    const nextTarget = authored ? unityMockupCameraFocus(active.bounds, active.asset.src) : active.bounds.getCenter(new THREE.Vector3());
+    const nextTarget = authoredFrame?.target ?? (authored ? unityMockupCameraFocus(active.bounds, active.asset.src) : active.bounds.getCenter(new THREE.Vector3()));
     const nextPosition = nextTarget.clone().addScaledVector(direction, nextDistance * Math.min(6, Math.max(0.45, ratio)));
     controls.minDistance = Math.max(active.radius * 1.1, nextDistance * 0.35);
     controls.maxDistance = nextDistance * 6;
@@ -565,12 +573,12 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   const discard = (model: LoadedModel | null) => {
     if (!model || discarded.has(model)) return;
     discarded.add(model);
-    candidates.delete(model); model.root.removeFromParent(); model.pool.dispose(); disposeProduct(model.root); disposeMockupDetachedTextures(model.detachedTextures);
+    candidates.delete(model); model.root.removeFromParent(); model.pool.dispose(); model.bubbles?.dispose(); disposeProduct(model.root); disposeMockupDetachedTextures(model.detachedTextures);
   };
   const recycle = (model: LoadedModel | null) => {
     if (!model) return;
     model.root.removeFromParent(); model.pool.dispose(); model.recent = [];
-    if (mobile || disposed) { discarded.add(model); disposeProduct(model.root); disposeMockupDetachedTextures(model.detachedTextures); return; }
+    if (mobile || disposed) { discarded.add(model); model.bubbles?.dispose(); disposeProduct(model.root); disposeMockupDetachedTextures(model.detachedTextures); return; }
     discard(cached); cached = model;
   };
   const warmup = async (root: THREE.Object3D, isCurrent: () => boolean) => {
@@ -686,15 +694,17 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
           const content = new THREE.Group(); content.add(gltf.scene);
           if (asset.orientation) content.rotation.set(...asset.orientation);
           content.updateMatrixWorld(true);
-          const original = new THREE.Box3().setFromObject(content);
+          const original = measureProductBounds(content);
           const size = original.getSize(new THREE.Vector3());
           if (!Number.isFinite(size.length()) || size.length() <= 0) { disposeProduct(content); throw new Error('Model has empty bounds'); }
           content.position.sub(original.getCenter(new THREE.Vector3())); content.updateMatrixWorld(true);
-          const bounds = new THREE.Box3().setFromObject(content);
+          const bounds = measureProductBounds(content);
           const root = new THREE.Group(); root.add(content);
           const detachedTextures = neutralizeMockupLabelArtwork(content, asset);
           candidate = { root, content, bounds, radius: bounds.getBoundingSphere(new THREE.Sphere()).radius,
             asset, key, pool: createPool(content, asset), recent: [], detachedTextures };
+          candidate.bubbles = createEnergyDrinkBubbles(content, asset);
+          if (candidate.bubbles) root.add(candidate.bubbles.mesh);
           candidates.add(candidate);
         }
         if (!current()) { if (candidate !== active) discard(candidate); return; }
@@ -717,10 +727,12 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         }
         candidate.asset = asset; candidate.root.rotation.y = desired!.frontYaw; candidate.committedAppearance = appearance;
         candidate.pool.setLiveOverrides?.(materialOverrides);
+        candidate.bubbles?.set(materialOverrides);
+        host.dataset.sparklingCount = String(candidate.bubbles?.mesh.count ?? 0);
         // Bounds belong to the upright model, not its currently animated parent.
         // Otherwise a label switch would bake today's tilt/yaw into future lens fits.
         candidate.root.removeFromParent(); candidate.root.updateMatrixWorld(true);
-        candidate.bounds = new THREE.Box3().setFromObject(candidate.root);
+        candidate.bounds = measureProductBounds(candidate.root);
         product.add(candidate.root); product.updateMatrixWorld(true);
         studioGround.setFloorY(candidate.bounds.min.y);
         studioGround.setRadius(candidate.radius);
@@ -941,6 +953,8 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       if (disposed || captureGate.busy) return;
       materialOverrides = overrides;
       if (readyRevision === revision) active?.pool.setLiveOverrides?.(overrides);
+      if (readyRevision === revision) active?.bubbles?.set(overrides);
+      if (readyRevision === revision) host.dataset.sparklingCount = String(active?.bubbles?.mesh.count ?? 0);
       requestRender();
     },
     setCamera: manualCamera,
@@ -951,6 +965,22 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       fit(); requestRender();
     },
     setBackground,
+    setPaused(paused) {
+      if (disposed || paused === (pausedAt !== null)) return;
+      const now = performance.now();
+      if (paused) {
+        pausedAt = now;
+        if (raf) cancelAnimationFrame(raf);
+        raf = 0;
+        sampleDiagnostics();
+      } else {
+        if (cameraTransition) cameraTransition.startedAt += now - pausedAt!;
+        pausedAt = null;
+        lastTime = now;
+        requestRender();
+      }
+      host.dataset.renderPaused = String(paused);
+    },
     setAnimation(value) {
       if (disposed || captureGate.busy) return;
       if (sceneMode === 'studio' && value.mode === 'showcase') value = { mode: 'off', speed: value.speed, playing: false };

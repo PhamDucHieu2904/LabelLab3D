@@ -8,7 +8,8 @@ import {
   ArrowUp,
   Box,
   Check,
-  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Circle,
   Droplets,
   FileImage,
@@ -44,6 +45,7 @@ import {
   DEFAULT_PREFERENCES,
   loadPreferences,
   parsePreferences,
+  pickMaterialPreferences,
   savePreferences,
   type ScenePreferences,
 } from "@/lib/labellab/preferences";
@@ -58,11 +60,14 @@ import modelLibrary from "./ModelLibrary.module.css";
 import SceneCanvas, { type SceneCanvasHandle } from "./SceneCanvas";
 import MovingGrid from "./MovingGrid";
 import RenderPanel from "./RenderPanel";
+import ArtworkLibrary from "./ArtworkLibrary";
+import { setArtworkSelection } from "@/lib/labellab/artwork-store";
 import SiteHeader from "./SiteHeader";
 import ModelVariantsPanel from "./ModelVariantsPanel";
+import PropertiesPanel from "./PropertiesPanel";
 
 type Modal = "projects" | "guide" | null;
-type EditorTool = "models" | "artwork" | "scene" | "materials";
+type EditorTool = "models" | "scene" | "materials";
 type SavedProject = {
   id: string;
   name: string;
@@ -78,11 +83,13 @@ const swatches = [
   "#253d36",
 ];
 const projectKey = "labellab.projects.v1";
+const libraryPageSize = 8; // Two columns, four rows.
 const categories = [
   { id: "all", label: "All" },
   { id: "glass", label: "Glass" },
   { id: "can", label: "Cans" },
   { id: "pet", label: "PET" },
+  { id: "pp", label: "PP" },
 ];
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat("en-US", {
@@ -124,6 +131,7 @@ export default function LabellabApp() {
   const [hydrated, setHydrated] = useState(false);
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
+  const [libraryPage, setLibraryPage] = useState(0);
   const [activeFamilyId, setActiveFamilyId] = useState<string | null>(null);
   const [activeTool, setActiveTool] = useState<EditorTool | null>("models");
   const [modal, setModal] = useState<Modal>(null);
@@ -132,8 +140,8 @@ export default function LabellabApp() {
   const [projectName, setProjectName] = useState("Basil study 01");
   const [projects, setProjects] = useState<SavedProject[]>([]);
   const [artwork, setArtwork] = useState<string>();
-  const [artworkName, setArtworkName] = useState("");
-  const [uploadBusy, setUploadBusy] = useState(false);
+  const [artworkEditing, setArtworkEditing] = useState(false);
+  const [artworkReset, setArtworkReset] = useState(0);
   const [exportBusy, setExportBusy] = useState(false);
   const [renderProgress, setRenderProgress] = useState<number | null>(null);
   const [activeCamera, setActiveCamera] = useState<"animated" | MockupCameraPreset>("animated");
@@ -144,7 +152,6 @@ export default function LabellabApp() {
   }>();
   const sceneRef = useRef<SceneCanvasHandle>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const uploadRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const workspaceLayoutRef = useRef<HTMLDivElement>(null);
   const libraryPanelRef = useRef<HTMLElement>(null);
@@ -154,15 +161,16 @@ export default function LabellabApp() {
     new Map<string, ReturnType<typeof getModelMaterialDefaults>>(),
   );
   const model = getLabModel(settings.modelId);
-  const originalArtwork = model.appearance.slots?.label?.baseColorMap;
-  const currentArtwork = artwork ?? originalArtwork;
   const studio = settings.sceneMode === "studio";
   const whiteStyle = settings.style === "white";
   const ready = status === "ready";
   const modelFamilies = filterLabModelFamilies(query, filter);
+  const libraryPageCount = Math.max(1, Math.ceil(modelFamilies.length / libraryPageSize));
+  const currentLibraryPage = Math.min(libraryPage, libraryPageCount - 1);
+  const visibleModelFamilies = modelFamilies.slice(currentLibraryPage * libraryPageSize, (currentLibraryPage + 1) * libraryPageSize);
   const activeFamily = getLabModelFamilyById(activeFamilyId);
   const variantsOpen = activeTool === "models" && !modal && !!activeFamily && activeFamily.variants.length > 1 &&
-    modelFamilies.some((family) => family.id === activeFamily.id);
+    visibleModelFamilies.some((family) => family.id === activeFamily.id);
   const update = <K extends keyof ScenePreferences>(
     key: K,
     value: ScenePreferences[K],
@@ -220,13 +228,7 @@ export default function LabellabApp() {
     const family = getLabModelFamily(id);
     setActiveFamilyId(family && family.variants.length > 1 ? family.id : null);
     if (id === settings.modelId) return;
-    modelMaterials.current.set(settings.modelId, {
-      liquidColor: settings.liquidColor,
-      capColor: settings.capColor,
-      labelOffset: settings.labelOffset,
-      roughness: settings.roughness,
-      metalness: settings.metalness,
-    });
+    modelMaterials.current.set(settings.modelId, pickMaterialPreferences(settings));
     setSettings((current) => ({
       ...current,
       ...(modelMaterials.current.get(id) ?? getModelMaterialDefaults(id)),
@@ -243,48 +245,22 @@ export default function LabellabApp() {
     const defaultVariant = getDefaultFamilyVariant(family);
     if (defaultVariant?.available && defaultVariant.modelId) chooseModel(defaultVariant.modelId);
   };
+  const changeLibraryPage = (page: number) => {
+    setLibraryPage(Math.max(0, Math.min(page, libraryPageCount - 1)));
+    setActiveFamilyId(null);
+    libraryPanelRef.current?.scrollTo({ top: 0 });
+  };
   const clearArtwork = () => {
     if (artworkRef.current) releaseLocalArtwork(artworkRef.current);
     artworkRef.current = undefined;
     setArtwork(undefined);
-    setArtworkName("");
   };
-  const upload = async (file?: File) => {
-    if (!file) return;
-    if (
-      !["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
-      file.size > 15 * 1024 * 1024
-    ) {
-      setToast("Choose a PNG, JPG or WebP image up to 15 MB.");
-      return;
-    }
-    setUploadBusy(true);
-    let url: string | undefined;
-    try {
-      const bitmap = await createImageBitmap(file);
-      const valid =
-        bitmap.width <= 8192 &&
-        bitmap.height <= 8192 &&
-        bitmap.width * bitmap.height <= 32_000_000;
-      bitmap.close();
-      if (!valid)
-        throw new Error("Images must be at most 8192 px per side and 32 megapixels.");
-      url = createLocalArtwork(file);
-      const previous = artworkRef.current;
-      artworkRef.current = url;
-      setArtwork(url);
-      setArtworkName(file.name);
-      if (previous) releaseLocalArtwork(previous);
-      setToast("Artwork applied. Adjust its position in the Materials panel.");
-    } catch (error) {
-      if (url) releaseLocalArtwork(url);
-      setToast(
-        error instanceof Error ? error.message : "This image could not be read.",
-      );
-    } finally {
-      setUploadBusy(false);
-      if (uploadRef.current) uploadRef.current.value = "";
-    }
+  const applyArtwork = (blob: Blob) => {
+    const url = createLocalArtwork(blob);
+    const previous = artworkRef.current;
+    artworkRef.current = url;
+    setArtwork(url);
+    if (previous) releaseLocalArtwork(previous);
   };
   const saveProject = () => {
     const project: SavedProject = {
@@ -299,7 +275,7 @@ export default function LabellabApp() {
       setProjects(next);
       setToast(
         artwork
-          ? "Settings saved in this browser. Uploaded artwork is available only in this session."
+          ? "Settings and your artwork library are saved in this browser."
           : "Project saved in this browser.",
       );
     } catch {
@@ -339,9 +315,12 @@ export default function LabellabApp() {
     setActiveFamilyId(null);
     setActiveTool((current) => (current === tool ? null : tool));
   };
-  const reset = () => {
+  const reset = async () => {
     if (exportBusy) return;
+    // Keep the library while clearing the current/default model's label choice.
+    await Promise.all([setArtworkSelection(model.id), setArtworkSelection(DEFAULT_PREFERENCES.modelId)]).catch(() => {});
     clearArtwork();
+    setArtworkReset(value => value + 1);
     modelMaterials.current.clear();
     setSettings({ ...DEFAULT_PREFERENCES });
     setActiveFamilyId(null);
@@ -395,36 +374,28 @@ export default function LabellabApp() {
                 <span>Models</span>
               </button>
               <button
-                className={activeTool === "artwork" ? "is-active" : ""}
-                aria-pressed={activeTool === "artwork"}
-                aria-label="Artwork"
-                title="Artwork"
-                onClick={() => selectTool("artwork")}
-              >
-                <Palette size={18} />
-                <span>Artwork</span>
-              </button>
-              <button
                 className={activeTool === "materials" ? "is-active" : ""}
                 aria-pressed={activeTool === "materials"}
-                aria-label="Materials"
-                title="Materials"
+                aria-label="Properties"
+                title="Properties"
                 onClick={() => selectTool("materials")}
               >
                 <Droplets size={18} />
-                <span>Materials</span>
+                <span>Properties</span>
               </button>
             </nav>
 
             <aside
               ref={libraryPanelRef}
-              className={`library-panel tool-panel ${activeTool === "models" || activeTool === "artwork" ? "is-open" : ""}`}
+              className={`library-panel tool-panel ${modelLibrary.panel} ${activeTool === "models" ? "is-open" : ""}`}
+              data-panel={activeTool}
+              data-tone={studio ? "neutral" : settings.style}
               inert={exportBusy}
-              aria-label={activeTool === "artwork" ? "Artwork" : "Model library"}
-              aria-hidden={activeTool !== "models" && activeTool !== "artwork"}
+              aria-label="Model library"
+              aria-hidden={activeTool !== "models"}
             >
               <div className="panel-title">
-                <h2>{activeTool === "artwork" ? "Artwork" : "Model library"}</h2>
+                <h2>Model library</h2>
                 {activeTool === "models" && (
                   <span className="count-badge">{LAB_MODEL_FAMILIES.length}</span>
                 )}
@@ -437,7 +408,7 @@ export default function LabellabApp() {
                       placeholder="Search packaging..."
                       aria-label="Search packaging"
                       value={query}
-                      onChange={(e) => { setQuery(e.target.value); setActiveFamilyId(null); }}
+                      onChange={(e) => { setQuery(e.target.value); setLibraryPage(0); setActiveFamilyId(null); }}
                     />
                   </label>
                   <div className="category-filters" aria-label="Filter packaging">
@@ -445,17 +416,18 @@ export default function LabellabApp() {
                       <button
                         key={category.id}
                         aria-pressed={filter === category.id}
-                        onClick={() => { setFilter(category.id); setActiveFamilyId(null); }}
+                        onClick={() => { setFilter(category.id); setLibraryPage(0); setActiveFamilyId(null); }}
                       >
                         {category.label}
                       </button>
                     ))}
                   </div>
                   <div
+                    id="model-library-grid"
                     className={`models-grid ${modelLibrary.grid}`}
                     data-tone={studio ? "neutral" : settings.style}
                   >
-                    {modelFamilies.map((family, index) => {
+                    {visibleModelFamilies.map((family, index) => {
                       const selected = family.variants.some(
                         (variant) => variant.modelId === model.id,
                       );
@@ -487,7 +459,7 @@ export default function LabellabApp() {
                           {family.name}
                         </strong>
                         <span className={modelLibrary.caption}>
-                          ({family.category === "glass" ? "Glass bottle" : family.category === "can" ? "Alu can" : "PET bottle"})
+                          ({family.category === "glass" ? "Glass bottle" : family.category === "can" ? "Alu can" : family.category === "pp" ? "PP bottle" : "PET bottle"})
                         </span>
                       </button>
                       );
@@ -501,6 +473,8 @@ export default function LabellabApp() {
                         onClick={() => {
                           setQuery("");
                           setFilter("all");
+                          setLibraryPage(0);
+                          setActiveFamilyId(null);
                         }}
                       >
                         Clear filters
@@ -508,49 +482,22 @@ export default function LabellabApp() {
                     </div>
                   )}
                 </>
-              ) : (
-                <div className="artwork-library">
-                  <div className={`artwork-thumbnail${currentArtwork ? "" : " is-empty"}`}>
-                    {currentArtwork ? (
-                      <img src={currentArtwork} alt="Current label artwork" />
-                    ) : (
-                      <FileImage size={36} strokeWidth={1.25} aria-hidden="true" />
-                    )}
-                  </div>
-                  <strong>
-                    {currentArtwork ? artworkName || "Original model artwork" : "No label yet"}
-                  </strong>
-                  <p>
-                    {currentArtwork
-                      ? "Artwork follows the label surface. Use a matching aspect ratio to keep your design in proportion."
-                      : "Upload your artwork to add a label."}
-                  </p>
-                  <button
-                    className="outline-button"
-                    disabled={uploadBusy}
-                    onClick={() => uploadRef.current?.click()}
-                  >
-                    <Upload size={16} /> Choose artwork
-                  </button>
-                  {artwork && (
-                    <button className="quiet-button" onClick={clearArtwork}>
-                      {originalArtwork ? "Restore original artwork" : "Remove artwork"}
+              ) : null}
+              {activeTool === "models" && libraryPageCount > 1 && (
+                <div className={`library-bottom ${modelLibrary.footer}`}>
+                  <nav className={modelLibrary.pagination} aria-label="Model library pages">
+                    <button type="button" aria-label="Previous model page" aria-controls="model-library-grid"
+                      disabled={currentLibraryPage === 0} onClick={() => changeLibraryPage(currentLibraryPage - 1)}>
+                      <ChevronLeft size={18} aria-hidden="true" />
                     </button>
-                  )}
+                    <span role="status" aria-live="polite" aria-atomic="true">Page {currentLibraryPage + 1} / {libraryPageCount}</span>
+                    <button type="button" aria-label="Next model page" aria-controls="model-library-grid"
+                      disabled={currentLibraryPage === libraryPageCount - 1} onClick={() => changeLibraryPage(currentLibraryPage + 1)}>
+                      <ChevronRight size={18} aria-hidden="true" />
+                    </button>
+                  </nav>
                 </div>
               )}
-              <input
-                ref={uploadRef}
-                className="sr-only"
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                aria-label="Upload label artwork"
-                onChange={(e) => void upload(e.target.files?.[0])}
-              />
-              <div className="library-bottom">
-                <span className="tiny-dot" /> {modelFamilies.length} {modelFamilies.length === 1 ? "packaging family" : "packaging families"}
-                <span>More models coming soon</span>
-              </div>
             </aside>
 
             {variantsOpen && activeFamily && (
@@ -580,6 +527,7 @@ export default function LabellabApp() {
                     model={model}
                     settings={settings}
                     artwork={artwork}
+                    artworkEditing={artworkEditing}
                     onStatus={(value) => setStatus(value.phase)}
                     renderCanvasRef={renderCanvasRef}
                   />
@@ -760,15 +708,14 @@ export default function LabellabApp() {
               id="material-settings-panel"
               className={`controls-panel tool-panel ${activeTool === "scene" || activeTool === "materials" ? "is-open" : ""}`}
               data-active-tool={activeTool ?? ""}
-              aria-label="Scene and material settings"
+              aria-label="Properties"
               inert={exportBusy}
               aria-hidden={activeTool !== "scene" && activeTool !== "materials"}
             >
               <div className="panel-title">
                 <h2>
-                  <SlidersHorizontal size={16} /> Settings
+                  <SlidersHorizontal size={16} aria-hidden="true" /> Properties
                 </h2>
-                <span className="settings-caption">LIVE</span>
               </div>
               <section className="control-section" data-tool-section="scene">
                 <div className="control-heading">
@@ -867,75 +814,10 @@ export default function LabellabApp() {
                   </button>
                 </div>
               </section>
-              <section className="control-section materials-section" data-tool-section="materials">
-                <div className="control-heading">
-                  <Droplets size={15} />
-                  <h3>Materials</h3>
-                  <span className="pro-tag">PBR</span>
-                </div>
-                {model.category !== "can" && (
-                  <div className="color-field">
-                    <label htmlFor="liquid-color">Liquid color</label>
-                    <div className="color-value">
-                      <span>{settings.liquidColor.toUpperCase()}</span>
-                      <input
-                        id="liquid-color"
-                        type="color"
-                        value={settings.liquidColor}
-                        onInput={(e) =>
-                          update("liquidColor", e.currentTarget.value)
-                        }
-                        onChange={(e) => update("liquidColor", e.target.value)}
-                      />
-                    </div>
-                  </div>
-                )}
-                <div className="color-field">
-                  <label htmlFor="cap-color">Cap color</label>
-                  <input
-                    id="cap-color"
-                    type="color"
-                    value={settings.capColor}
-                    onInput={(e) => update("capColor", e.currentTarget.value)}
-                    onChange={(e) => update("capColor", e.target.value)}
-                  />
-                </div>
-                <Range
-                  label="Label position"
-                  id="label-offset"
-                  value={settings.labelOffset}
-                  min={-50}
-                  max={50}
-                  step={1}
-                  unit="%"
-                  onChange={(value) => update("labelOffset", value)}
-                />
-                <Range
-                  label="Label roughness"
-                  id="roughness"
-                  value={settings.roughness}
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  format={(value) => `${Math.round(value * 100)}%`}
-                  onChange={(value) => update("roughness", value)}
-                />
-                <details className="advanced-materials">
-                  <summary>
-                    Metallic finish <ChevronDown size={13} />
-                  </summary>
-                  <Range
-                    label="Metalness"
-                    id="metalness"
-                    value={settings.metalness}
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    format={(value) => `${Math.round(value * 100)}%`}
-                    onChange={(value) => update("metalness", value)}
-                  />
-                </details>
-              </section>
+              <PropertiesPanel key={model.id} model={model} settings={settings}
+                artwork={<ArtworkLibrary key={`${model.id}:${artworkReset}`} modelId={model.id} disabled={exportBusy}
+                  resetSignal={artworkReset} onApply={applyArtwork} onClear={clearArtwork} onEditorStateChange={setArtworkEditing} />}
+                onChange={(patch) => { if (!exportBusy) setSettings((current) => ({ ...current, ...patch })); }} />
 
             </aside>
             <RenderPanel
@@ -1012,6 +894,7 @@ export default function LabellabApp() {
                     onClick={() => {
                       clearArtwork();
                       setActiveFamilyId(null);
+                      modelMaterials.current.clear();
                       setSettings(project.settings);
                       setActiveCamera(
                         project.settings.sceneMode === "studio"
@@ -1120,51 +1003,5 @@ function Toggle({
         <span />
       </span>
     </button>
-  );
-}
-function Range({
-  label,
-  id,
-  value,
-  min,
-  max,
-  step,
-  unit = "",
-  format,
-  onChange,
-}: {
-  label: string;
-  id: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  unit?: string;
-  format?: (value: number) => string;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <div className="range-field">
-      <div>
-        <label htmlFor={id}>{label}</label>
-        <output htmlFor={id}>
-          {format ? format(value) : `${value}${unit}`}
-        </output>
-      </div>
-      <input
-        id={id}
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        style={
-          {
-            "--range-fill": `${((value - min) / (max - min)) * 100}%`,
-          } as CSSProperties
-        }
-        onChange={(e) => onChange(Number(e.target.value))}
-      />
-    </div>
   );
 }

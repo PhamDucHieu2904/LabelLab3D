@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { signOut, useSession } from "next-auth/react";
 import { Bell, Layers3, LogIn, LogOut } from "lucide-react";
 import { LABELLAB_UPDATES } from "@/lib/labellab/updates";
 import { useAuthDialog } from "./AuthDialog";
@@ -16,10 +17,12 @@ type SiteHeaderProps = {
   onLogout?: () => void;
 };
 
-export default function SiteHeader({ activePage, disabled = false, onOpenProjects, isLoggedIn = false, onLogin, onLogout }: SiteHeaderProps) {
+export default function SiteHeader({ activePage, disabled = false, onOpenProjects, isLoggedIn, onLogin, onLogout }: SiteHeaderProps) {
   const openAuth = useAuthDialog();
-  const accountLabel = isLoggedIn ? "Log out" : "Login";
-  const AccountIcon = isLoggedIn ? LogOut : LogIn;
+  const { data: session, status } = useSession();
+  const signedIn = isLoggedIn ?? status === "authenticated";
+  const accountLabel = signedIn ? "Log out" : "Login";
+  const AccountIcon = signedIn ? LogOut : LogIn;
   return (
     <header className={styles.header} inert={disabled}>
       <Link className={styles.wordmark} href="/" aria-label="Labellab home">
@@ -61,11 +64,17 @@ export default function SiteHeader({ activePage, disabled = false, onOpenProject
             </ul>
           </div>
         </details>
+        {signedIn && session?.user && (
+          <span className={styles.accountName} title={session.user.name || session.user.email || undefined}>
+            {session.user.name || session.user.email}
+          </span>
+        )}
         <button
           className={styles.start}
           type="button"
           aria-label={accountLabel}
-          onClick={isLoggedIn ? onLogout : (onLogin ?? (() => openAuth("login")))}
+          onClick={signedIn ? (onLogout ?? (() => { void signOut({ redirect: false }); }))
+            : (onLogin ?? (() => openAuth("login")))}
         >
           <span>{accountLabel}</span><AccountIcon className={styles.icon} aria-hidden="true" />
         </button>

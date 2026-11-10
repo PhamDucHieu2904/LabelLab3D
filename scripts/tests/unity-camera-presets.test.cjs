@@ -87,3 +87,35 @@ test('angle damping crosses 360 and negative boundaries by the shortest arc', ()
   for (let i = 0; i < 120; i++) ({ value, velocity } = dampAngle(value, 10, velocity, .15, 1 / 60));
   near(value, 370, .00001);
 });
+
+const THREE = require('three');
+const cameraFile = path.resolve(__dirname, '../../lib/mockup/camera.ts');
+const cameraModule = new Module(cameraFile, module);
+cameraModule.filename = cameraFile; cameraModule.paths = module.paths;
+const nativeCameraRequire = cameraModule.require.bind(cameraModule);
+cameraModule.require = name => name === './unity-camera-presets' ? loaded.exports : nativeCameraRequire(name);
+cameraModule._compile(ts.transpileModule(fs.readFileSync(cameraFile, 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText, cameraFile);
+
+test('new bottle bounds framing keeps the entire PET1L and PET320 Full in every authored view', () => {
+  assert.equal(typeof cameraModule.exports.authoredMockupCameraFrame, 'function');
+  for (const [height,width] of [[.264833,.076898],[.149808,.064294]]) {
+    const bounds = new THREE.Box3(new THREE.Vector3(-width/2,-height/2,-width/2),new THREE.Vector3(width/2,height/2,width/2));
+    for (const aspect of [1,4/5,9/16,16/9]) for (const preset of presets) {
+      const frame = cameraModule.exports.authoredMockupCameraFrame(bounds, {src:'/new.glb',cameraFraming:'bounds'}, preset.id, aspect);
+      assert.ok(frame.target.distanceTo(bounds.getCenter(new THREE.Vector3())) < 1e-12);
+      const direction = cameraModule.exports.mockupCameraDirection(preset.id);
+      const camera = new THREE.PerspectiveCamera(frame.fieldOfView,aspect,.0001,100);
+      camera.position.copy(frame.target).addScaledVector(direction,frame.distanceMetres);
+      camera.lookAt(frame.target); camera.updateMatrixWorld();
+      for(const x of [bounds.min.x,bounds.max.x]) for(const y of [bounds.min.y,bounds.max.y]) for(const z of [bounds.min.z,bounds.max.z]) {
+        const p = new THREE.Vector3(x,y,z).project(camera);
+        assert.ok(Math.abs(p.x)<=.801 && Math.abs(p.y)<=.801, `${preset.id}: product clipped (${p.x},${p.y})`);
+      }
+    }
+    const legacy = cameraModule.exports.authoredMockupCameraFrame(bounds, {src:'/legacy.glb'}, 'view-1',1);
+    assert.equal(legacy.distanceMetres,destination('view-1').distanceMetres);
+    near(legacy.target.y,bounds.min.y+.1);
+  }
+});

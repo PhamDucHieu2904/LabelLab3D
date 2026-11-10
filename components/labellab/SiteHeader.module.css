@@ -22,6 +22,7 @@
 .nav a[aria-current="page"]::after { background: #d7195c; }
 .nav a:hover, .projects:hover { color: #a90f45; }
 .actions { display: flex; align-items: center; gap: 10px; min-width: 0; margin-left: auto; }
+.accountName { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .preview { display: inline-flex; align-items: center; gap: 7px; margin-right: 6px; color: #69535e; font-size: 12px; font-weight: 500; white-space: nowrap; }
 .preview > span { width: 6px; height: 6px; border-radius: 50%; background: #3ca96d; box-shadow: 0 0 0 2px #3ca96d20; }
 .projects { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; color: #5f4d56; white-space: nowrap; }
@@ -47,7 +48,7 @@
   .header { position: sticky; top: 0; padding-inline: 16px; gap: 12px; }
   .nav { display: none; }
   .projects { width: 44px; padding: 0; justify-content: center; }
-  .projects span, .start span { display: none; }
+  .projects span, .start span, .accountName { display: none; }
   .start { width: 44px; min-width: 44px; padding: 0; }
 }
 @container labellab-page (max-width: 520px) {

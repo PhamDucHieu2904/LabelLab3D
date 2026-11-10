@@ -39,6 +39,7 @@
 .identityText h2 { margin: 0; color: var(--profile-ink); font-size: clamp(21px, calc(26 * var(--home-unit)), 26px); font-weight: 650; line-height: 1.2; letter-spacing: -.025em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .identityText p { display: flex; align-items: center; gap: 5px; margin: 6px 0 0; color: var(--profile-accent); font-size: clamp(14px, calc(16 * var(--home-unit)), 16px); font-weight: 500; line-height: 1.3; }
 .card .identityText p svg { flex: 0 0 auto; width: 14px; height: 14px; }
+.identityText p > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .stats { display: grid; grid-template-columns: 1fr 1fr; margin: 0; padding-block: clamp(9px, calc(14 * var(--home-unit)), 14px); border-top: 1px solid rgba(145, 68, 100, .12); border-bottom: 1px solid rgba(145, 68, 100, .12); }
 .stat { display: flex; flex-direction: column; gap: 5px; min-width: 0; }

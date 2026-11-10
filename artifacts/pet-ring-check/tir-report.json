@@ -1,0 +1,43 @@
+{
+  "results": {
+    "tirFilter": {
+      "glError": 0,
+      "materials": [
+        {
+          "name": "pet-ring",
+          "type": "MeshPhysicalMaterial",
+          "color": "ffffff",
+          "roughness": 0.055,
+          "metalness": 0,
+          "thickness": 0.0024,
+          "transmission": 1,
+          "ior": 1.57,
+          "program": "pet-closed-flange-v1"
+        }
+      ],
+      "bounds": [
+        [
+          -0.015222887508571148,
+          0.05488533526659012,
+          -0.01520277839154005
+        ],
+        [
+          0.015178983099758625,
+          0.057196035981178284,
+          0.015189814381301403
+        ]
+      ],
+      "alpha": {
+        "clear": 0,
+        "partial": 0,
+        "opaque": 800000
+      },
+      "sample": [
+        24.079733333333333,
+        26.772133333333333,
+        28.584133333333334
+      ]
+    }
+  },
+  "errors": []
+}

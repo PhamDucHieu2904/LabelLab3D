@@ -1,0 +1,309 @@
+{
+  "results": {
+    "geometric": {
+      "glError": 0,
+      "materials": [
+        {
+          "name": "Ring",
+          "type": "MeshPhysicalMaterial",
+          "color": "ffffff",
+          "roughness": 0.055,
+          "metalness": 0,
+          "thickness": 0.0024,
+          "transmission": 1,
+          "ior": 1.57,
+          "program": "pet-closed-flange-v1"
+        }
+      ],
+      "bounds": [
+        [
+          -0.016440391540527344,
+          0.15303754806518557,
+          -0.016440391540527344
+        ],
+        [
+          0.016440391540527344,
+          0.15542478561401368,
+          0.016440391540527344
+        ]
+      ],
+      "alpha": {
+        "clear": 0,
+        "partial": 0,
+        "opaque": 800000
+      },
+      "sample": [
+        209.6604,
+        197.5588,
+        173.16946666666666
+      ]
+    },
+    "photo": {
+      "glError": 0,
+      "materials": [
+        {
+          "name": "pet-ring",
+          "type": "MeshPhysicalMaterial",
+          "color": "ffffff",
+          "roughness": 0.055,
+          "metalness": 0,
+          "thickness": 0.0024,
+          "transmission": 1,
+          "ior": 1.57,
+          "program": "pet-closed-flange-v1"
+        }
+      ],
+      "bounds": [
+        [
+          -0.015222887508571148,
+          0.05488533526659012,
+          -0.01520277839154005
+        ],
+        [
+          0.015178983099758625,
+          0.057196035981178284,
+          0.015189814381301403
+        ]
+      ],
+      "alpha": {
+        "clear": 0,
+        "partial": 0,
+        "opaque": 800000
+      },
+      "sample": [
+        107.85533333333333,
+        108.33813333333333,
+        108.87626666666667
+      ]
+    },
+    "photoOpen": {
+      "glError": 0,
+      "materials": [
+        {
+          "name": "Ring",
+          "type": "MeshPhysicalMaterial",
+          "color": "ffffff",
+          "roughness": 0.055,
+          "metalness": 0,
+          "thickness": 0.0024,
+          "transmission": 1,
+          "ior": 1.57,
+          "program": "pet-closed-flange-v1"
+        }
+      ],
+      "bounds": [
+        [
+          -0.016440391540527344,
+          0.15303754806518557,
+          -0.016440391540527344
+        ],
+        [
+          0.016440391540527344,
+          0.15542478561401368,
+          0.016440391540527344
+        ]
+      ],
+      "alpha": {
+        "clear": 0,
+        "partial": 0,
+        "opaque": 800000
+      },
+      "sample": [
+        28.7428,
+        26.143733333333333,
+        16.659866666666666
+      ]
+    },
+    "red": {
+      "glError": 0,
+      "materials": [
+        {
+          "name": "pet-ring",
+          "type": "MeshPhysicalMaterial",
+          "color": "ffffff",
+          "roughness": 0.055,
+          "metalness": 0,
+          "thickness": 0.0024,
+          "transmission": 1,
+          "ior": 1.57,
+          "program": "pet-closed-flange-v1"
+        }
+      ],
+      "bounds": [
+        [
+          -0.015222887508571148,
+          0.05488533526659012,
+          -0.01520277839154005
+        ],
+        [
+          0.015178983099758625,
+          0.057196035981178284,
+          0.015189814381301403
+        ]
+      ],
+      "alpha": {
+        "clear": 0,
+        "partial": 0,
+        "opaque": 800000
+      },
+      "sample": [
+        215.79626666666667,
+        220.0016,
+        228.67306666666667
+      ]
+    },
+    "amber": {
+      "glError": 0,
+      "materials": [
+        {
+          "name": "Ring",
+          "type": "MeshPhysicalMaterial",
+          "color": "ffffff",
+          "roughness": 0.055,
+          "metalness": 0,
+          "thickness": 0.0024,
+          "transmission": 1,
+          "ior": 1.57,
+          "program": "pet-closed-flange-v1"
+        }
+      ],
+      "bounds": [
+        [
+          -0.016440391540527344,
+          0.15303754806518557,
+          -0.016440391540527344
+        ],
+        [
+          0.016440391540527344,
+          0.15542478561401368,
+          0.016440391540527344
+        ]
+      ],
+      "alpha": {
+        "clear": 0,
+        "partial": 0,
+        "opaque": 800000
+      },
+      "sample": [
+        202.16946666666666,
+        199.96173333333334,
+        197.36106666666666
+      ]
+    },
+    "clear": {
+      "glError": 0,
+      "materials": [
+        {
+          "name": "Ring",
+          "type": "MeshPhysicalMaterial",
+          "color": "ffffff",
+          "roughness": 0.055,
+          "metalness": 0,
+          "thickness": 0.0024,
+          "transmission": 1,
+          "ior": 1.57,
+          "program": "pet-closed-flange-v1"
+        }
+      ],
+      "bounds": [
+        [
+          -0.01431032675741335,
+          0.19970971301813734,
+          -0.01431032675741335
+        ],
+        [
+          0.014310276212677308,
+          0.20243134698825999,
+          0.01431032675741335
+        ]
+      ],
+      "alpha": {
+        "clear": 0,
+        "partial": 0,
+        "opaque": 800000
+      },
+      "sample": [
+        202.5016,
+        203.56813333333332,
+        207.39773333333332
+      ]
+    },
+    "transparent": {
+      "glError": 0,
+      "materials": [
+        {
+          "name": "pet-ring",
+          "type": "MeshPhysicalMaterial",
+          "color": "ffffff",
+          "roughness": 0.055,
+          "metalness": 0,
+          "thickness": 0.0024,
+          "transmission": 1,
+          "ior": 1.57,
+          "program": "pet-closed-flange-v1"
+        }
+      ],
+      "bounds": [
+        [
+          -0.015222887508571148,
+          0.05488533526659012,
+          -0.01520277839154005
+        ],
+        [
+          0.015178983099758625,
+          0.057196035981178284,
+          0.015189814381301403
+        ]
+      ],
+      "alpha": {
+        "clear": 713077,
+        "partial": 67174,
+        "opaque": 19749
+      },
+      "sample": [
+        0,
+        0,
+        0
+      ]
+    },
+    "matte": {
+      "glError": 0,
+      "materials": [
+        {
+          "name": "Ring",
+          "type": "MeshPhysicalMaterial",
+          "color": "ffffff",
+          "roughness": 0.055,
+          "metalness": 0,
+          "thickness": 0.0024,
+          "transmission": 1,
+          "ior": 1.57,
+          "program": "pet-closed-flange-v1"
+        }
+      ],
+      "bounds": [
+        [
+          -0.016440391540527344,
+          0.15303754806518557,
+          -0.016440391540527344
+        ],
+        [
+          0.016440391540527344,
+          0.15542478561401368,
+          0.016440391540527344
+        ]
+      ],
+      "alpha": {
+        "clear": 98647,
+        "partial": 5096,
+        "opaque": 696257
+      },
+      "sample": [
+        215.4264,
+        152.56933333333333,
+        39.2672
+      ]
+    }
+  },
+  "errors": []
+}

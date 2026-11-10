@@ -43,10 +43,8 @@ test('can family library exposes one family per geometry', () => {
 
 
 test('all native can model IDs survive preference parsing', () => {
-  const Module = require('node:module'); const ts = require('typescript');
-  const file = path.join(root, 'lib/labellab/preferences.ts'); const m = new Module(file, module); m.filename=file; m.paths=module.paths;
-  m._compile(ts.transpileModule(fs.readFileSync(file,'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText, file);
-  const { parsePreferences } = m.exports;
+  const load = require('../lib/load-ts-source.cjs').createSourceLoader();
+  const { parsePreferences } = load(path.join(root, 'lib/labellab/preferences'));
   for (const id of manifest.assets.filter(a=>a.kind==='can' && a.id !== 'can-330').map(a=>a.id)) {
     const modelId = id === 'can-250' ? 'can-250-slim' : id;
     assert.equal(parsePreferences({ modelId }).modelId, modelId);

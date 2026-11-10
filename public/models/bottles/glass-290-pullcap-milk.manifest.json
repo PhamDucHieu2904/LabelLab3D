@@ -1,0 +1,116 @@
+{
+  "id": "glass-290-pullcap-milk",
+  "src": "/models/bottles/glass-290-pullcap-milk.glb",
+  "sourceName": "Glass 290ml napkeo model (Milk) web.glb",
+  "sourceBytes": 1969400,
+  "sourceSha256": "cce9377a2a09223d77c1db600eba186f3ae32478ce2003ba0b3aa6d09676b8b4",
+  "bytes": 175620,
+  "sha256": "2174d996fbefec5ab2c23d65249c9f745eddc1b9cc6bdef05f95d339ec00bbd0",
+  "binarySha256": "45ec371798ac4e21af01158c03716b357cd7a8adb8b48a6ec77119da13f0d818",
+  "sourceToMetres": 0.1,
+  "units": "metres",
+  "volumeMl": 290,
+  "defaultLiquid": "milk",
+  "blankLabel": "white",
+  "materialSlots": {
+    "body": [
+      "Body",
+      "GlassBase",
+      "Neck"
+    ],
+    "cap": [
+      "SilverCap"
+    ],
+    "label": [
+      "PaperLabel"
+    ],
+    "liquid": [
+      "Water"
+    ]
+  },
+  "geometryRepair": {
+    "capSourceBlend": "D:/3D model/Model Bottle Can/Blender Model 1/Glass 290ml napkeo model (Basil).blend",
+    "capSourceBlendSha256": "b4c6f87355124e9c3d0633e32faad535b8e78e98eb0e7442a200d78149099475",
+    "capEvaluatedArtifact": "artifacts/pullcap-cap-evaluated.glb",
+    "capEvaluatedVertices": 5630,
+    "capEvaluatedTriangles": 9176,
+    "labelRadialOffsetMetres": 0,
+    "zeroAreaTrianglesRemoved": 0,
+    "neckShell": {
+      "thicknessMetres": 0.0013,
+      "addedTriangles": 0,
+      "outerSurfaceUnchanged": true,
+      "sourceNode": "Neck"
+    },
+    "waterBottom": {
+      "addedTriangles": 0,
+      "method": "authored source closed",
+      "sourceClosed": true
+    },
+    "waterTop": {
+      "sourceClosed": true,
+      "topFacesUpward": true
+    }
+  },
+  "compression": {
+    "extension": "KHR_draco_mesh_compression",
+    "encoder": "draco3dgltf 1.5.7",
+    "method": "edgebreaker",
+    "precisionBits": {
+      "POSITION": 18,
+      "NORMAL": 14,
+      "TEXCOORD_0": 16
+    },
+    "lossless": false,
+    "simplification": false,
+    "uncompressedBytes": 949892,
+    "savedPercent": 81.51,
+    "triangles": 33590,
+    "topologyPreserved": true,
+    "maxPositionErrorMeters": 3.8084235577813686e-7,
+    "maxNormalAngleDegrees": 0.023582069098144302,
+    "maxUvError": 0.00000768899917602539,
+    "maxUvErrorAt4096px": 0.031494140625,
+    "sceneSha256": "7339ffe3075bccb04ed5c4ccd59a829681a1d1ba17423ba387062c1a61e20860",
+    "decodedPositionHashes": [
+      "ff4891d654915ca23c66834a9c8fce338b182d14a09f869fce0a6cb3170e3a89",
+      "59d0a8b1593e550adb8d4cce2e94f7ad389146b0c99cd53f5981996f07002b50",
+      "dad3321c7db6b6a1fa9a54987db8cb96f6240ec29462c7a3edb56b1860581348",
+      "f132fd16ef2998e629680fca0d85d9a6e69677ab458699373480d91076c23976",
+      "9006cb41bca5704bc022078dd0e35fb3cbaa2c244e3825feed82e3b88a6b05c9",
+      "8c1530fffdac81c0d5088d648cfda5d8815d5db68ac42b2443b95c710e4c6787"
+    ],
+    "decodedAttributeHashes": [
+      {
+        "POSITION": "ff4891d654915ca23c66834a9c8fce338b182d14a09f869fce0a6cb3170e3a89",
+        "NORMAL": "4a039410dbaf467a7fbfa8c1478c97a2ae3c8b474bb4d7026902c72227b20197",
+        "TEXCOORD_0": "a0cbf31a7602294007c3950e7eab2f5be7003390cae0d4612119bf87fb0007c9"
+      },
+      {
+        "POSITION": "59d0a8b1593e550adb8d4cce2e94f7ad389146b0c99cd53f5981996f07002b50",
+        "NORMAL": "0b03262ef582e7d08448e40bfedff8fb962612032f91082e2a7cb6205aa9b990",
+        "TEXCOORD_0": "6060debd2512e7248867332ceb85baa189c33c2e6d0aed99c0d69c16cd6db9d4"
+      },
+      {
+        "POSITION": "dad3321c7db6b6a1fa9a54987db8cb96f6240ec29462c7a3edb56b1860581348",
+        "NORMAL": "d12455e907932835dd18b4d140007719bc62c60c106a6833b38a0cbc920f9e82",
+        "TEXCOORD_0": "8734f737ef275d939592ec06db64169848f57cc06318b5892520aef66266ecb5"
+      },
+      {
+        "POSITION": "f132fd16ef2998e629680fca0d85d9a6e69677ab458699373480d91076c23976",
+        "NORMAL": "7314c25ce5514e1b9814aac017de119b658125d884a6f7ed0ecdafd17a49ee4e",
+        "TEXCOORD_0": "8d1393b3ee6ba7368cbe973a5c138b1e8b495f426d06df3227aea1dcd1ba0c93"
+      },
+      {
+        "POSITION": "9006cb41bca5704bc022078dd0e35fb3cbaa2c244e3825feed82e3b88a6b05c9",
+        "NORMAL": "6e4df5755cf9772c40e713578c527e983cb887924159796993d95293d3fdb551",
+        "TEXCOORD_0": "ed089555d3fa404fbf4386231b3aeee50e0d693388b4ab3dff2a84c3591a7e98"
+      },
+      {
+        "POSITION": "8c1530fffdac81c0d5088d648cfda5d8815d5db68ac42b2443b95c710e4c6787",
+        "NORMAL": "3c4f9e22b857ac58ca27a02e0cb40f01649ecd1667792a678c95f792e9d91334",
+        "TEXCOORD_0": "120691dfd10f2a6ba01da602476944de2a779ed7087c6e64027e6c23efc1dfae"
+      }
+    ]
+  }
+}

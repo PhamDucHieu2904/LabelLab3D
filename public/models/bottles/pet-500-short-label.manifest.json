@@ -192,8 +192,7 @@
   "materialSlots": {
     "body": [
       "Body Bottle - Rough_NormalMap",
-      "Body Bottle - z Glossy",
-      "Ring"
+      "Body Bottle - z Glossy"
     ],
     "cap": [
       "PlasticCap"
@@ -206,6 +205,9 @@
     ],
     "inclusions": [
       "Aloe Pulp - Clear"
+    ],
+    "ring": [
+      "Ring"
     ]
   },
   "layoutProfile": "pet-wrap-v1",

@@ -5,13 +5,28 @@ import { liquidColorUpdates } from './material-adjustments';
 import { aloeTransmissionClearRadiance, correctAloeTransmissionClear } from './aloe-bottle-materials';
 import { BASIL_WEB_OPTICS, BASIL_WEB_VOLUME_GLSL, basilWebAbsorption, configureBasilWebInclusions, createBasilWebUniforms, fitBasilWebProfile } from './basil-web-optics';
 import { BASIL_WEB_SEED_MATERIAL, isBasilWebSeedMetadata } from './basil-web-seed-contract';
+import { createGlassNeckMaterialContext } from './glass-neck-material';
+import { configureGlass300Base } from './glass-300-base';
 
 type Role = 'body' | 'ring' | 'liquid' | 'liquid-back' | 'inclusions' | 'cap' | 'label';
 const PROFILE = 'basil-web-v1';
+const GLASS_PROFILES = new Set(['glass-290-v1', 'glass-300-v1']);
 const GOLD = [.9528302, .8926178, .3460751] as const;
 
+function isProfiledGlassNeck(asset: ProductAsset, mesh: THREE.Mesh, material: THREE.Material): boolean {
+  const role = basilWebMaterialRole(asset, mesh, material);
+  if (role !== 'body') return false;
+  const name = `${material.name} ${mesh.name}`.toLowerCase();
+  if (!name.includes('neck')) return false;
+  return GLASS_PROFILES.has(material.userData.bottleProfile) ||
+    GLASS_PROFILES.has(mesh.userData.bottleProfile) ||
+    material.userData.basilProfile === PROFILE || mesh.userData.basilProfile === PROFILE;
+}
+
 export function basilWebMaterialRole(asset: ProductAsset, mesh: THREE.Mesh, material: THREE.Material): Role | undefined {
-  if (asset.packaging !== 'glass' || (mesh.userData.basilProfile !== PROFILE && material.userData.basilProfile !== PROFILE)) return;
+  if (asset.packaging !== 'glass' ||
+    (mesh.userData.basilProfile !== PROFILE && material.userData.basilProfile !== PROFILE &&
+      !GLASS_PROFILES.has(mesh.userData.bottleProfile) && !GLASS_PROFILES.has(material.userData.bottleProfile))) return;
   return Object.entries(asset.materialSlots ?? {}).find(([, names]) => names.includes(material.name) || names.includes(mesh.name))?.[0] as Role | undefined;
 }
 
@@ -25,7 +40,7 @@ export function prepareBasilWebLayers(root: THREE.Object3D, asset: ProductAsset)
     if (!(node instanceof THREE.Mesh)) return;
     const role = (Array.isArray(node.material) ? node.material : [node.material]).map(material => basilWebMaterialRole(asset, node, material)).find(Boolean);
     if (role === 'liquid' || role === 'inclusions') configureCaptureOnly(node);
-    else if (role === 'cap' || role === 'label') configureBeautyOnly(node);
+    else if (role === 'cap' || role === 'label') configureBottleBeautyOnly(node);
   });
   let owner: THREE.Object3D | undefined;
   root.traverse(node => { if (node.userData.basilWebSeeds) owner = node; });
@@ -81,10 +96,9 @@ function configureCaptureOnly(mesh: THREE.Mesh) {
   configureRenderLayer(mesh, false);
 }
 
-/** Solid cap/print write depth before transmitting glass in the beauty opaque
- * queue. Excluding their capture draw keeps them out of the refracted reservoir,
- * without letting the glass's depth erase their interior faces. */
-function configureBeautyOnly(mesh: THREE.Mesh) {
+/** Exclude solid cap/print from the refracted reservoir while retaining their
+ * depth and interior faces in the final beauty draw. */
+export function configureBottleBeautyOnly(mesh: THREE.Mesh) {
   if (beautyOnly.has(mesh)) return;
   beautyOnly.add(mesh);
   configureRenderLayer(mesh, true);
@@ -121,6 +135,18 @@ export function createBasilWebBottleMaterialContext(root: THREE.Object3D, asset:
   root.updateMatrixWorld(true);
   const rootInverse = root.matrixWorld.clone().invert();
   const toMetric = (mesh: THREE.Mesh) => new THREE.Matrix4().multiplyMatrices(rootInverse, mesh.matrixWorld);
+  let tracedNeck = false;
+  root.traverse(node => {
+    if (node instanceof THREE.Mesh && (Array.isArray(node.material) ? node.material : [node.material]).some(material =>
+      (Number.isFinite(material.userData.basilWebNeckWallMetres) && material.userData.basilWebNeckWallMetres > 0) ||
+      isProfiledGlassNeck(asset, node, material))) tracedNeck = true;
+  });
+  const neckOptics = tracedNeck ? createGlassNeckMaterialContext(root, (mesh, material) => {
+    if ((Number.isFinite(material.userData.basilWebNeckWallMetres) && material.userData.basilWebNeckWallMetres > 0) ||
+      isProfiledGlassNeck(asset, mesh, material)) return 1;
+    const role = basilWebMaterialRole(asset, mesh, material);
+      return role === 'cap' ? 3 : role === 'label' ? 4 : role === 'liquid' ? 5 : undefined;
+  }) : undefined;
   const profile = fitBasilWebProfile(water.geometry, toMetric(water));
   if (!profile) throw new Error('Basil web water profile is empty');
   const color = new THREE.Color('#be2838');
@@ -141,12 +167,13 @@ export function createBasilWebBottleMaterialContext(root: THREE.Object3D, asset:
   applyColor('#be2838');
   return {
     ready: undefined as Promise<void> | undefined,
-    dispose: undefined as (() => void) | undefined,
+    dispose: neckOptics ? () => neckOptics.dispose() : undefined,
     defaultColor: color.clone(),
     configure(material: THREE.MeshStandardMaterial, mesh: THREE.Mesh, role: Role, juiceColor?: string, capColor?: string) {
       material.visible = true;
       if (role === 'cap' || role === 'label') {
-        configureBeautyOnly(mesh);
+        neckOptics?.registerOpaque(material, role === 'cap' ? 3 : 4);
+        configureBottleBeautyOnly(mesh);
         material.transparent = false; material.opacity = 1; material.depthWrite = true; material.depthTest = true;
         material.side = THREE.DoubleSide; material.forceSinglePass = true;
         if (material instanceof THREE.MeshPhysicalMaterial) material.transmission = 0;
@@ -160,14 +187,49 @@ export function createBasilWebBottleMaterialContext(root: THREE.Object3D, asset:
         liquidColorUpdates.set(material, applyColor);
         configureCaptureOnly(mesh);
         if (role === 'inclusions') {
-          if (!(mesh instanceof THREE.InstancedMesh)) throw new Error('Basil web inclusions must be instanced');
-          configureBasilWebInclusions(material, mesh, profile, meshToMetric, shared);
+          if (mesh instanceof THREE.InstancedMesh) {
+            configureBasilWebInclusions(material, mesh, profile, meshToMetric, shared);
+            return;
+          }
+          // Glass 290 Chia ships its authored seeds as a regular mesh. Draw it
+          // into the Basil water capture only; the final beauty pass then shows
+          // it through the calibrated glass and keeps it behind the label.
+          material.color.set('#302a24'); material.metalness = 0; material.roughness = .74;
+          material.transparent = false; material.opacity = 1; material.depthWrite = true;
+          material.side = THREE.DoubleSide; material.toneMapped = false;
+          configureCaptureOnly(mesh);
+          material.customProgramCacheKey = () => 'basil-web-raw-seeds-v1';
           return;
         }
         const uniforms = createBasilWebUniforms(profile, meshToMetric, shared);
         material.color.setRGB(1, 1, 1); material.metalness = 0; material.roughness = 1;
         material.transparent = false; material.opacity = 1; material.side = THREE.BackSide; material.depthWrite = true;
         if (material instanceof THREE.MeshPhysicalMaterial) material.transmission = 0;
+        // Milk shares the same glass/capture layers, but its dense liquid must
+        // retain its own pigment rather than expose the page through water.
+        if (material.userData.bottleLiquidKind === 'milk') {
+          // Opaque milk shades the nearest outward interface. The absorption
+          // reservoir's BackSide would expose the far wall and hide its top.
+          material.side = THREE.FrontSide;
+          const updateMilk = (value: string) => material.color.set(value);
+          updateMilk(juiceColor ?? '#fff5e4');
+          liquidColorUpdates.set(material, updateMilk);
+          neckOptics?.registerLiquid(material.color, {
+            clarity: 0, density: 1, turbidity: 1, brightness: 1,
+            scattering: .9, roughness: .8, ior: 1.333,
+          }, material, material.userData.bottleProfile === 'glass-300-v1' ? .18 : 0);
+          // Unity's Milk interior outputs the liquid pigment directly. Native
+          // diffuse lighting creates a gray disc on the downward-facing water
+          // surface. Glass still supplies the outer reflections/refraction;
+          // tone mapping and explicit live optics run after this reservoir.
+          material.onBeforeCompile = shader => {
+            shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>',
+              'gl_FragColor = vec4(diffuse, 1.0);');
+          };
+          material.customProgramCacheKey = () => 'basil-web-milk-reservoir-v2';
+          return;
+        }
+        neckOptics?.registerLiquid(color, undefined, material);
         material.onBeforeCompile = shader => {
           Object.assign(shader.uniforms, uniforms);
           addBottleBackdropProjection(shader);
@@ -188,12 +250,27 @@ export function createBasilWebBottleMaterialContext(root: THREE.Object3D, asset:
         return;
       }
       if (role !== 'body' || !(material instanceof THREE.MeshPhysicalMaterial)) return;
-      const neck = material.name === 'basil-web-neck';
+      if (material.userData.bottleProfile === 'glass-300-v1' &&
+        (material.name === 'Base' || material.name === 'GlassBase' || mesh.name === 'Base' || mesh.name === 'GlassBase')) {
+        configureGlass300Base(material, mesh, meshToMetric);
+        return;
+      }
+      const neck = material.name === 'basil-web-neck' || material.name === 'Neck';
+      const authoredNeckWall = neck && typeof material.userData.basilWebNeckWallMetres === 'number' && Number.isFinite(material.userData.basilWebNeckWallMetres)
+        ? Math.max(.0001, material.userData.basilWebNeckWallMetres) : undefined;
       material.color.setRGB(1, 1, 1); material.metalness = 0; material.roughness = neck ? .15 : BASIL_WEB_OPTICS.glassRoughness;
       material.normalMap = null; material.roughnessMap = null; material.map = null;
       material.transparent = true; material.opacity = 1; material.depthWrite = true; material.side = THREE.FrontSide;
       material.transmission = 1; material.ior = BASIL_WEB_OPTICS.glassIOR;
       material.attenuationColor.setRGB(1, 1, 1); material.attenuationDistance = Infinity;
+      const tracedNeckWall = authoredNeckWall ?? (isProfiledGlassNeck(asset, mesh, material) ? .0013 : undefined);
+      if (tracedNeckWall && neckOptics) {
+        material.thickness = tracedNeckWall * 2;
+        neckOptics.configure(material, mesh);
+        return;
+      }
+      // Legacy Basil surfaces retain their calibrated native transmission.
+      // The authored pull-cap shell above follows its actual inner/outer mesh.
       const physicalThickness = neck ? .0013 : Math.min(profile.halfBounds.x, profile.halfBounds.y) * .42;
       material.thickness = physicalThickness;
       const uniforms = { aloeClearRadiance: { value: 1 }, basilWebWorldThickness: { value: physicalThickness } };

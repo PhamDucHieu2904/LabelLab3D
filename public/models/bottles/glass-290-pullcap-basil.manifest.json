@@ -1,0 +1,142 @@
+{
+  "id": "glass-290-pullcap-basil",
+  "src": "/models/bottles/glass-290-pullcap-basil.glb",
+  "sourceName": "Glass 290ml napkeo model (Basil) web.glb",
+  "sourceBytes": 430280,
+  "sourceSha256": "486b827bdd7f49a23ab327fbc042960a25e7dd5eedacc5d8aa150bc0b0a249d5",
+  "bytes": 195056,
+  "sha256": "2dff43bbbca5a8a8af80099260205beb27cb876d2ba02434925f439161f5d6bf",
+  "binarySha256": "08def4d7f4ea254be33611e52623f1542aee8ae2e22841e59baa6db1787e7004",
+  "sourceToMetres": 0.1,
+  "units": "metres",
+  "volumeMl": 290,
+  "defaultLiquid": "basil",
+  "blankLabel": "white",
+  "materialSlots": {
+    "body": [
+      "Body",
+      "GlassBase",
+      "Neck"
+    ],
+    "cap": [
+      "SilverCap"
+    ],
+    "label": [
+      "PaperLabel"
+    ],
+    "liquid": [
+      "Water"
+    ],
+    "inclusions": [
+      "basil-web-seed-gel"
+    ]
+  },
+  "seedInstances": {
+    "count": 330,
+    "representation": "source-fitted Float32 ellipsoid fits; runtime instanced hydrated envelopes",
+    "gelThicknessNative": 0.008321520913910748,
+    "nativeToGlbMatrix": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1
+    ]
+  },
+  "geometryRepair": {
+    "capSourceBlend": "D:/3D model/Model Bottle Can/Blender Model 1/Glass 290ml napkeo model (Basil).blend",
+    "capSourceBlendSha256": "b4c6f87355124e9c3d0633e32faad535b8e78e98eb0e7442a200d78149099475",
+    "capEvaluatedArtifact": "artifacts/pullcap-cap-evaluated.glb",
+    "capEvaluatedVertices": 5630,
+    "capEvaluatedTriangles": 9176,
+    "labelRadialOffsetMetres": 0.0001,
+    "zeroAreaTrianglesRemoved": 256,
+    "neckShell": {
+      "thicknessMetres": 0.0013,
+      "addedTriangles": 704,
+      "outerSurfaceUnchanged": true,
+      "sourceNode": "Neck"
+    },
+    "waterBottom": {
+      "addedTriangles": 0,
+      "method": "authored source closed",
+      "sourceClosed": true
+    },
+    "waterTop": {
+      "sourceClosed": true,
+      "topFacesUpward": true
+    }
+  },
+  "compression": {
+    "extension": "KHR_draco_mesh_compression",
+    "encoder": "draco3dgltf 1.5.7",
+    "method": "edgebreaker",
+    "precisionBits": {
+      "POSITION": 18,
+      "NORMAL": 14,
+      "TEXCOORD_0": 16
+    },
+    "lossless": false,
+    "simplification": false,
+    "uncompressedBytes": 634392,
+    "savedPercent": 69.25,
+    "triangles": 19886,
+    "topologyPreserved": true,
+    "maxPositionErrorMeters": 3.753164031265806e-7,
+    "maxNormalAngleDegrees": 0.023582069098144302,
+    "maxUvError": 0.00000768899917602539,
+    "maxUvErrorAt4096px": 0.031494140625,
+    "sceneSha256": "0f3cf5cffe3d750553617d59669dc409faca45b1640e91e33e8bb942235394f1",
+    "decodedPositionHashes": [
+      "3e90b2776019619573e5435b7bb0a6725e8b3a08441f83b94a801e0eb9fabe1c",
+      "0b20204bdb0384b74261a40ee22178a994057a6fc8a929218fb41887ea7b310b",
+      "dad3321c7db6b6a1fa9a54987db8cb96f6240ec29462c7a3edb56b1860581348",
+      "0f582e86106a147151b89c46fde63e06627f1e15bc994bb611c6698902948df4",
+      "7ac123e8061715e5949d355155bc73737ef34760ed28bebad2e7f0198ebaae86",
+      "7f71034df0843e7f41c7d14f3f02aeded3f262bae0fe068ff0c7d2637606b2ba"
+    ],
+    "decodedAttributeHashes": [
+      {
+        "POSITION": "3e90b2776019619573e5435b7bb0a6725e8b3a08441f83b94a801e0eb9fabe1c",
+        "NORMAL": "79c389fac918713c2d96cd29289bf20f7b78726fb89a1b009b4d1994ece46e83",
+        "TEXCOORD_0": "5e721d57d204bf47f9020034b5944e8838096d5d9b1cfb04fa07c8ac8ffe7c03"
+      },
+      {
+        "POSITION": "0b20204bdb0384b74261a40ee22178a994057a6fc8a929218fb41887ea7b310b",
+        "NORMAL": "4f492bdda317b41b7b9291f366806941f73f36d43fc92d6442b1b6a7a11f54d8",
+        "TEXCOORD_0": "9f89e57a90d21d100b394688388b5cecefc868158bce3853b6c8147d4ac1d2db"
+      },
+      {
+        "POSITION": "dad3321c7db6b6a1fa9a54987db8cb96f6240ec29462c7a3edb56b1860581348",
+        "NORMAL": "d12455e907932835dd18b4d140007719bc62c60c106a6833b38a0cbc920f9e82",
+        "TEXCOORD_0": "8734f737ef275d939592ec06db64169848f57cc06318b5892520aef66266ecb5"
+      },
+      {
+        "POSITION": "0f582e86106a147151b89c46fde63e06627f1e15bc994bb611c6698902948df4",
+        "NORMAL": "7314c25ce5514e1b9814aac017de119b658125d884a6f7ed0ecdafd17a49ee4e",
+        "TEXCOORD_0": "8d1393b3ee6ba7368cbe973a5c138b1e8b495f426d06df3227aea1dcd1ba0c93"
+      },
+      {
+        "POSITION": "7ac123e8061715e5949d355155bc73737ef34760ed28bebad2e7f0198ebaae86",
+        "NORMAL": "fab7b99bdf74dfebb6d3b2867e254b880af845ac88474aa9f4d43f9c8a5561ff",
+        "TEXCOORD_0": "c14823f2f0317794c5c23ed1f83d83c7cca0b5996705a1591350da17d9998060"
+      },
+      {
+        "POSITION": "7f71034df0843e7f41c7d14f3f02aeded3f262bae0fe068ff0c7d2637606b2ba",
+        "NORMAL": "47ede012f3164392ae78c9e8b4548e6548320db240dc20b9dc6cc04b923f06a9",
+        "TEXCOORD_0": "fe4eaaaefb429b5369931f62c86f1b016edb2eab6d8c969b166074fc46409c90"
+      }
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+.library { display: grid; gap: 8px; min-width: 0; margin-bottom: 14px; }
+.choose { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 44px; padding: 10px 14px; border: 1px solid var(--prop-line); border-radius: 9px; color: var(--prop-active-ink); background: var(--prop-active); cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; transition: opacity 150ms; }
+.choose:hover:not(:disabled) { opacity: .88; }
+.choose:focus-visible { outline: 2px solid var(--prop-ink); outline-offset: 3px; }
+.choose:disabled { opacity: .5; cursor: wait; }
+.error { margin: 0; padding: 10px; background: #fff4f0; color: #8e2727; border-radius: 6px; font-size: 12px; line-height: 1.5; }
+@media (prefers-reduced-motion: reduce) { .choose { transition: none; } }

@@ -1,0 +1,1736 @@
+[
+  {
+    "method": "Runtime.executionContextCreated",
+    "params": {
+      "context": {
+        "id": 1,
+        "origin": "://",
+        "name": "",
+        "uniqueId": "3314630571841221094.8094890764963272824",
+        "auxData": {
+          "isDefault": true,
+          "type": "default",
+          "frameId": "DD5933024326E91DAEB9EEED8770A49C"
+        }
+      }
+    }
+  },
+  {
+    "method": "Page.frameStartedNavigating",
+    "params": {
+      "frameId": "DD5933024326E91DAEB9EEED8770A49C",
+      "url": "http://127.0.0.1:3076/",
+      "loaderId": "EAF9CD8E984607412F544A44D0908200",
+      "navigationType": "differentDocument"
+    }
+  },
+  {
+    "method": "Page.frameStartedLoading",
+    "params": {
+      "frameId": "DD5933024326E91DAEB9EEED8770A49C"
+    }
+  },
+  {
+    "method": "Runtime.executionContextsCleared",
+    "params": {}
+  },
+  {
+    "method": "Runtime.executionContextsCleared",
+    "params": {}
+  },
+  {
+    "method": "Page.frameNavigated",
+    "params": {
+      "frame": {
+        "id": "DD5933024326E91DAEB9EEED8770A49C",
+        "loaderId": "EAF9CD8E984607412F544A44D0908200",
+        "url": "http://127.0.0.1:3076/",
+        "domainAndRegistry": "",
+        "securityOrigin": "http://127.0.0.1:3076",
+        "securityOriginDetails": {
+          "isLocalhost": true
+        },
+        "mimeType": "text/html",
+        "adFrameStatus": {
+          "adFrameType": "none"
+        },
+        "secureContextType": "SecureLocalhost",
+        "crossOriginIsolatedContextType": "NotIsolated",
+        "gatedAPIFeatures": []
+      },
+      "type": "Navigation"
+    }
+  },
+  {
+    "method": "Runtime.executionContextCreated",
+    "params": {
+      "context": {
+        "id": 2,
+        "origin": "http://127.0.0.1:3076",
+        "name": "",
+        "uniqueId": "-2555716914017590562.-2754623898014187772",
+        "auxData": {
+          "isDefault": true,
+          "type": "default",
+          "frameId": "DD5933024326E91DAEB9EEED8770A49C"
+        }
+      }
+    }
+  },
+  {
+    "method": "Page.domContentEventFired",
+    "params": {
+      "timestamp": 247276.167128
+    }
+  },
+  {
+    "method": "Page.loadEventFired",
+    "params": {
+      "timestamp": 247276.16723
+    }
+  },
+  {
+    "method": "Page.frameStoppedLoading",
+    "params": {
+      "frameId": "DD5933024326E91DAEB9EEED8770A49C"
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940564964.102,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940564968.55,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940564972.668,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940564975.037,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940564976.837,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940564978.401,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940565472.914,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940565475.833,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940565478.992,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940565481.062,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940565482.715,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940565484.217,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940571218.065,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940571222.545,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940571227.728,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940571231.066,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940571233.743,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940571236.214,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940579491.341,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940579496.058,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940579501.428,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940579504.946,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940579507.857,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940579510.491,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940587840.634,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940587845.208,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940587850.425,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940587853.66,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940587856.324,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940587859.045,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940591960.269,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940591964.859,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940591969.897,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940591973.244,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940591975.905,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940591978.418,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940600138.504,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940600142.92,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940600147.767,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940600150.919,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940600153.563,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "type": "warning",
+      "args": [
+        {
+          "type": "string",
+          "value": "THREE.GLTFLoader: Missing min/max properties for accessor POSITION."
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793940600155.952,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "computeBounds",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4730,
+            "columnNumber": 11
+          },
+          {
+            "functionName": "addPrimitiveAttributes",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 4864,
+            "columnNumber": 1
+          },
+          {
+            "functionName": "",
+            "scriptId": "7",
+            "url": "http://127.0.0.1:3076/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+            "lineNumber": 3817,
+            "columnNumber": 12
+          }
+        ]
+      }
+    }
+  }
+]

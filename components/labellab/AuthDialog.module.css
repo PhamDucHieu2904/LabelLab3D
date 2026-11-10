@@ -58,6 +58,37 @@
 .intro p { color: var(--auth-muted); font-size: 15px; line-height: 1.55; }
 .form { display: grid; gap: 19px; }
 .compactForm { margin-top: 26px; }
+.googleOption { display: grid; gap: 16px; }
+.googleButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 50px;
+  padding: 12px 16px;
+  border: 1px solid #dfcfd6;
+  border-radius: 11px;
+  background: #fff;
+  color: var(--auth-ink);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.5;
+  transition: border-color .18s, background-color .18s;
+}
+.googleButton > svg { flex: 0 0 auto; }
+.googleButton:hover { border-color: #bda1ad; background: #fdf5f8; }
+.googleButton:active { background: var(--auth-blush); }
+.googleButton:disabled { cursor: wait; opacity: .7; }
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--auth-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: #eddee4; }
 .field { display: grid; gap: 8px; min-width: 0; }
 .field label { color: var(--auth-ink); font-size: 14px; font-weight: 650; }
 .field input {
@@ -126,7 +157,8 @@
   font-size: 13px;
   line-height: 1.5;
 }
-.serviceError > svg { margin-top: 1px; }
+.serviceError > svg { flex: 0 0 auto; margin-top: 1px; }
+.serviceError > p { margin: 0; }
 .submit {
   display: flex;
   align-items: center;
@@ -148,6 +180,7 @@
 .submit:hover { background: #4a303f; }
 .submit:hover > svg { transform: translateX(3px); }
 .submit:active { transform: translateY(1px); }
+.submit:disabled { cursor: wait; opacity: .7; }
 .footer {
   display: flex;
   flex-wrap: wrap;

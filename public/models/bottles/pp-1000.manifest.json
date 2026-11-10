@@ -1,0 +1,76 @@
+{
+  "id": "pp-1000",
+  "src": "/models/bottles/pp-1000.glb",
+  "sourceName": "PP 1L model web.glb",
+  "sourceBytes": 2635964,
+  "sourceSha256": "532f9413d9fb4e7bdd84711a89b3ce34bff4fd7d26e198878449544c6882f6d4",
+  "bytes": 309916,
+  "sha256": "888f78a9f1376fe11c459d3f2d8b3383679b484ec173a901bdadbbadc8a31596",
+  "binarySha256": "798f6a9aa74e87769cf707a10a7570faa95731886a51ea66d5b18da772bc1143",
+  "units": "metres",
+  "sourceToMetres": 0.1,
+  "volumeMl": 1000,
+  "packaging": "pp",
+  "materialSlots": {
+    "body": [
+      "Body"
+    ],
+    "cap": [
+      "Cap"
+    ],
+    "label": [
+      "Label"
+    ]
+  },
+  "defaultLiquid": null,
+  "compression": {
+    "extension": "KHR_draco_mesh_compression",
+    "encoder": "draco3dgltf 1.5.7",
+    "method": "edgebreaker",
+    "precisionBits": {
+      "POSITION": 18,
+      "NORMAL": 14,
+      "TEXCOORD_0": 16
+    },
+    "lossless": false,
+    "simplification": false,
+    "uncompressedBytes": 2636292,
+    "savedPercent": 88.24,
+    "triangles": 82980,
+    "topologyPreserved": true,
+    "maxPositionErrorMeters": 4.4743839196536263e-7,
+    "maxNormalAngleDegrees": 0.026338905816679775,
+    "maxUvError": 0.00000768899917602539,
+    "maxUvErrorAt4096px": 0.031494140625,
+    "sceneSha256": "9ccaaa725a85fc6b92263442096edf776d05b6128414ab91444bf1c19cb74b05",
+    "decodedPositionHashes": [
+      "319769404b6bcf608d944917c5dfbd26cecc9e5164e524adb9b7fcef9bb44a49",
+      "209d63b6aed0ee274754bc752be47f02d4728c062acf7f1994641bc437ddff23",
+      "d52bb3e6d040160e870d913c7370baf2f62ba875903acbb10398b294d0e20b79",
+      "0f21db0d4119f6966e7076a858ac224a35e6ec6f8310e08aad90087cd8048452"
+    ],
+    "decodedAttributeHashes": [
+      {
+        "POSITION": "319769404b6bcf608d944917c5dfbd26cecc9e5164e524adb9b7fcef9bb44a49",
+        "NORMAL": "f980b7022119ea696ad2daafcd63d079b7befcd1fa42ef2dabeaab646c05d6c0",
+        "TEXCOORD_0": "86e273caa6f99dd8ba05ed1f5d87bd905718a83626e2412570a9a2e7e1a86230"
+      },
+      {
+        "POSITION": "209d63b6aed0ee274754bc752be47f02d4728c062acf7f1994641bc437ddff23",
+        "NORMAL": "a367388334d35ec89813032c55534445da6e0f4e4a26a0ac67da6ca1d91689de",
+        "TEXCOORD_0": "f6280087f79a626ec56a5b623e88828276cd9be64dc989d2455358384db31c21"
+      },
+      {
+        "POSITION": "d52bb3e6d040160e870d913c7370baf2f62ba875903acbb10398b294d0e20b79",
+        "NORMAL": "afa0eb7cd74324baf6e63efd8cff97a4f1fd5c9dfade522af6f7c6df81b2718d",
+        "TEXCOORD_0": "235d03829e24693bbb79643c61d6e397043143fe3dbfc51746646557ccf8fdae",
+        "TEXCOORD_1": "208dad0d342ba0fd7f009f9869fdd9de2a7becdfd7c7f4887328292f703018f8"
+      },
+      {
+        "POSITION": "0f21db0d4119f6966e7076a858ac224a35e6ec6f8310e08aad90087cd8048452",
+        "NORMAL": "71ac66486334bf00d16ea55256addbab1f779e85d09c84b33bcec781817cba6b",
+        "TEXCOORD_0": "7e93e08596ed5141006c1103b06cff1b283ca156b73f242809f8e333af26e1d0"
+      }
+    ]
+  }
+}

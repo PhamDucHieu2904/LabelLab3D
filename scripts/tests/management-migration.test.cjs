@@ -29,7 +29,7 @@ function loadSource(filename) {
   }).outputText, resolved);
   return loaded.exports;
 }
-const { createManagementData, migrateManagementData, BUILTIN_MARKER_KEY } = loadSource(path.join(root, 'lib/admin/management-data'));
+const { createManagementData, migrateManagementData, BUILTIN_MARKER_KEY, BUILTIN_CATEGORY_MARKER_KEY, managementTabs } = loadSource(path.join(root, 'lib/admin/management-data'));
 const legacyIds = ['basil-strawberry', 'can-mango', 'pet-aloe'];
 const related = (key, id) => key === 'models' ? id : `${({ materials: 'mat', displays: 'display', assets: 'asset' })[key]}-${id}`;
 const tables = ['models', 'materials', 'displays', 'assets'];
@@ -67,4 +67,29 @@ test('a fresh admin cache records known built-ins before the first deletion', ()
   for (const key of tables) saved[key] = saved[key].filter(row => row.id !== related(key, 'can-500'));
   const restored = migrateManagementData(initial, saved);
   for (const key of tables) assert.equal(restored[key].some(row => row.id === related(key, 'can-500')), false);
+});
+
+test('admin model and category records expose PP as a first-class packaging category', () => {
+  const initial = createManagementData();
+  const pp = initial.models.find(row => row.id === 'pp-1250');
+  assert.ok(pp);
+  assert.equal(pp.values.category, 'Chai PP');
+  assert.deepEqual(initial.categories.find(row => row.id === 'pp').values, { code: 'pp', order: '4' });
+  assert.ok(initial.models.some(row => row.id === 'pp-1000' && row.values.category === 'Chai PP'));
+  assert.ok(managementTabs.models[0].fields.find(field => field.key === 'category').options.includes('Chai PP'));
+});
+
+test('existing admin caches import the new PP category once and preserve later deletion', () => {
+  const initial = createManagementData();
+  const saved = structuredClone(initial);
+  saved.categories = saved.categories.filter(row => row.id !== 'pp');
+  saved.categories[0].name = 'Custom glass name';
+  saved[BUILTIN_MARKER_KEY] = saved[BUILTIN_MARKER_KEY].filter(row => !row.id.startsWith('pp-'));
+  saved[BUILTIN_CATEGORY_MARKER_KEY] = saved[BUILTIN_CATEGORY_MARKER_KEY].filter(row => row.id !== 'pp');
+  for (const key of tables) saved[key] = saved[key].filter(row => !row.id.includes('pp-'));
+  const migrated = migrateManagementData(initial, saved);
+  assert.equal(migrated.categories.filter(row => row.id === 'pp').length, 1);
+  assert.equal(migrated.categories[0].name, 'Custom glass name');
+  migrated.categories = migrated.categories.filter(row => row.id !== 'pp');
+  assert.equal(migrateManagementData(initial, migrated).categories.some(row => row.id === 'pp'), false);
 });

@@ -1,18 +1,9 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const path = require('node:path');
-const Module = require('node:module');
-const ts = require('typescript');
-const filename = path.resolve(__dirname, '../../lib/labellab/preferences.ts');
-const compiled = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-}).outputText;
-const loaded = new Module(filename, module);
-loaded.filename = filename;
-loaded.paths = module.paths;
-loaded._compile(compiled, filename);
-const { DEFAULT_PREFERENCES: defaults, parsePreferences, loadPreferences, savePreferences, PREFERENCES_KEY } = loaded.exports;
+const loadSource = require('../lib/load-ts-source.cjs').createSourceLoader();
+const { DEFAULT_PREFERENCES: defaults, parsePreferences, loadPreferences, savePreferences, PREFERENCES_KEY,
+  LIQUID_TYPE_IDS, MATERIAL_PREFERENCE_KEYS, pickMaterialPreferences } = loadSource(path.resolve(__dirname, '../../lib/labellab/preferences'));
 const memory = () => {
   const values = new Map();
   return { values, getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
@@ -95,7 +86,7 @@ test('high-resolution transparent story exports persist while legacy records rem
 
 test('bounds clamp finite numeric values and reject coercion or nonfinite data', () => {
   const sanitized = parsePreferences({ labelOffset: -1000, roughness: 2, metalness: -1 });
-  assert.equal(sanitized.labelOffset, -50);
+  assert.equal(sanitized.labelOffset, -100);
   assert.equal(sanitized.roughness, 1);
   assert.equal(sanitized.metalness, 0);
   const invalid = parsePreferences({ labelOffset: Infinity, roughness: '0.8', metalness: NaN, resolution: '1024', grid: 'false' });
@@ -104,6 +95,15 @@ test('bounds clamp finite numeric values and reject coercion or nonfinite data',
   assert.equal(invalid.metalness, defaults.metalness);
   assert.equal(invalid.resolution, defaults.resolution);
   assert.equal(invalid.grid, true);
+});
+
+test('artwork offset restores the full Unity sweep including fine positioning', () => {
+  const storage = memory();
+  for (const labelOffset of [-100, -75.5, 0, 75.5, 100]) {
+    savePreferences({ ...defaults, labelOffset }, storage);
+    assert.equal(loadPreferences(storage).labelOffset, labelOffset);
+  }
+  assert.equal(parsePreferences({ labelOffset: 500 }).labelOffset, 100);
 });
 
 test('unknown models, modes, colors and hostile object values are ignored', () => {
@@ -126,5 +126,57 @@ test('blocked or quota-exhausted storage fails safely and defaults cannot be mut
   first.background = '#000000';
   assert.equal(parsePreferences(null).background, '#d53660');
   assert.equal(Object.isFrozen(defaults), true);
+});
+
+test('expanded properties survive save/restore and material snapshots exclude scene options', () => {
+  const storage = memory();
+  const chosen = { ...defaults, liquidType: 'milk', liquidCustomized: true, capMetalness: .35, capRoughness: .66,
+    bodyMetalness: .24, bodyRoughness: .72, liquidClarity: .04, liquidDensity: .85, liquidTurbidity: .9,
+    liquidBrightness: 1.4, liquidScattering: .8, liquidRoughness: .31, liquidIor: 1.38 };
+  assert.equal(savePreferences(chosen, storage), true);
+  assert.deepEqual(loadPreferences(storage), chosen);
+  const snapshot = pickMaterialPreferences(chosen);
+  assert.deepEqual(Object.keys(snapshot), [...MATERIAL_PREFERENCE_KEYS]);
+  for (const key of MATERIAL_PREFERENCE_KEYS) assert.equal(snapshot[key], chosen[key]);
+  assert.equal(Object.hasOwn(snapshot, 'modelId'), false);
+  assert.equal(Object.hasOwn(snapshot, 'resolution'), false);
+  assert.equal(Object.hasOwn(snapshot, 'sceneMode'), false);
+});
+
+test('optics reject coercion and clamp extreme values before renderer use', () => {
+  const fields = ['capMetalness', 'capRoughness', 'bodyMetalness', 'bodyRoughness', 'liquidClarity',
+    'liquidDensity', 'liquidTurbidity', 'liquidScattering', 'liquidRoughness'];
+  for (const key of fields) {
+    assert.equal(parsePreferences({ [key]: 100 })[key], 1);
+    assert.equal(parsePreferences({ [key]: -100 })[key], 0);
+    for (const value of ['0.5', null, true, NaN, Infinity]) {
+      assert.equal(parsePreferences({ [key]: value })[key], defaults[key]);
+    }
+  }
+  assert.equal(parsePreferences({ liquidBrightness: 10 }).liquidBrightness, 2);
+  assert.equal(parsePreferences({ liquidBrightness: -1 }).liquidBrightness, 0);
+  assert.equal(parsePreferences({ liquidIor: 0 }).liquidIor, 1);
+  assert.equal(parsePreferences({ liquidIor: 5 }).liquidIor, 1.6);
+  assert.equal(parsePreferences({ liquidCustomized: 'true' }).liquidCustomized, false);
+  assert.equal(parsePreferences({ liquidType: '__proto__' }).liquidType, defaults.liquidType);
+  for (const liquidType of LIQUID_TYPE_IDS) assert.equal(parsePreferences({ liquidType }).liquidType, liquidType);
+});
+
+test('legacy saved projects retain native optics and user label/color choices', () => {
+  const legacy = { modelId: 'pet-nata-watermelon', liquidColor: '#FF4430', labelOffset: 3, roughness: .15 };
+  const restored = parsePreferences(legacy);
+  assert.equal(restored.modelId, legacy.modelId);
+  assert.equal(restored.liquidColor, legacy.liquidColor);
+  assert.equal(restored.labelOffset, legacy.labelOffset);
+  assert.equal(restored.roughness, legacy.roughness);
+  assert.equal(restored.liquidCustomized, false);
+  assert.equal(restored.liquidType, 'nata-de-coco');
+  assert.equal(restored.capMetalness, 0);
+  assert.equal(restored.capRoughness, .29);
+  assert.equal(restored.bodyMetalness, 0);
+  assert.equal(restored.bodyRoughness, .075);
+  const oldCan = parsePreferences({ modelId: 'can-320' });
+  assert.equal(oldCan.bodyMetalness, 1);
+  assert.equal(oldCan.bodyRoughness, .22);
 });
 

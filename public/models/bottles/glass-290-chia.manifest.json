@@ -1,0 +1,125 @@
+{
+  "id": "glass-290-chia",
+  "src": "/models/bottles/glass-290-chia.glb",
+  "sourceName": "Glass 290ml model (Chia) web.glb",
+  "sourceBytes": 2160168,
+  "sourceSha256": "1346a16a826cfde3b93c8070b116c9f4eb4cac76a4cf0fe0decc7d779b7ea779",
+  "bytes": 435548,
+  "sha256": "32014ba5d4aa0c034e9392f8375a2331b042e179f609d0ccb5ee841161a20e59",
+  "binarySha256": "de7ff3494d8fa87198ba1919f913fd5b0c21e3e1cdda3224fd2747f63579109b",
+  "neckOptics": {
+    "tracer": "pullcap-hollow-glass-neck-v1",
+    "wallThicknessMetres": 0.0013,
+    "geometrySource": "canonical Neck already closed",
+    "innerShellAdded": false
+  },
+  "sourceToMetres": 0.1,
+  "units": "metres",
+  "volumeMl": 290,
+  "defaultLiquid": "chia",
+  "blankLabel": "white",
+  "geometry": {
+    "canonicalSource": "glass-290-basil-web.glb",
+    "canonicalSourceSha256": "4cc5032f0f40d48de156af9d50962d65b329883f7ed44df1e1bdba4a69547502",
+    "canonicalParts": [
+      "Body",
+      "Neck",
+      "Water"
+    ],
+    "sourcePartsRetained": [
+      "Golden Cap",
+      "Label",
+      "Seeds"
+    ],
+    "sourceUnitsPerCanonicalMetre": 10,
+    "sourceYOffset": 0.9023135900497437
+  },
+  "materialSlots": {
+    "body": [
+      "Body",
+      "Neck"
+    ],
+    "cap": [
+      "GoldenCap"
+    ],
+    "label": [
+      "PaperLabel"
+    ],
+    "liquid": [
+      "Water"
+    ],
+    "inclusions": [
+      "Chia Seeds"
+    ]
+  },
+  "compression": {
+    "extension": "KHR_draco_mesh_compression",
+    "encoder": "draco3dgltf 1.5.7",
+    "method": "edgebreaker",
+    "precisionBits": {
+      "POSITION": 18,
+      "NORMAL": 14,
+      "TEXCOORD_0": 16
+    },
+    "lossless": false,
+    "simplification": false,
+    "uncompressedBytes": 2791420,
+    "savedPercent": 84.4,
+    "triangles": 118045,
+    "topologyPreserved": true,
+    "maxPositionErrorMeters": 4.842947594901767e-7,
+    "maxNormalAngleDegrees": 0.014101263701715097,
+    "maxUvError": 0.00000762939453125,
+    "maxUvErrorAt4096px": 0.03125,
+    "sceneSha256": "43de22724c4eb8a45d98d94f242b13283145a1b9330fa4d07c57c2b6d049d332",
+    "decodedPositionHashes": [
+      "afac63f5cbb462fe896e85a17eba2ca7d458ce8f88fcb1ff950d2f29ea3dc90d",
+      "84dd8fb5b8c1852392656ff108266d522ff7f153a4c80cb6263b3d0be12f2f22",
+      "ab96906b2231abc6a693c7095e5a11407a933081f6df24f7404600f2c4f755f2",
+      "ac0a3d90c15d5a8001c8ff7619b59888d149dc47b764e6c52c5f279f32d140d2",
+      "cc7e4b75450d294409e83134f5be3532b24fe68bfe5b46e65d653ff6f9d613df",
+      "1f7a5052545ae8c9af079787181d3c29f4ee9e37129c715a7ff151a66979fb27",
+      "60bfd5d1059082a4d53be0dcbb0eb83a84e6cedb9525958a2b5980317693b5a2",
+      "c5a1901a72f8131d50d8067baf0d1aae988ed8714e5b0c1a2a5c0dcdac83a048"
+    ],
+    "decodedAttributeHashes": [
+      {
+        "POSITION": "afac63f5cbb462fe896e85a17eba2ca7d458ce8f88fcb1ff950d2f29ea3dc90d",
+        "NORMAL": "284eff108144295efcc6d59bfee41ee988a7615a69ad1a5439826b3b15d0f827",
+        "TEXCOORD_0": "c8a576152c51c31251717a42317c79f5a77aaf03d0c99dab6337eb6e117d4136"
+      },
+      {
+        "POSITION": "84dd8fb5b8c1852392656ff108266d522ff7f153a4c80cb6263b3d0be12f2f22",
+        "NORMAL": "bf57604d277cd14423bf002378f1ce15f10ef56ee6ee804105696ec0cc10c23c",
+        "TEXCOORD_0": "90ec1aaf0c6f4e77d627aace7a989a852f7996a4dffef40b536308b5d024c0ed"
+      },
+      {
+        "POSITION": "ab96906b2231abc6a693c7095e5a11407a933081f6df24f7404600f2c4f755f2",
+        "NORMAL": "abadb447a5a33c92bb8b232df2f48cba6b3cfad64ab2df36b3d8b148234e5fab",
+        "TEXCOORD_0": "cdfcebde639aca91ed05ecf826046ed137f161ef1b8166f2136dafa85f2a51ad"
+      },
+      {
+        "POSITION": "ac0a3d90c15d5a8001c8ff7619b59888d149dc47b764e6c52c5f279f32d140d2",
+        "NORMAL": "fc25ee5afc66b7db20fbd10903b546a915b4a3aea94f7346fca4caceb1ad8e7a",
+        "TEXCOORD_0": "03afefb95c243dc6efbe2cb5a781949bd2f8022d1625b24a606722f37de05dac"
+      },
+      {
+        "POSITION": "cc7e4b75450d294409e83134f5be3532b24fe68bfe5b46e65d653ff6f9d613df",
+        "NORMAL": "a1cd68d6c71711fc7a957c296ff39bbdb49e823de2a52b8f39bab755e99e9bac"
+      },
+      {
+        "POSITION": "1f7a5052545ae8c9af079787181d3c29f4ee9e37129c715a7ff151a66979fb27",
+        "NORMAL": "1dd5aefbf4a44a2c165ff1f42ce96af7972c1db171339b32dc92e0a3268b6cf4"
+      },
+      {
+        "POSITION": "60bfd5d1059082a4d53be0dcbb0eb83a84e6cedb9525958a2b5980317693b5a2",
+        "NORMAL": "419bd27c9814121eef1b18b414e72219af431a22a0419fa8fa60166a59dbc20d"
+      },
+      {
+        "POSITION": "c5a1901a72f8131d50d8067baf0d1aae988ed8714e5b0c1a2a5c0dcdac83a048",
+        "NORMAL": "0166b1a369ee10282cd8cf529cc40c35f661974d3abe7bcbe15aacf3edecb769",
+        "TEXCOORD_0": "549c864ffbcab86e85a9348dba614dfede8caa34bdd15fb1ed8d65a98810478c"
+      }
+    ]
+  }
+}

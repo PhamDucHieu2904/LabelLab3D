@@ -1,0 +1,84 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const THREE = require('three');
+const load = require('../lib/load-ts-source.cjs').createSourceLoader();
+
+test('Neck liquid registration exposes live optics uniforms and callback updates', () => {
+  const { createGlassNeckMaterialContext } = load(path.resolve(__dirname, '../../lib/viewer/glass-neck-material.ts'));
+  const { createExportRefractionSession } = load(path.resolve(__dirname, '../../lib/mockup/export-refraction.ts'));
+  const root = new THREE.Group();
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(.015,.018,.025,16,1,true), new THREE.MeshPhysicalMaterial());
+  root.add(neck);
+  const context = createGlassNeckMaterialContext(root, () => 1);
+  const material = neck.material.clone();
+  context.configure(material, neck);
+  const liquid = new THREE.Color('#be2838');
+  const state = { clarity: .7, density: .3, turbidity: .2, brightness: 1, scattering: .2, roughness: .14, ior: 1.333 };
+  assert.equal(typeof context.registerLiquid, 'function');
+  context.registerLiquid(liquid, state);
+  const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.physical.vertexShader, fragmentShader: THREE.ShaderLib.physical.fragmentShader };
+  material.onBeforeCompile(shader, {});
+  assert.ok(shader.fragmentShader.includes('glassNeckLiquidClarity'));
+  assert.ok(shader.fragmentShader.includes('glassNeckLiquidCapture'));
+  assert.equal(shader.uniforms.glassNeckLiquidClarity.value, .7);
+  context.updateLiquid({ ...state, clarity: .2, density: .8, ior: 1.5 }, '#123456');
+  assert.equal(shader.uniforms.glassNeckLiquidClarity.value, .2);
+  assert.equal(shader.uniforms.glassNeckLiquidDensity.value, .8);
+  assert.equal(shader.uniforms.glassNeckLiquidIor.value, 1.5);
+  assert.equal(shader.uniforms.glassNeckLiquidColor.value.getHexString(), '123456');
+  const { configureLiveLiquidOptics, liquidOpticsUpdates } = load(path.resolve(__dirname, '../../lib/viewer/liquid-adjustments'));
+  const waterMaterial = new THREE.MeshPhysicalMaterial();
+  configureLiveLiquidOptics(waterMaterial, 'liquid');
+  context.registerLiquid(liquid, state, waterMaterial);
+  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera();
+  camera.position.set(0, .1, .2); camera.updateMatrixWorld();
+  liquidOpticsUpdates.get(waterMaterial)({ ...state, clarity: .12, brightness: 1.5 }, '#654321');
+  material.onBeforeRender({}, scene, camera, neck.geometry, neck, null);
+  assert.equal(shader.uniforms.glassNeckLiquidClarity.value, .12, 'real liquid callback reaches Neck on the next draw');
+  assert.equal(shader.uniforms.glassNeckLiquidBrightness.value, 1.5);
+  assert.equal(shader.uniforms.glassNeckLiquidColor.value.getHexString(), '654321');
+  liquidOpticsUpdates.get(waterMaterial)(undefined, '#be2838');
+  material.onBeforeRender({}, scene, camera, neck.geometry, neck, null);
+  assert.equal(shader.uniforms.glassNeckLiquidClarity.value, state.clarity, 'reset restores the native water optics');
+  context.registerLiquid(liquid, { clarity: 0, density: 1, turbidity: 1, brightness: 1, scattering: .9, roughness: .8, ior: 1.333 }, material);
+  assert.equal(shader.uniforms.glassNeckLiquidClarity.value, 0);
+  assert.equal(shader.uniforms.glassNeckLiquidDensity.value, 1);
+  neck.material = material;
+  const exportRoot = new THREE.Group(); exportRoot.add(neck); // configured Neck is the real export material
+  const session = createExportRefractionSession(exportRoot);
+  const exportShader = { uniforms: { transmissionSamplerMap: { value: null }, transmissionSamplerSize: { value: new THREE.Vector2(1, 1) } }, vertexShader: THREE.ShaderLib.physical.vertexShader, fragmentShader: THREE.ShaderLib.physical.fragmentShader };
+  material.onBeforeCompile(exportShader, {});
+  assert.match(exportShader.fragmentShader, /getTransmissionSample\s*\(/);
+  assert.ok(exportShader.fragmentShader.includes('mockupExportRefractionRegion'));
+  assert.ok(exportShader.fragmentShader.includes('getTransmissionSample(uv,'), 'Neck rays may cross a tile edge before atlas coordinates are applied');
+  assert.ok(!exportShader.fragmentShader.includes('textureLod(transmissionSamplerMap'), 'Neck cannot bypass the atlas helper');
+  const atlas = new THREE.Texture();
+  session.bindAtlas(atlas, 400, 300, { x: 100, y: 200, width: 400, height: 300 }, 1000);
+  session.setTile({ x: 200, y: 250, width: 200, height: 150 });
+  assert.equal(exportShader.uniforms.mockupExportRefractionMap.value, atlas);
+  assert.deepEqual(exportShader.uniforms.mockupExportRefractionRegion.value.toArray(), [.25, 1/3, .5, .5]);
+  session.dispose();
+  atlas.dispose();
+  context.dispose(); material.dispose(); neck.geometry.dispose(); neck.material.dispose(); waterMaterial.dispose();
+});
+
+test('dense milk keeps a bounded captured surface contribution through the neck', () => {
+  const { createGlassNeckMaterialContext } = load(path.resolve(__dirname, '../../lib/viewer/glass-neck-material.ts'));
+  const root = new THREE.Group();
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(.015, .018, .025, 16, 1, true), new THREE.MeshPhysicalMaterial());
+  root.add(neck);
+  const context = createGlassNeckMaterialContext(root, () => 1);
+  const material = neck.material.clone();
+  context.configure(material, neck);
+  const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.physical.vertexShader, fragmentShader: THREE.ShaderLib.physical.fragmentShader };
+  material.onBeforeCompile(shader, {});
+  context.registerLiquid(new THREE.Color('#fff5e4'), {
+    clarity: 0, density: 1, turbidity: 1, brightness: 1, scattering: .9, roughness: .38, ior: 1.333,
+  }, material, .18);
+  assert.ok(shader.fragmentShader.includes('glassNeckLiquidSurfaceCapture'));
+  assert.ok(shader.fragmentShader.includes('vec3 surfaceBase=mix(diffuse,pigment,haze)'), 'surface capture must retain density/turbidity/scattering haze');
+  assert.equal(shader.uniforms.glassNeckLiquidSurfaceCapture.value, .18);
+  assert.equal(shader.uniforms.glassNeckLiquidClarity.value, 0);
+  context.dispose(); material.dispose(); neck.geometry.dispose(); neck.material.dispose();
+});

@@ -20,8 +20,10 @@ import type {
   MockupBackdropPainter,
 } from "@/lib/mockup/contracts";
 import type { ScenePreferences } from "@/lib/labellab/preferences";
+import { createMaterialOverrides } from "@/lib/labellab/material-overrides";
 import { paintRenderBackdrop, prepareRenderBackdrop, snapshotRenderBackdrop } from "@/lib/labellab/render-backdrop";
 import { MOCKUP_ASPECTS as aspects } from "@/lib/mockup/camera";
+import { artworkEditAnimation } from "@/lib/labellab/artwork-edit-motion";
 
 export interface SceneCanvasHandle {
   capture: (onProgress?: (progress: number) => void) => Promise<Blob>;
@@ -35,6 +37,7 @@ interface Props {
   model: LabModel;
   settings: ScenePreferences;
   artwork?: string;
+  artworkEditing?: boolean;
   onStatus: (status: MockupStatus) => void;
   renderCanvasRef?: RefObject<HTMLCanvasElement | null>;
   interaction?: "studio" | "drag-only";
@@ -44,31 +47,29 @@ interface Props {
 function applyMotion(
   runtime: MockupRuntime,
   settings: Pick<ScenePreferences, "sceneMode" | "motion">,
+  artworkEditing = false,
 ) {
+  const animation = artworkEditAnimation(settings, artworkEditing);
   runtime.setAnimation({
-    mode: settings.sceneMode === "studio" ? "off" : settings.motion,
-    playing:
-      settings.sceneMode === "website" &&
-      settings.motion !== "off" &&
-      !matchMedia("(prefers-reduced-motion: reduce)").matches,
-    speed: 1,
+    ...animation,
+    playing: animation.playing && !matchMedia("(prefers-reduced-motion: reduce)").matches,
   });
 }
 
 const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
-  { model, settings, artwork, onStatus, renderCanvasRef, interaction = "studio", displayScale = 1, paintBackground },
+  { model, settings, artwork, artworkEditing = false, onStatus, renderCanvasRef, interaction = "studio", displayScale = 1, paintBackground },
   ref,
 ) {
   const outerRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<MockupRuntime | null>(null);
-  const propsRef = useRef({ model, settings, artwork, onStatus, paintBackground });
+  const propsRef = useRef({ model, settings, artwork, artworkEditing, onStatus, paintBackground });
   const [readyVersion, setReadyVersion] = useState(0);
   const [status, setStatus] = useState("loading-model");
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   useEffect(() => {
-    propsRef.current = { model, settings, artwork, onStatus, paintBackground };
+    propsRef.current = { model, settings, artwork, artworkEditing, onStatus, paintBackground };
   });
 
   useImperativeHandle(
@@ -192,42 +193,21 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
         ? { type: "white" }
         : { type: "transparent" },
     );
-    applyMotion(runtime, {
-      sceneMode: settings.sceneMode,
-      motion: settings.motion,
-    });
-    runtime.setMaterialOverrides({
-      ...(model.asset.materialSlots?.liquid?.length
-        ? { liquid: { color: settings.liquidColor } }
-        : {}),
-      ...(model.asset.materialSlots?.cap?.length &&
-      settings.capColor.toLowerCase() !==
-        getModelMaterialDefaults(model.id).capColor.toLowerCase()
-        ? { cap: { color: settings.capColor } }
-        : {}),
-      label: {
-        textureOffsetX: settings.labelOffset / 100,
-        roughness: settings.roughness,
-        metalness: settings.metalness,
-      },
-    });
-  }, [
-    model,
-    settings.sceneMode,
-    settings.motion,
-    settings.liquidColor,
-    settings.capColor,
-    settings.labelOffset,
-    settings.roughness,
-    settings.metalness,
-    readyVersion,
-  ]);
+    runtime.setMaterialOverrides(createMaterialOverrides(settings, model, getModelMaterialDefaults(model.id)));
+  }, [model, settings, readyVersion]);
+
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    runtime.setPaused(artworkEditing);
+    applyMotion(runtime, { sceneMode: settings.sceneMode, motion: settings.motion }, artworkEditing);
+  }, [settings.sceneMode, settings.motion, artworkEditing, readyVersion]);
 
   useEffect(() => {
     const media = matchMedia("(prefers-reduced-motion: reduce)");
     const sync = () => {
       if (runtimeRef.current)
-        applyMotion(runtimeRef.current, propsRef.current.settings);
+        applyMotion(runtimeRef.current, propsRef.current.settings, propsRef.current.artworkEditing);
     };
     media.addEventListener("change", sync);
     return () => media.removeEventListener("change", sync);

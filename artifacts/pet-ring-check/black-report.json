@@ -1,0 +1,43 @@
+{
+  "results": {
+    "noTirFallback": {
+      "glError": 0,
+      "materials": [
+        {
+          "name": "Ring",
+          "type": "MeshPhysicalMaterial",
+          "color": "ffffff",
+          "roughness": 0.055,
+          "metalness": 0,
+          "thickness": 0.0024,
+          "transmission": 1,
+          "ior": 1.57,
+          "program": "pet-closed-flange-v1"
+        }
+      ],
+      "bounds": [
+        [
+          -0.016440391540527344,
+          0.15303754806518557,
+          -0.016440391540527344
+        ],
+        [
+          0.016440391540527344,
+          0.15542478561401368,
+          0.016440391540527344
+        ]
+      ],
+      "alpha": {
+        "clear": 0,
+        "partial": 0,
+        "opaque": 800000
+      },
+      "sample": [
+        232.50853333333333,
+        186.7484,
+        88.3296
+      ]
+    }
+  },
+  "errors": []
+}

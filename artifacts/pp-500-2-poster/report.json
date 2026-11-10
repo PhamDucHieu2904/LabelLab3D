@@ -1,0 +1,245 @@
+{
+  "baseline": {
+    "options": {},
+    "samples": {
+      "underside": [
+        231,
+        235,
+        244,
+        255
+      ],
+      "side": [
+        234,
+        238,
+        246,
+        255
+      ]
+    },
+    "materials": [
+      {
+        "mesh": "Body",
+        "material": "Body",
+        "type": "MeshStandardMaterial",
+        "userData": {
+          "bottleProfile": "pp-opaque-v1"
+        },
+        "visible": true,
+        "renderOrder": 0,
+        "color": "ffffff",
+        "roughness": 0.3,
+        "side": 0,
+        "depthWrite": true,
+        "transparent": false,
+        "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}",
+        "matrix": [
+          0.15240125951256953,
+          0,
+          0,
+          0,
+          0,
+          0.4994072493992458,
+          0,
+          0,
+          0,
+          0,
+          0.15240125951256953,
+          0,
+          2.5885747782188405e-7,
+          -0.0005927506007542549,
+          2.681023877243388e-7,
+          1
+        ]
+      },
+      {
+        "mesh": "Cap",
+        "material": "Cap",
+        "type": "MeshStandardMaterial",
+        "userData": {
+          "bottleProfile": "pp-opaque-v1"
+        },
+        "visible": true,
+        "renderOrder": 0,
+        "color": "ffffff",
+        "roughness": 0.29,
+        "side": 2,
+        "depthWrite": true,
+        "transparent": false,
+        "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}",
+        "matrix": [
+          0.09509918167876182,
+          0,
+          0,
+          0,
+          0,
+          0.04754959083938091,
+          0,
+          0,
+          0,
+          0,
+          0.09509918167876182,
+          0,
+          2.5885747782188405e-7,
+          0.45296338376519985,
+          2.681023877243388e-7,
+          1
+        ]
+      },
+      {
+        "mesh": "Label",
+        "material": "Label",
+        "type": "MeshStandardMaterial",
+        "userData": {
+          "bottleProfile": "pp-opaque-v1"
+        },
+        "visible": true,
+        "renderOrder": 0,
+        "color": "ffffff",
+        "roughness": 0.28,
+        "side": 2,
+        "depthWrite": true,
+        "transparent": false,
+        "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}",
+        "matrix": [
+          0.1551038506615635,
+          0,
+          0,
+          0,
+          0,
+          0.41936685959660747,
+          0,
+          0,
+          0,
+          0,
+          0.1551038506615635,
+          0,
+          2.5885747782188405e-7,
+          -0.0708169373762848,
+          2.681023877243388e-7,
+          1
+        ]
+      }
+    ],
+    "frames": {
+      "initial": {
+        "samples": {
+          "underside": [
+            231,
+            235,
+            244,
+            255
+          ],
+          "side": [
+            234,
+            238,
+            246,
+            255
+          ]
+        },
+        "materials": [
+          {
+            "mesh": "Body",
+            "material": "Body",
+            "type": "MeshStandardMaterial",
+            "userData": {
+              "bottleProfile": "pp-opaque-v1"
+            },
+            "visible": true,
+            "renderOrder": 0,
+            "color": "ffffff",
+            "roughness": 0.3,
+            "side": 0,
+            "depthWrite": true,
+            "transparent": false,
+            "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}",
+            "matrix": [
+              0.15240125951256953,
+              0,
+              0,
+              0,
+              0,
+              0.4994072493992458,
+              0,
+              0,
+              0,
+              0,
+              0.15240125951256953,
+              0,
+              2.5885747782188405e-7,
+              -0.0005927506007542549,
+              2.681023877243388e-7,
+              1
+            ]
+          },
+          {
+            "mesh": "Cap",
+            "material": "Cap",
+            "type": "MeshStandardMaterial",
+            "userData": {
+              "bottleProfile": "pp-opaque-v1"
+            },
+            "visible": true,
+            "renderOrder": 0,
+            "color": "ffffff",
+            "roughness": 0.29,
+            "side": 2,
+            "depthWrite": true,
+            "transparent": false,
+            "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}",
+            "matrix": [
+              0.09509918167876182,
+              0,
+              0,
+              0,
+              0,
+              0.04754959083938091,
+              0,
+              0,
+              0,
+              0,
+              0.09509918167876182,
+              0,
+              2.5885747782188405e-7,
+              0.45296338376519985,
+              2.681023877243388e-7,
+              1
+            ]
+          },
+          {
+            "mesh": "Label",
+            "material": "Label",
+            "type": "MeshStandardMaterial",
+            "userData": {
+              "bottleProfile": "pp-opaque-v1"
+            },
+            "visible": true,
+            "renderOrder": 0,
+            "color": "ffffff",
+            "roughness": 0.28,
+            "side": 2,
+            "depthWrite": true,
+            "transparent": false,
+            "shader": "onBeforeCompile( /* shaderobject, renderer */ ) {}",
+            "matrix": [
+              0.1551038506615635,
+              0,
+              0,
+              0,
+              0,
+              0.41936685959660747,
+              0,
+              0,
+              0,
+              0,
+              0.1551038506615635,
+              0,
+              2.5885747782188405e-7,
+              -0.0708169373762848,
+              2.681023877243388e-7,
+              1
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

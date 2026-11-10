@@ -51,6 +51,25 @@ export function fitMockupCamera(bounds: THREE.Box3, direction: THREE.Vector3, as
   return Math.max(distance, bounds.getSize(new THREE.Vector3()).length() * 0.55, 0.001);
 }
 
+/** Keep newly imported assets inside authored view presets without changing legacy framing. */
+export function authoredMockupCameraFrame(
+  bounds: THREE.Box3,
+  asset: { src: string; cameraFraming?: 'bounds' },
+  preset: Parameters<typeof unityCameraDestination>[0],
+  aspect: number,
+) {
+  const authored = unityCameraDestination(preset);
+  const direction = mockupCameraDirection(preset);
+  if (asset.cameraFraming !== 'bounds') {
+    return { distanceMetres: authored.distanceMetres, fieldOfView: authored.fieldOfView, target: unityMockupCameraFocus(bounds, asset.src) };
+  }
+  return {
+    distanceMetres: Math.max(authored.distanceMetres, fitMockupCamera(bounds, direction, aspect, authored.fieldOfView, 0.8)),
+    fieldOfView: authored.fieldOfView,
+    target: bounds.getCenter(new THREE.Vector3()),
+  };
+}
+
 /** Conservative radial envelope keeps a freely rotated product inside its fit. */
 export function mockupOrbitBounds(bounds: THREE.Box3): THREE.Box3 {
   const center = bounds.getCenter(new THREE.Vector3());

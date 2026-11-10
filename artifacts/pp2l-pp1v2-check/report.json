@@ -1,0 +1,486 @@
+{
+  "pp-2000-direct": {
+    "options": {
+      "id": "pp-2000"
+    },
+    "glError": 0,
+    "materials": [
+      {
+        "mesh": "Body",
+        "material": "Body",
+        "color": "ffffff",
+        "roughness": 0.3,
+        "transparent": false,
+        "visible": true
+      },
+      {
+        "mesh": "Cap",
+        "material": "Cap",
+        "color": "ffffff",
+        "roughness": 0.29,
+        "transparent": false,
+        "visible": true
+      },
+      {
+        "mesh": "Label",
+        "material": "Label",
+        "color": "ffffff",
+        "roughness": 0.28,
+        "transparent": false,
+        "visible": true
+      }
+    ],
+    "bounds": [
+      [
+        -0.04562241660186573,
+        0.0001506924629211398,
+        -0.05053175681347
+      ],
+      [
+        0.04552393916749367,
+        0.29668155923325,
+        0.050541613997134506
+      ]
+    ],
+    "size": [
+      0.0911463557693594,
+      0.29653086677032886,
+      0.1010733708106045
+    ],
+    "frames": {
+      "initial": {
+        "samples": {},
+        "materials": [
+          {
+            "mesh": "Body",
+            "material": "Body",
+            "color": "ffffff",
+            "roughness": 0.3,
+            "transparent": false,
+            "visible": true
+          },
+          {
+            "mesh": "Cap",
+            "material": "Cap",
+            "color": "ffffff",
+            "roughness": 0.29,
+            "transparent": false,
+            "visible": true
+          },
+          {
+            "mesh": "Label",
+            "material": "Label",
+            "color": "ffffff",
+            "roughness": 0.28,
+            "transparent": false,
+            "visible": true
+          }
+        ]
+      }
+    }
+  },
+  "pp-2000-pooled": {
+    "options": {
+      "id": "pp-2000",
+      "pooled": true
+    },
+    "glError": 0,
+    "materials": [
+      {
+        "mesh": "Body",
+        "material": "Body",
+        "color": "ffffff",
+        "roughness": 0.3,
+        "transparent": false,
+        "visible": true
+      },
+      {
+        "mesh": "Cap",
+        "material": "Cap",
+        "color": "ffffff",
+        "roughness": 0.29,
+        "transparent": false,
+        "visible": true
+      },
+      {
+        "mesh": "Label",
+        "material": "Label",
+        "color": "ffffff",
+        "roughness": 0.28,
+        "transparent": false,
+        "visible": true
+      }
+    ],
+    "bounds": [
+      [
+        -0.04562241660186573,
+        0.0001506924629211398,
+        -0.05053175681347
+      ],
+      [
+        0.04552393916749367,
+        0.29668155923325,
+        0.050541613997134506
+      ]
+    ],
+    "size": [
+      0.0911463557693594,
+      0.29653086677032886,
+      0.1010733708106045
+    ],
+    "frames": {
+      "initial": {
+        "samples": {},
+        "materials": [
+          {
+            "mesh": "Body",
+            "material": "Body",
+            "color": "ffffff",
+            "roughness": 0.3,
+            "transparent": false,
+            "visible": true
+          },
+          {
+            "mesh": "Cap",
+            "material": "Cap",
+            "color": "ffffff",
+            "roughness": 0.29,
+            "transparent": false,
+            "visible": true
+          },
+          {
+            "mesh": "Label",
+            "material": "Label",
+            "color": "ffffff",
+            "roughness": 0.28,
+            "transparent": false,
+            "visible": true
+          }
+        ]
+      }
+    }
+  },
+  "pp-2000-above": {
+    "options": {
+      "id": "pp-2000",
+      "above": true
+    },
+    "glError": 0,
+    "materials": [
+      {
+        "mesh": "Body",
+        "material": "Body",
+        "color": "ffffff",
+        "roughness": 0.3,
+        "transparent": false,
+        "visible": true
+      },
+      {
+        "mesh": "Cap",
+        "material": "Cap",
+        "color": "ffffff",
+        "roughness": 0.29,
+        "transparent": false,
+        "visible": true
+      },
+      {
+        "mesh": "Label",
+        "material": "Label",
+        "color": "ffffff",
+        "roughness": 0.28,
+        "transparent": false,
+        "visible": true
+      }
+    ],
+    "bounds": [
+      [
+        -0.04562241660186573,
+        0.0001506924629211398,
+        -0.05053175681347
+      ],
+      [
+        0.04552393916749367,
+        0.29668155923325,
+        0.050541613997134506
+      ]
+    ],
+    "size": [
+      0.0911463557693594,
+      0.29653086677032886,
+      0.1010733708106045
+    ],
+    "frames": {
+      "initial": {
+        "samples": {},
+        "materials": [
+          {
+            "mesh": "Body",
+            "material": "Body",
+            "color": "ffffff",
+            "roughness": 0.3,
+            "transparent": false,
+            "visible": true
+          },
+          {
+            "mesh": "Cap",
+            "material": "Cap",
+            "color": "ffffff",
+            "roughness": 0.29,
+            "transparent": false,
+            "visible": true
+          },
+          {
+            "mesh": "Label",
+            "material": "Label",
+            "color": "ffffff",
+            "roughness": 0.28,
+            "transparent": false,
+            "visible": true
+          }
+        ]
+      }
+    }
+  },
+  "pp-1000-2-direct": {
+    "options": {
+      "id": "pp-1000-2"
+    },
+    "glError": 0,
+    "materials": [
+      {
+        "mesh": "Body",
+        "material": "Body",
+        "color": "ffffff",
+        "roughness": 0.3,
+        "transparent": false,
+        "visible": true
+      },
+      {
+        "mesh": "Cap",
+        "material": "Cap",
+        "color": "ffffff",
+        "roughness": 0.29,
+        "transparent": false,
+        "visible": true
+      },
+      {
+        "mesh": "Label",
+        "material": "Label",
+        "color": "ffffff",
+        "roughness": 0.28,
+        "transparent": false,
+        "visible": true
+      }
+    ],
+    "bounds": [
+      [
+        -0.04287315418955302,
+        0.0001787781715393011,
+        -0.04287315418955302
+      ],
+      [
+        0.042873149045729524,
+        0.23588526332841175,
+        0.042873149045729524
+      ]
+    ],
+    "size": [
+      0.08574630323528254,
+      0.23570648515687245,
+      0.08574630323528254
+    ],
+    "frames": {
+      "initial": {
+        "samples": {},
+        "materials": [
+          {
+            "mesh": "Body",
+            "material": "Body",
+            "color": "ffffff",
+            "roughness": 0.3,
+            "transparent": false,
+            "visible": true
+          },
+          {
+            "mesh": "Cap",
+            "material": "Cap",
+            "color": "ffffff",
+            "roughness": 0.29,
+            "transparent": false,
+            "visible": true
+          },
+          {
+            "mesh": "Label",
+            "material": "Label",
+            "color": "ffffff",
+            "roughness": 0.28,
+            "transparent": false,
+            "visible": true
+          }
+        ]
+      }
+    }
+  },
+  "pp-1000-2-pooled": {
+    "options": {
+      "id": "pp-1000-2",
+      "pooled": true
+    },
+    "glError": 0,
+    "materials": [
+      {
+        "mesh": "Body",
+        "material": "Body",
+        "color": "ffffff",
+        "roughness": 0.3,
+        "transparent": false,
+        "visible": true
+      },
+      {
+        "mesh": "Cap",
+        "material": "Cap",
+        "color": "ffffff",
+        "roughness": 0.29,
+        "transparent": false,
+        "visible": true
+      },
+      {
+        "mesh": "Label",
+        "material": "Label",
+        "color": "ffffff",
+        "roughness": 0.28,
+        "transparent": false,
+        "visible": true
+      }
+    ],
+    "bounds": [
+      [
+        -0.04287315418955302,
+        0.0001787781715393011,
+        -0.04287315418955302
+      ],
+      [
+        0.042873149045729524,
+        0.23588526332841175,
+        0.042873149045729524
+      ]
+    ],
+    "size": [
+      0.08574630323528254,
+      0.23570648515687245,
+      0.08574630323528254
+    ],
+    "frames": {
+      "initial": {
+        "samples": {},
+        "materials": [
+          {
+            "mesh": "Body",
+            "material": "Body",
+            "color": "ffffff",
+            "roughness": 0.3,
+            "transparent": false,
+            "visible": true
+          },
+          {
+            "mesh": "Cap",
+            "material": "Cap",
+            "color": "ffffff",
+            "roughness": 0.29,
+            "transparent": false,
+            "visible": true
+          },
+          {
+            "mesh": "Label",
+            "material": "Label",
+            "color": "ffffff",
+            "roughness": 0.28,
+            "transparent": false,
+            "visible": true
+          }
+        ]
+      }
+    }
+  },
+  "pp-1000-2-above": {
+    "options": {
+      "id": "pp-1000-2",
+      "above": true
+    },
+    "glError": 0,
+    "materials": [
+      {
+        "mesh": "Body",
+        "material": "Body",
+        "color": "ffffff",
+        "roughness": 0.3,
+        "transparent": false,
+        "visible": true
+      },
+      {
+        "mesh": "Cap",
+        "material": "Cap",
+        "color": "ffffff",
+        "roughness": 0.29,
+        "transparent": false,
+        "visible": true
+      },
+      {
+        "mesh": "Label",
+        "material": "Label",
+        "color": "ffffff",
+        "roughness": 0.28,
+        "transparent": false,
+        "visible": true
+      }
+    ],
+    "bounds": [
+      [
+        -0.04287315418955302,
+        0.0001787781715393011,
+        -0.04287315418955302
+      ],
+      [
+        0.042873149045729524,
+        0.23588526332841175,
+        0.042873149045729524
+      ]
+    ],
+    "size": [
+      0.08574630323528254,
+      0.23570648515687245,
+      0.08574630323528254
+    ],
+    "frames": {
+      "initial": {
+        "samples": {},
+        "materials": [
+          {
+            "mesh": "Body",
+            "material": "Body",
+            "color": "ffffff",
+            "roughness": 0.3,
+            "transparent": false,
+            "visible": true
+          },
+          {
+            "mesh": "Cap",
+            "material": "Cap",
+            "color": "ffffff",
+            "roughness": 0.29,
+            "transparent": false,
+            "visible": true
+          },
+          {
+            "mesh": "Label",
+            "material": "Label",
+            "color": "ffffff",
+            "roughness": 0.28,
+            "transparent": false,
+            "visible": true
+          }
+        ]
+      }
+    }
+  }
+}

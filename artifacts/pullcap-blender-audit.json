@@ -1,0 +1,105 @@
+[
+  {
+    "name": "Cap",
+    "type": "MESH",
+    "vertices": 610,
+    "polygons": 537,
+    "modifiers": [
+      {
+        "name": "Subdivision",
+        "type": "SUBSURF",
+        "show_viewport": true,
+        "show_render": true,
+        "levels": 1,
+        "render_levels": 2
+      },
+      {
+        "name": "Solidify",
+        "type": "SOLIDIFY",
+        "show_viewport": true,
+        "show_render": true,
+        "levels": null,
+        "render_levels": null
+      }
+    ]
+  },
+  {
+    "name": "Neck",
+    "type": "MESH",
+    "vertices": 320,
+    "polygons": 288,
+    "modifiers": [
+      {
+        "name": "Subdivision",
+        "type": "SUBSURF",
+        "show_viewport": true,
+        "show_render": true,
+        "levels": 1,
+        "render_levels": 2
+      },
+      {
+        "name": "Solidify",
+        "type": "SOLIDIFY",
+        "show_viewport": true,
+        "show_render": true,
+        "levels": null,
+        "render_levels": null
+      }
+    ]
+  },
+  {
+    "name": "Label",
+    "type": "MESH",
+    "vertices": 3343,
+    "polygons": 6366,
+    "modifiers": []
+  },
+  {
+    "name": "Body",
+    "type": "MESH",
+    "vertices": 1152,
+    "polygons": 1058,
+    "modifiers": [
+      {
+        "name": "Subdivision",
+        "type": "SUBSURF",
+        "show_viewport": true,
+        "show_render": true,
+        "levels": 1,
+        "render_levels": 2
+      }
+    ]
+  },
+  {
+    "name": "Water",
+    "type": "MESH",
+    "vertices": 544,
+    "polygons": 514,
+    "modifiers": [
+      {
+        "name": "Subdivision",
+        "type": "SUBSURF",
+        "show_viewport": true,
+        "show_render": true,
+        "levels": 1,
+        "render_levels": 2
+      }
+    ]
+  },
+  {
+    "name": "Seeds",
+    "type": "MESH",
+    "vertices": 3960,
+    "polygons": 6600,
+    "modifiers": [
+      {
+        "name": "Subdivision",
+        "type": "SUBSURF",
+        "show_viewport": true,
+        "show_render": true,
+        "levels": 1,
+        "render_levels": 2
+      }
+    ]
+  }
+]

@@ -1,0 +1,119 @@
+{
+  "results": {
+    "context": {
+      "glError": 0,
+      "materials": [
+        {
+          "name": "Ring",
+          "type": "MeshPhysicalMaterial",
+          "color": "ffffff",
+          "roughness": 0.055,
+          "metalness": 0,
+          "thickness": 0.0024,
+          "transmission": 1,
+          "ior": 1.57,
+          "program": "pet-closed-flange-v2"
+        }
+      ],
+      "bounds": [
+        [
+          -0.016440391540527344,
+          0.15303754806518557,
+          -0.016440391540527344
+        ],
+        [
+          0.016440391540527344,
+          0.15542478561401368,
+          0.016440391540527344
+        ]
+      ],
+      "alpha": {
+        "clear": 0,
+        "partial": 0,
+        "opaque": 800000
+      },
+      "sample": [
+        233.27333333333334,
+        237.89266666666666,
+        245.92853333333332
+      ]
+    },
+    "contextSide": {
+      "glError": 0,
+      "materials": [
+        {
+          "name": "Ring",
+          "type": "MeshPhysicalMaterial",
+          "color": "ffffff",
+          "roughness": 0.055,
+          "metalness": 0,
+          "thickness": 0.0024,
+          "transmission": 1,
+          "ior": 1.57,
+          "program": "pet-closed-flange-v2"
+        }
+      ],
+      "bounds": [
+        [
+          -0.016440391540527344,
+          0.15303754806518557,
+          -0.016440391540527344
+        ],
+        [
+          0.016440391540527344,
+          0.15542478561401368,
+          0.016440391540527344
+        ]
+      ],
+      "alpha": {
+        "clear": 0,
+        "partial": 0,
+        "opaque": 800000
+      },
+      "sample": [
+        231.1312,
+        236.02853333333334,
+        244.59773333333334
+      ]
+    },
+    "photo": {
+      "glError": 0,
+      "materials": [
+        {
+          "name": "pet-ring",
+          "type": "MeshPhysicalMaterial",
+          "color": "ffffff",
+          "roughness": 0.055,
+          "metalness": 0,
+          "thickness": 0.0024,
+          "transmission": 1,
+          "ior": 1.57,
+          "program": "pet-closed-flange-v2"
+        }
+      ],
+      "bounds": [
+        [
+          -0.015222887508571148,
+          0.05488533526659012,
+          -0.01520277839154005
+        ],
+        [
+          0.015178983099758625,
+          0.057196035981178284,
+          0.015189814381301403
+        ]
+      ],
+      "alpha": {
+        "clear": 0,
+        "partial": 0,
+        "opaque": 800000
+      },
+      "sample": [
+        215.22386666666668,
+        132.318,
+        64.0536
+      ]
+    }
+  },
+  "errors": []
+}

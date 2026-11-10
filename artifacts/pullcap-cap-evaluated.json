@@ -1,0 +1,23 @@
+{
+  "source": "D:/3D model/Model Bottle Can/Blender Model 1/Glass 290ml napkeo model (Basil).blend",
+  "object": "Cap",
+  "evaluated": true,
+  "evaluation": "Blender depsgraph viewport settings (show_viewport modifiers)",
+  "modifiers": [
+    {
+      "name": "Subdivision",
+      "type": "SUBSURF",
+      "show_viewport": true,
+      "levels": 1
+    },
+    {
+      "name": "Solidify",
+      "type": "SOLIDIFY",
+      "show_viewport": true,
+      "levels": null
+    }
+  ],
+  "vertices": 4588,
+  "polygons": 4588,
+  "output": "D:/program project/3D mockup web version/artifacts/pullcap-cap-evaluated.glb"
+}

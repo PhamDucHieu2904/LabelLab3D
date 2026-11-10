@@ -11,7 +11,7 @@ import { AppearanceHandle, createAppearanceHandle, disposeProduct } from './appe
 import { createPooledAppearanceHandle, type AppearanceWarmupPriority, type PooledAppearanceHandle } from './pooled-appearance';
 import type { LiveMaterialOverrides } from './material-adjustments';
 import { createResourcePrefetcher, type ViewerResourceWindow } from './resource-prefetch';
-import { createProductFramingFrames, createRadialProductEnvelope, fitProductCamera, interpolatePackageAim } from './framing';
+import { createProductFramingFrames, createRadialProductEnvelope, fitProductCamera, interpolatePackageAim, measureProductBounds } from './framing';
 import { packageCapPose, packageEntryScale, packageExitProgress, packageMaximumScale, packageSpinProgress, smoothstep } from './package-motion';
 import { createDaylightEnvironment, environmentCacheKey } from './environment';
 import { createAccentLayer } from './accent-layer';
@@ -598,7 +598,7 @@ export function createProductViewer(
         content.add(gltf.scene);
         if (asset.orientation) content.rotation.set(...asset.orientation);
         content.updateMatrixWorld(true);
-        const originalBounds = new THREE.Box3().setFromObject(content);
+        const originalBounds = measureProductBounds(content);
         const dimensions = originalBounds.getSize(new THREE.Vector3());
         if (!Number.isFinite(dimensions.length()) || dimensions.length() <= 0) {
           disposeProduct(content); throw new Error('Model has empty bounds');
@@ -606,7 +606,7 @@ export function createProductViewer(
         const center = originalBounds.getCenter(new THREE.Vector3());
         content.position.sub(center);
         content.updateMatrixWorld(true);
-        const bounds = new THREE.Box3().setFromObject(content);
+        const bounds = measureProductBounds(content);
         const root = new THREE.Group(); root.add(content);
         const framingPoints = asset.packaging === 'can' ? createRadialProductEnvelope(content, bounds) : undefined;
         loaded = { root, content, bounds, framingPoints, radius: bounds.getBoundingSphere(new THREE.Sphere()).radius, appearance: createHandle(content, asset), asset, definitionKey: nextAssetDefinitionKey };

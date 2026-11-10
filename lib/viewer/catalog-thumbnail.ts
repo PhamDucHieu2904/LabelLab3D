@@ -8,6 +8,7 @@ import { createAppearanceHandle, disposeProduct } from './appearance';
 import { renderBottleScene } from './bottle-materials';
 import type { ProductAppearance, ProductAsset } from '../viewer-config';
 import { publicUrl } from '../public-url';
+import { measureProductBounds } from './framing';
 
 /** One shared renderer, serial still renders and a bounded image cache; cards do not run WebGL loops. */
 const cache = new Map<string, Promise<string>>();
@@ -52,7 +53,7 @@ async function renderThumbnail(asset: ProductAsset, appearance: ProductAppearanc
     unwanted.forEach(object => object.removeFromParent());
     if (asset.orientation) content.rotation.set(...asset.orientation);
     content.updateMatrixWorld(true);
-    const bounds = new THREE.Box3().setFromObject(content);
+    const bounds = measureProductBounds(content);
     const size = bounds.getSize(new THREE.Vector3());
     const extent = Math.max(size.x, size.y, size.z);
     if (!Number.isFinite(extent) || extent <= 0) throw new Error('Empty product model');

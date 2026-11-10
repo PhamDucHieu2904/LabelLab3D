@@ -21,7 +21,8 @@ References reside in the Windows clipboard Temp directory. They are evidence, no
 | Orthogonal moving grid | Reuse established old website grid motion/background behavior | Grid moves behind panels, never captures pointer input |
 | Tilted floating bottle | Website mode starts with tilt and idle rotation enabled | First loaded product animates; Idle stops it; drag takes immediate precedence |
 | Vinut-style studio | Floating library / flexible canvas / inspector | At desktop no overlap; canvas remains dominant on one continuous background |
-| Contextual tool rail | Models, Artwork, Scene, Materials and Export open one floating panel at a time | Active tool has text + selected semantics; closing the active tool returns space to the canvas |
+| Contextual tool rail | Models, Artwork, Scene, Properties and Export open one floating panel at a time | Active tool has text + selected semantics; closing the active tool returns space to the canvas |
+| Properties inspector | Liquid, Cap/Top, Bottle/Body and Label selectors reveal one compact group at a time; only supported model slots appear | Numeric inputs and sliders share values, colors have editable hex fields, and each part can reset independently |
 | Motion rail | Website (tilt/rotate) and Idle (still) | Buttons reflect actual runtime state, mode switch preserves selected model |
 | Focal rail | Front / three-quarter camera views plus zoom/reset | Preset changes visibly update camera, not just selected CSS |
 | Export panel | Format, frame, quality, download action | Real output matches dimensions and selected background |
@@ -30,6 +31,8 @@ References reside in the Windows clipboard Temp directory. They are evidence, no
 | Contact shadow | Soft procedural grounding shadow under product | Shadow follows floor/model position; no hovering |
 
 Terminology: the visible scene switch is **Scene 1** and **Scene 2**. Internally these map to Website and Studio respectively; keep those runtime names inside the implementation. Scene 2 is upright and static by default. Scene 1 is tilted and animated by default. Never apply the Scene 1 tilt to a grounded Scene 2 product.
+
+Current terminology update — 02/11/2026: the former Materials rail label and Settings inspector heading are **Properties**. Liquid editing starts with a drink type and named color presets, followed by color, clarity, density, turbidity and brightness; type-specific optical controls sit in a Fine-tune disclosure. Historical implementation and QA descriptions below retain the labels used at their recorded dates.
 
 ## 3. Layout and visual tokens
 

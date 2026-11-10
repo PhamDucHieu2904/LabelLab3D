@@ -48,6 +48,8 @@ export interface MockupRuntime {
   setFocalLength(preset: MockupFocalPreset): void;
   setBackground(background: MockupBackground): void;
   setAnimation(animation: MockupAnimation): void;
+  /** Suspend background rendering for a modal without resetting the view or animation clock. */
+  setPaused(paused: boolean): void;
   /** Numeric width/height ratio; the host should display the same frame. */
   setAspect(aspect: number): void;
   /** Keyboard-accessible free orbit; pitch increases the polar angle. */
