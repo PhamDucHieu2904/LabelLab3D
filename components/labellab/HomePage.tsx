@@ -18,6 +18,7 @@ import MovingGrid from "./MovingGrid";
 import SiteHeader from "./SiteHeader";
 import CoinPricing from "./CoinPricing";
 import UserProfileCard from "./UserProfileCard";
+import { useAuthDialog } from "./AuthDialog";
 import HomeModelDemo from "./HomeModelDemo";
 import { FEATURED_MODELS } from "@/lib/labellab/catalog";
 import { LABELLAB_UPDATES } from "@/lib/labellab/updates";
@@ -37,7 +38,22 @@ const week = [
 
 export default function HomePage() {
   const [claimed, setClaimed] = useState(false);
+  const [checkinBusy, setCheckinBusy] = useState(false);
   const [featuredModel, setFeaturedModel] = useState(FEATURED_MODELS[0]);
+  const openAuth = useAuthDialog();
+
+  const claimCheckIn = async () => {
+    if (checkinBusy || claimed) return;
+    setCheckinBusy(true);
+    try {
+      const response = await fetch("/api/account/check-in", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: "{}" });
+      if (response.status === 401 || response.status === 403) { openAuth("login"); return; }
+      if (!response.ok) throw new Error("check-in failed");
+      const payload = await response.json() as { claimed?: boolean };
+      if (payload.claimed) { setClaimed(true); window.dispatchEvent(new Event("labellab-account-changed")); }
+    } catch { /* Keep the UI usable when the account service is unavailable. */ }
+    finally { setCheckinBusy(false); }
+  };
 
   return (
     <main className="home-shell">
@@ -148,7 +164,8 @@ export default function HomePage() {
               <button
                 className={`home-checkin-cta home-sheen ${claimed ? "is-claimed" : ""}`}
                 type="button"
-                onClick={() => setClaimed(true)}
+                onClick={() => void claimCheckIn()}
+                disabled={checkinBusy}
                 aria-live="polite"
               >
                 {claimed ? <><Check size={18} /> Reward claimed</> : <><CalendarCheck size={18} /> {"Claim today's +20"}</>}

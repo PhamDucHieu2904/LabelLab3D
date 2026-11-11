@@ -27,8 +27,11 @@ type AuthMode = "login" | "register" | "forgot";
 type Field = "name" | "email" | "password";
 type FieldErrors = Partial<Record<Field, string>>;
 type OpenAuth = (mode?: AuthMode) => void;
+export type AccountUser = { id: string; email: string; name: string; role: "user" | "admin" };
+type AccountContextValue = { user: AccountUser | null; refresh: () => Promise<void> };
 
 const AuthContext = createContext<OpenAuth | null>(null);
+const AccountContext = createContext<AccountContextValue | null>(null);
 
 const copy = {
   login: {
@@ -54,8 +57,15 @@ export function useAuthDialog(): OpenAuth {
   return openAuth;
 }
 
+export function useAccount(): AccountContextValue {
+  const account = useContext(AccountContext);
+  if (!account) throw new Error("useAccount requires AuthDialogProvider.");
+  return account;
+}
+
 export function AuthDialogProvider({ children }: { children: ReactNode }) {
   const [initialMode, setInitialMode] = useState<AuthMode | null>(null);
+  const [user, setUser] = useState<AccountUser | null>(null);
   const [oauthError, setOauthError] = useState("");
   const triggerRef = useRef<HTMLElement | null>(null);
   const openAuth = useCallback<OpenAuth>((mode = "login") => {
@@ -70,6 +80,16 @@ export function AuthDialogProvider({ children }: { children: ReactNode }) {
     setOauthError("");
     triggerRef.current?.focus({ preventScroll: true });
   }, []);
+
+  const refresh = useCallback(async () => {
+    try {
+      const response = await fetch("/api/account/me", { credentials: "same-origin", cache: "no-store" });
+      const payload = await response.json() as { user?: AccountUser | null };
+      setUser(payload.user ?? null);
+    } catch { setUser(null); }
+  }, []);
+
+  useEffect(() => { void refresh(); const onChange = () => { void refresh(); }; window.addEventListener("labellab-account-changed", onChange); return () => window.removeEventListener("labellab-account-changed", onChange); }, [refresh]);
 
   useEffect(() => {
     // Open the native modal after hydration when OAuth returns an error.
@@ -88,8 +108,10 @@ export function AuthDialogProvider({ children }: { children: ReactNode }) {
   return (
     <SessionProvider>
       <AuthContext.Provider value={openAuth}>
-        {children}
-        {initialMode && <AuthDialog initialMode={initialMode} initialGoogleError={oauthError} onDismiss={dismiss} />}
+        <AccountContext.Provider value={{ user, refresh }}>
+          {children}
+          {initialMode && <AuthDialog initialMode={initialMode} initialGoogleError={oauthError} onDismiss={dismiss} />}
+        </AccountContext.Provider>
       </AuthContext.Provider>
     </SessionProvider>
   );
@@ -192,24 +214,30 @@ function AuthDialog({ initialMode, initialGoogleError, onDismiss }: {
         titleId={titleId}
         descriptionId={descriptionId}
         onSwitchMode={switchMode}
+        onAuthenticated={() => {
+          window.dispatchEvent(new Event("labellab-account-changed"));
+          onDismiss();
+        }}
       />
     </dialog>
   );
 }
 
-function AuthForm({ mode, initialEmail, initialGoogleError, titleId, descriptionId, onSwitchMode }: {
+function AuthForm({ mode, initialEmail, initialGoogleError, titleId, descriptionId, onSwitchMode, onAuthenticated }: {
   mode: AuthMode;
   initialEmail: string;
   initialGoogleError: string;
   titleId: string;
   descriptionId: string;
   onSwitchMode: (mode: AuthMode, email: string) => void;
+  onAuthenticated: () => void;
 }) {
   const [values, setValues] = useState({ name: "", email: initialEmail, password: "" });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState("");
   const [googleError, setGoogleError] = useState(initialGoogleError);
   const [googleBusy, setGoogleBusy] = useState(false);
+  const [submitBusy, setSubmitBusy] = useState(false);
   const googlePending = useRef(false);
   const formActive = useRef(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -277,7 +305,7 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
     if (errors[field]) setErrors((current) => ({ ...current, [field]: undefined }));
   };
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (googleBusy) return;
     setGoogleError("");
@@ -295,12 +323,32 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
       return;
     }
 
-    // UI-only until the account service is connected. Never persist credentials
-    // or imply that an account/session/reset email was created successfully.
-    setSubmitError(mode === "forgot"
-      ? "Password reset is not available yet. Please try again later."
-      : "Account access is not available yet. Please try again later.");
-    requestAnimationFrame(() => errorRef.current?.focus());
+    if (mode === "forgot") {
+      setSubmitError("Password reset is not available yet. Please try again later.");
+      requestAnimationFrame(() => errorRef.current?.focus());
+      return;
+    }
+    setSubmitBusy(true);
+    try {
+      const response = await fetch(`/api/account/${mode === "register" ? "register" : "login"}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify(mode === "register"
+          ? { name: values.name.trim(), email: values.email.trim(), password: values.password }
+          : { email: values.email.trim(), password: values.password }),
+      });
+      const payload = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(payload.error || "REQUEST_FAILED");
+      onAuthenticated();
+    } catch (error) {
+      setSubmitError(error instanceof Error && error.message === "INVALID_CREDENTIALS"
+        ? "The email or password is incorrect."
+        : "Account access could not be completed. Please try again.");
+      requestAnimationFrame(() => errorRef.current?.focus());
+    } finally {
+      setSubmitBusy(false);
+    }
   };
 
   return (
@@ -319,7 +367,7 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
               type="button"
               className={styles.googleButton}
               aria-busy={googleBusy}
-              disabled={googleBusy}
+              disabled={googleBusy || submitBusy}
               onClick={() => void continueWithGoogle()}
             >
               <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
@@ -421,8 +469,8 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
             <p>{submitError}</p>
           </div>
         )}
-        <button type="submit" className={styles.submit} disabled={googleBusy}>
-          <span>{content.action}</span><ArrowRight size={19} aria-hidden="true" />
+        <button type="submit" className={styles.submit} disabled={googleBusy || submitBusy}>
+          <span>{submitBusy ? "Please wait…" : content.action}</span><ArrowRight size={19} aria-hidden="true" />
         </button>
       </form>
       <div className={styles.footer}>

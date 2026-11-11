@@ -5,7 +5,7 @@ import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
 import { Bell, Layers3, LogIn, LogOut } from "lucide-react";
 import { LABELLAB_UPDATES } from "@/lib/labellab/updates";
-import { useAuthDialog } from "./AuthDialog";
+import { useAccount, useAuthDialog } from "./AuthDialog";
 import styles from "./SiteHeader.module.css";
 
 type SiteHeaderProps = {
@@ -19,8 +19,9 @@ type SiteHeaderProps = {
 
 export default function SiteHeader({ activePage, disabled = false, onOpenProjects, isLoggedIn, onLogin, onLogout }: SiteHeaderProps) {
   const openAuth = useAuthDialog();
+  const { user } = useAccount();
   const { data: session, status } = useSession();
-  const signedIn = isLoggedIn ?? status === "authenticated";
+  const signedIn = isLoggedIn ?? (Boolean(user) || status === "authenticated");
   const accountLabel = signedIn ? "Log out" : "Login";
   const AccountIcon = signedIn ? LogOut : LogIn;
   return (
@@ -64,16 +65,16 @@ export default function SiteHeader({ activePage, disabled = false, onOpenProject
             </ul>
           </div>
         </details>
-        {signedIn && session?.user && (
-          <span className={styles.accountName} title={session.user.name || session.user.email || undefined}>
-            {session.user.name || session.user.email}
+        {signedIn && (user || session?.user) && (
+          <span className={styles.accountName} title={user?.name || session?.user?.name || user?.email || session?.user?.email || undefined}>
+            {user?.name || session?.user?.name || user?.email || session?.user?.email}
           </span>
         )}
         <button
           className={styles.start}
           type="button"
           aria-label={accountLabel}
-          onClick={signedIn ? (onLogout ?? (() => { void signOut({ redirect: false }); }))
+          onClick={signedIn ? (onLogout ?? (() => { void fetch("/api/account/logout", { method: "POST", credentials: "same-origin" }).finally(() => { void signOut({ redirect: false }); window.dispatchEvent(new Event("labellab-account-changed")); }); }))
             : (onLogin ?? (() => openAuth("login")))}
         >
           <span>{accountLabel}</span><AccountIcon className={styles.icon} aria-hidden="true" />
