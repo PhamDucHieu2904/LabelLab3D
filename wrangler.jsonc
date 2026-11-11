@@ -12,7 +12,8 @@
     {
       "binding": "DB",
       "database_name": "labellab3d-production",
-      "database_id": "dc0975db-13d2-425f-a7c2-b182798e03d2"
+      "database_id": "dc0975db-13d2-425f-a7c2-b182798e03d2",
+      "migrations_dir": "db/migrations"
     }
   ],
   "workers_dev": true,

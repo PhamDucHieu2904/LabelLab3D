@@ -27,7 +27,7 @@ export default function AdminWorkspace({ section }: { section: AdminSection }) {
       <div className={s.sidebarBottom}><span className={s.adminAvatar}>LL</span><div><strong>Quản trị viên</strong><span>Chủ sở hữu</span></div></div>
     </aside>
     <div className={s.mainColumn}>
-      <header className={s.topbar}><div className={s.breadcrumb}><button className={s.mobileOnly} onClick={() => setMenuOpen(true)} aria-expanded={menuOpen} aria-label="Mở menu"><Menu size={22}/></button><span>Quản trị</span><ChevronRight size={14} aria-hidden="true"/><strong>{current.title}</strong></div><div className={s.topbarActions}><span className={s.demoBadge}><span/>Dữ liệu mẫu</span><Link href="/" className={s.websiteLink}>Xem website<ExternalLink size={15} aria-hidden="true"/></Link></div></header>
+      <header className={s.topbar}><div className={s.breadcrumb}><button className={s.mobileOnly} onClick={() => setMenuOpen(true)} aria-expanded={menuOpen} aria-label="Mở menu"><Menu size={22}/></button><span>Quản trị</span><ChevronRight size={14} aria-hidden="true"/><strong>{current.title}</strong></div><div className={s.topbarActions}><span className={s.demoBadge}><span/>Production + mẫu</span><Link href="/" className={s.websiteLink}>Xem website<ExternalLink size={15} aria-hidden="true"/></Link></div></header>
       <main id="admin-main" className={s.main} tabIndex={-1}>
         {section === "overview" && <OverviewPanel />}
         {section === "traffic" && <OverviewPanel detailed />}
