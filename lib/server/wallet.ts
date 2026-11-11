@@ -56,7 +56,7 @@ export async function getCoinBalance(env: AppEnv, userId: string) {
   return Number(row?.balance ?? 0);
 }
 
-type Reservation = { id: string; userId: string; amount: number; status: "reserved" | "committed" | "released"; ledgerId: string | null; createdAt: string; updatedAt: string; expiresAt: string };
+type Reservation = { id: string; userId: string; amount: number; reference: string; status: "reserved" | "committed" | "released"; ledgerId: string | null; createdAt: string; updatedAt: string; expiresAt: string };
 
 function reservationKey(key: string) {
   if (!/^reserve_[A-Za-z0-9_-]{16,120}$/.test(key)) throw new Error("INVALID_INPUT");
@@ -64,7 +64,7 @@ function reservationKey(key: string) {
 }
 
 async function readReservation(env: AppEnv, key: string) {
-  return requireDb(env).prepare("SELECT id,user_id AS userId,amount,status,ledger_id AS ledgerId,created_at AS createdAt,updated_at AS updatedAt,expires_at AS expiresAt FROM coin_reservations WHERE idempotency_key=?").bind(key).first<Reservation>();
+  return requireDb(env).prepare("SELECT id,user_id AS userId,amount,reference,status,ledger_id AS ledgerId,created_at AS createdAt,updated_at AS updatedAt,expires_at AS expiresAt FROM coin_reservations WHERE idempotency_key=?").bind(key).first<Reservation>();
 }
 
 function reservationLedgerKey(key: string) { return `reservation_${key.slice(8)}`; }
@@ -74,10 +74,12 @@ async function reservationLedger(env: AppEnv, key: string) {
   return requireDb(env).prepare("SELECT id,user_id AS userId,amount,kind,reference,balance,created_at AS createdAt FROM coin_ledger WHERE idempotency_key=?").bind(reservationLedgerKey(key)).first<LedgerEntry>();
 }
 
-async function assertReservationLedger(env: AppEnv, key: string, row: Reservation, reference: string) {
+async function assertReservationLedger(env: AppEnv, key: string, row: Reservation) {
   const ledger = await reservationLedger(env, key);
   if (!ledger) return null;
-  if (ledger.userId !== row.userId || ledger.amount !== -row.amount || ledger.kind !== "reservation" || ledger.reference !== reference) throw new Error("IDEMPOTENCY_CONFLICT");
+  const expectedReference = row.reference || ledger.reference;
+  if (ledger.userId !== row.userId || ledger.amount !== -row.amount || ledger.kind !== "reservation" || ledger.reference !== expectedReference) throw new Error("IDEMPOTENCY_CONFLICT");
+  if (!row.reference) await requireDb(env).prepare("UPDATE coin_reservations SET reference=?,updated_at=? WHERE id=? AND reference='' ").bind(ledger.reference, nowIso(), row.id).run();
   if (!row.ledgerId) await requireDb(env).prepare("UPDATE coin_reservations SET ledger_id=?,updated_at=? WHERE id=? AND ledger_id IS NULL").bind(ledger.id, nowIso(), row.id).run();
   return ledger;
 }
@@ -88,14 +90,16 @@ async function assertReservationLedger(env: AppEnv, key: string, row: Reservatio
  * The deterministic ledger idempotency key makes repair safe under retries.
  */
 async function ensureReservationLedger(env: AppEnv, key: string, row: Reservation, reference: string) {
-  const existing = await assertReservationLedger(env, key, row, reference);
+  if (row.reference && row.reference !== reference) throw new Error("IDEMPOTENCY_CONFLICT");
+  const effectiveReference = row.reference || reference;
+  const existing = await assertReservationLedger(env, key, row);
   if (existing) return existing;
   try {
     const entry = await appendLedgerEntry(env, {
       userId: row.userId,
       amount: -row.amount,
       kind: "reservation",
-      reference,
+      reference: effectiveReference,
       idempotencyKey: reservationLedgerKey(key),
       metadata: { reservationId: row.id, expiresAt: row.expiresAt },
     });
@@ -115,8 +119,8 @@ async function ensureReservationLedger(env: AppEnv, key: string, row: Reservatio
 async function reservationReference(env: AppEnv, key: string, row: Reservation) {
   const ledger = await reservationLedger(env, key);
   if (!ledger) return null;
-  if (ledger.userId !== row.userId || ledger.amount !== -row.amount || ledger.kind !== "reservation") throw new Error("IDEMPOTENCY_CONFLICT");
-  if (!row.ledgerId) await requireDb(env).prepare("UPDATE coin_reservations SET ledger_id=?,updated_at=? WHERE id=? AND ledger_id IS NULL").bind(ledger.id, nowIso(), row.id).run();
+  if (ledger.userId !== row.userId || ledger.amount !== -row.amount || ledger.kind !== "reservation" || (row.reference && ledger.reference !== row.reference)) throw new Error("IDEMPOTENCY_CONFLICT");
+  if (!row.reference || !row.ledgerId) await requireDb(env).prepare("UPDATE coin_reservations SET reference=CASE WHEN reference='' THEN ? ELSE reference END,ledger_id=COALESCE(ledger_id,?),updated_at=? WHERE id=?").bind(ledger.reference, ledger.id, nowIso(), row.id).run();
   return ledger.reference;
 }
 
@@ -143,14 +147,28 @@ async function ensureReleaseLedger(env: AppEnv, key: string, row: Reservation) {
  * worker crash. */
 async function settleExpiredReservations(env: AppEnv, userId: string) {
   const db = requireDb(env), cutoff = nowIso();
-  const rows = await db.prepare("SELECT id,user_id AS userId,amount,status,ledger_id AS ledgerId,created_at AS createdAt,updated_at AS updatedAt,expires_at AS expiresAt FROM coin_reservations WHERE user_id=? AND status IN ('reserved','released') AND ledger_id IS NOT NULL AND expires_at <= ? ORDER BY expires_at LIMIT 50").bind(userId, cutoff).all<Reservation>();
+  const rows = await db.prepare("SELECT id,user_id AS userId,amount,reference,status,ledger_id AS ledgerId,created_at AS createdAt,updated_at AS updatedAt,expires_at AS expiresAt FROM coin_reservations WHERE user_id=? AND expires_at <= ? AND (status='reserved' OR status='released') ORDER BY expires_at LIMIT 50").bind(userId, cutoff).all<Reservation>();
   for (const row of rows.results ?? []) {
     if (row.status === "reserved") {
-      const claim = await db.prepare("UPDATE coin_reservations SET status='released',updated_at=? WHERE id=? AND status='reserved' AND ledger_id IS NOT NULL AND expires_at <= ?").bind(nowIso(), row.id, cutoff).run();
+      const claim = await db.prepare("UPDATE coin_reservations SET status='released',updated_at=? WHERE id=? AND status='reserved' AND expires_at <= ?").bind(nowIso(), row.id, cutoff).run();
       if ((claim.meta?.changes as number | undefined) !== 1) continue;
     }
     const key = await db.prepare("SELECT idempotency_key AS idempotencyKey FROM coin_reservations WHERE id=?").bind(row.id).first<{ idempotencyKey: string }>();
-    if (key) await ensureReleaseLedger(env, key.idempotencyKey, row);
+    if (key) {
+      let settled = row;
+      if (!settled.ledgerId) {
+        const debit = await reservationLedger(env, key.idempotencyKey);
+        if (debit) {
+          if (debit.userId !== settled.userId || debit.amount !== -settled.amount || debit.kind !== "reservation") throw new Error("IDEMPOTENCY_CONFLICT");
+          await db.prepare("UPDATE coin_reservations SET reference=CASE WHEN reference='' THEN ? ELSE reference END,ledger_id=COALESCE(ledger_id,?),updated_at=? WHERE id=?").bind(debit.reference, debit.id, nowIso(), settled.id).run();
+          settled = (await readReservation(env, key.idempotencyKey)) ?? settled;
+        } else if (settled.status === "reserved" && settled.reference) {
+          await ensureReservationLedger(env, key.idempotencyKey, settled, settled.reference);
+          settled = (await readReservation(env, key.idempotencyKey)) ?? settled;
+        }
+      }
+      if (settled.ledgerId) await ensureReleaseLedger(env, key.idempotencyKey, settled);
+    }
   }
 }
 
@@ -162,6 +180,7 @@ export async function reserveCoins(env: AppEnv, input: { userId: string; amount:
   const db = requireDb(env), existing = await readReservation(env, key);
   if (existing) {
     if (existing.userId !== input.userId || existing.amount !== input.amount) throw new Error("IDEMPOTENCY_CONFLICT");
+    if (existing.reference && existing.reference !== input.reference) throw new Error("IDEMPOTENCY_CONFLICT");
     if (existing.status === "reserved" || existing.status === "committed") {
       const entry = await ensureReservationLedger(env, key, existing, input.reference);
       return { ...((await readReservation(env, key)) ?? existing), balance: entry.balance };
@@ -172,7 +191,7 @@ export async function reserveCoins(env: AppEnv, input: { userId: string; amount:
   }
   const now = nowIso(), ttl = Math.min(900, Math.max(30, Math.floor(input.ttlSeconds ?? 300))), expires = new Date(Date.parse(now) + ttl * 1000).toISOString(), id = randomId("res");
   try {
-    await db.prepare("INSERT INTO coin_reservations (id,user_id,amount,idempotency_key,status,ledger_id,created_at,updated_at,expires_at) VALUES (?,?,?,?,?,?,?,?,?)").bind(id, input.userId, input.amount, key, "reserved", null, now, now, expires).run();
+    await db.prepare("INSERT INTO coin_reservations (id,user_id,amount,reference,idempotency_key,status,ledger_id,created_at,updated_at,expires_at) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(id, input.userId, input.amount, input.reference, key, "reserved", null, now, now, expires).run();
   } catch (e) {
     const raced = await readReservation(env, key);
     if (raced) {
@@ -181,6 +200,7 @@ export async function reserveCoins(env: AppEnv, input: { userId: string; amount:
         const entry = await ensureReservationLedger(env, key, raced, input.reference);
         return { ...((await readReservation(env, key)) ?? raced), balance: entry.balance };
       }
+      if (raced.reference && raced.reference !== input.reference) throw new Error("IDEMPOTENCY_CONFLICT");
       const racedReference = await reservationReference(env, key, raced);
       if (racedReference !== null && racedReference !== input.reference) throw new Error("IDEMPOTENCY_CONFLICT");
       return raced;

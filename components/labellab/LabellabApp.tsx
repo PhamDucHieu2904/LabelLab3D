@@ -286,29 +286,35 @@ export default function LabellabApp() {
     if (!ready || exportBusy) return;
     setExportBusy(true);
     setRenderProgress(0);
+    const reservationKey = `reserve_${crypto.randomUUID().replaceAll("-", "")}`;
+    let reserved = false;
     try {
-      const spendResponse = await fetch("/api/account/spend", {
+      const reserveResponse = await fetch("/api/account/coin/reserve", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idempotencyKey: `render_${crypto.randomUUID()}`, modelId: model.id, resolution: settings.resolution }),
+        body: JSON.stringify({ idempotencyKey: reservationKey, modelId: model.id, resolution: settings.resolution }),
       });
-      if (spendResponse.status === 401 || spendResponse.status === 403) {
+      if (reserveResponse.status === 401 || reserveResponse.status === 403) {
         setToast("Please sign in before spending coins on a render.");
         return;
       }
-      if (!spendResponse.ok) {
-        const payload = await spendResponse.json().catch(() => null) as { error?: string } | null;
+      if (!reserveResponse.ok) {
+        const payload = await reserveResponse.json().catch(() => null) as { error?: string } | null;
         setToast(payload?.error === "INSUFFICIENT_COINS" ? "You do not have enough coins for this render." : "Could not charge the render. Please try again.");
         return;
       }
+      reserved = true;
       const blob = await sceneRef.current!.capture(setRenderProgress);
+      const commitResponse = await fetch("/api/account/coin/commit", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idempotencyKey: reservationKey }) });
+      if (!commitResponse.ok) throw new Error("Render payment could not be committed. Please try again.");
       if (resultRef.current) URL.revokeObjectURL(resultRef.current);
       const url = URL.createObjectURL(blob);
       resultRef.current = url;
       setExportResult({ url, name: `labellab-${model.id}-${settings.resolution}${settings.transparent ? "-transparent" : ""}.png` });
       setToast("Your image is ready. Select Download image to save the PNG.");
     } catch (error) {
+      if (reserved) void fetch("/api/account/coin/release", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idempotencyKey: reservationKey }) }).catch(() => undefined);
       setToast(error instanceof Error ? error.message : "Rendering failed. Please try again.");
     } finally {
       setExportBusy(false);

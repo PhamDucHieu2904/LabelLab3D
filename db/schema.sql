@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS coin_reservations (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   amount INTEGER NOT NULL CHECK (amount > 0),
+  reference TEXT NOT NULL,
   idempotency_key TEXT NOT NULL UNIQUE,
   status TEXT NOT NULL CHECK (status IN ('reserved','committed','released')),
   ledger_id TEXT,

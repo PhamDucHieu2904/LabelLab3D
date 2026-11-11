@@ -17,9 +17,14 @@ export async function hashPassword(password: string) {
 }
 
 export async function verifyPassword(password: string, encoded: string) {
-  const [algorithm, iterationText, saltText, digestText] = encoded.split("$");
-  const iterations = Number(iterationText);
-  if (algorithm !== "pbkdf2-sha256" || !Number.isSafeInteger(iterations) || iterations < 100_000 || !saltText || !digestText) return false;
-  const actual = base64Url(await derive(password, base64UrlBytes(saltText), iterations));
-  return constantTimeEqual(actual, digestText);
+  if (typeof password !== "string" || password.length > 256 || typeof encoded !== "string" || encoded.length > 512) return false;
+  try {
+    const [algorithm, iterationText, saltText, digestText] = encoded.split("$");
+    const iterations = Number(iterationText);
+    if (algorithm !== "pbkdf2-sha256" || !Number.isSafeInteger(iterations) || iterations < 100_000 || iterations > 2_000_000 || !saltText || !digestText) return false;
+    const salt = base64UrlBytes(saltText);
+    if (salt.length < 16 || salt.length > 64) return false;
+    const actual = base64Url(await derive(password, salt, iterations));
+    return constantTimeEqual(actual, digestText);
+  } catch { return false; }
 }

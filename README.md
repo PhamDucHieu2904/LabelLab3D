@@ -4,10 +4,14 @@ Bản frontend đầu tiên của nền tảng mockup bao bì Labellab. Website 
 
 ## Chạy tại máy
 
-Yêu cầu Node.js hiện đại tương thích Next.js 16 và npm. Các phiên bản trực tiếp được pin trong `package.json`; dùng lockfile khi cài đặt lại.
+Yêu cầu Node.js 20.9 trở lên (khuyên dùng bản LTS) và npm. Các phiên bản trực tiếp được pin trong `package.json`; dùng lockfile khi cài đặt lại.
+
+Trên Windows, nhấp đúp `open-labellab.bat`. File sẽ kiểm tra Node.js/npm, tự chạy `npm ci` nếu chưa có thư viện và mở trình duyệt sau khi website sẵn sàng. Lần đầu sau khi clone cần Internet để tải thư viện; Git không lưu `node_modules`. Giữ cửa sổ `Labellab Dev Server` mở khi sử dụng, nhấn `Ctrl+C` trong cửa sổ đó để dừng.
+
+Hoặc chạy thủ công:
 
 ```powershell
-npm install
+npm ci
 npm run dev
 ```
 
@@ -39,7 +43,7 @@ Thiết lập scene tự lưu vào `localStorage` với schema version và allow
 
 Artwork chỉ là Blob URL thuộc phiên hiện tại: không đưa vào localStorage, không upload lên server, không khôi phục sau refresh. Đổi model hoặc tải lại bản lưu sẽ dùng nhãn mẫu khi artwork bị xóa; bản lưu không chứa file ảnh. Dữ liệu lưu cục bộ không cấp quyền thương mại hay token.
 
-Đây là frontend phase: chưa có đăng ký/đăng nhập, ví token, nạp tiền, webhook, daily reward/spin/referral hoặc render server. Watermark client chỉ thể hiện chính sách preview, không phải cơ chế chống lấy ảnh. Không dùng bản này làm ranh giới kiểm soát paid download.
+Production foundation hiện đã có đăng ký/đăng nhập email-mật khẩu, session HttpOnly, admin login/bootstrap, D1 wallet ledger, daily check-in, badges và lịch sử coin. Render charge dùng reservation → commit/release idempotent; client không tự chọn giá. Payment provider, webhook ký/xác minh, email verification/reset và server artifact render vẫn là các bước thương mại tiếp theo. Client PNG vẫn là preview và không phải ranh giới bảo vệ artifact trả phí.
 
 ## Tài liệu
 
@@ -48,7 +52,21 @@ Artwork chỉ là Blob URL thuộc phiên hiện tại: không đưa vào localS
 - [Định hướng UI và mapping ảnh tham chiếu](docs/LABELLAB_UI_DIRECTION.md)
 - [Sàn Studio](docs/STUDIO_GROUND.md)
 
-Bước kế tiếp: API/auth, catalog có release, PostgreSQL, ledger token bất biến, payment webhook idempotent và render/artifact server có entitlement. Xem kế hoạch để triển khai theo từng gate.
+Bước tiếp theo: payment adapter/webhook idempotent, email verification/reset, server render/artifact entitlement và các migration D1 production theo từng gate.
+
+## Cloudflare production
+
+Worker production đang dùng tên `www`, nên URL chính là [www.labellab3d.workers.dev](https://www.labellab3d.workers.dev/). Cloudflare Dashboard xác nhận GitHub branch `main` đã nối với Worker và deployment production nhận 100% traffic. D1 production là `labellab3d-production`.
+
+Sau khi cập nhật code, chạy migration D1 trước khi deploy worker:
+
+```powershell
+npx wrangler d1 migrations apply labellab3d-production --remote
+npm run cf:build
+npm run cf:deploy
+```
+
+Migration `0004_coin_reservation_reference.sql` phải được áp dụng trước bản worker dùng trường `coin_reservations.reference`.
 
 ## Giao diện và QA hiện tại
 
