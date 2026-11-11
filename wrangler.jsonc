@@ -1,11 +1,18 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "labellab3d",
+  "name": "www",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-11-11",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "labellab3d-production",
+      "database_id": "dc0975db-13d2-425f-a7c2-b182798e03d2"
+    }
   }
 }
