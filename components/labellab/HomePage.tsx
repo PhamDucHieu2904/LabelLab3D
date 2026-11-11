@@ -13,7 +13,7 @@ import {
   Sparkles,
   Zap,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import MovingGrid from "./MovingGrid";
 import SiteHeader from "./SiteHeader";
 import CoinPricing from "./CoinPricing";
@@ -41,6 +41,14 @@ export default function HomePage() {
   const [checkinBusy, setCheckinBusy] = useState(false);
   const [featuredModel, setFeaturedModel] = useState(FEATURED_MODELS[0]);
   const openAuth = useAuthDialog();
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/account/check-in", { credentials: "same-origin" })
+      .then(async (response) => response.ok ? await response.json() as { claimed?: boolean } : null)
+      .then((payload) => { if (!cancelled && payload?.claimed) setClaimed(true); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
 
   const claimCheckIn = async () => {
     if (checkinBusy || claimed) return;

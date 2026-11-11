@@ -76,3 +76,9 @@
   .usageWhen { font-size: 12px; }
   .usageAmount { font-size: 16px; }
 }
+.badges { display: grid; gap: 7px; }
+.badges h3 { display: flex; align-items: center; gap: 5px; margin: 0; color: var(--profile-muted); font-size: 13px; font-weight: 600; }
+.badges h3 svg { width: 14px; height: 14px; }
+.badgeList { display: flex; flex-wrap: wrap; gap: 6px; }
+.badgeList span { border: 1px solid rgba(145,68,100,.15); border-radius: 999px; padding: 4px 8px; color: var(--profile-accent); background: rgba(255,255,255,.4); font-size: 12px; }
+.positive { color: #2c7f58; }
