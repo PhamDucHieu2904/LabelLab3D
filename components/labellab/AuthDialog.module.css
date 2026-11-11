@@ -12,7 +12,10 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
+  /* Keep the dialog scrollable on short screens without showing a browser
+     scrollbar over the form. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   border: 1px solid #ffffffcc;
   border-radius: 26px;
   background: var(--auth-surface);
@@ -20,6 +23,7 @@
   color: var(--auth-ink);
   font: 400 15px/1.5 var(--font-mona-sans), sans-serif;
 }
+.dialog::-webkit-scrollbar { display: none; }
 
 .dialog[open] { animation: arrive .22s ease-out; }
 .dialog::backdrop {
