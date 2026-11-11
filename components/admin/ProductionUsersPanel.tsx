@@ -13,7 +13,10 @@ export default function ProductionUsersPanel() {
     if (!response.ok) throw new Error("Không thể tải người dùng.");
     setUsers((await response.json() as { users?: User[] }).users ?? []);
   };
-  useEffect(() => { void load().catch((e) => setError(e instanceof Error ? e.message : "Không thể tải dữ liệu.")); }, []);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => { void load().catch((e) => setError(e instanceof Error ? e.message : "Không thể tải dữ liệu.")); });
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const mutate = async (payload: Record<string, unknown>) => {
     setBusy(true); setError("");
     try { const response = await fetch("/api/admin/users", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); if (!response.ok) throw new Error((await response.json().catch(() => null) as { error?: string } | null)?.error ?? "Không thể cập nhật."); await load(); }

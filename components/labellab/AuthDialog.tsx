@@ -89,7 +89,12 @@ export function AuthDialogProvider({ children }: { children: ReactNode }) {
     } catch { setUser(null); }
   }, []);
 
-  useEffect(() => { void refresh(); const onChange = () => { void refresh(); }; window.addEventListener("labellab-account-changed", onChange); return () => window.removeEventListener("labellab-account-changed", onChange); }, [refresh]);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => { void refresh(); });
+    const onChange = () => { void refresh(); };
+    window.addEventListener("labellab-account-changed", onChange);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("labellab-account-changed", onChange); };
+  }, [refresh]);
 
   useEffect(() => {
     // Open the native modal after hydration when OAuth returns an error.

@@ -3,7 +3,7 @@ import { nowIso, requireDb, sha256, type AppEnv } from "./db";
 const MAX_FAILURES = 5;
 const LOCK_MINUTES = 15;
 
-let tableReady = new WeakSet<object>();
+const tableReady = new WeakSet<object>();
 async function ensureTable(env: AppEnv) {
   const db = requireDb(env);
   if (tableReady.has(db)) return db;
