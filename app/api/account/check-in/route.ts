@@ -1,11 +1,11 @@
 import { requireDb } from "@/lib/server/db";
 import { env, sessionUser, json, errorResponse, assertSameOrigin } from "@/lib/server/http";
-import { claimDailyCheckIn } from "@/lib/server/rewards";
+import { claimDailyCheckIn, currentRewardDay } from "@/lib/server/rewards";
 export const runtime = "nodejs"; export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const user = await sessionUser(); if (!user) throw new Error("FORBIDDEN");
-    const db = requireDb(await env()); const today = new Date().toISOString().slice(0,10);
+    const db = requireDb(await env()); const today = currentRewardDay();
     const rows = await db.prepare("SELECT day,coins,claimed_at AS claimedAt FROM daily_checkins WHERE user_id=? ORDER BY day DESC LIMIT 30").bind(user.id).all();
     const todayRow = (rows.results ?? []).find((row) => (row as {day?: string}).day === today);
     return json({ today, claimed: Boolean(todayRow), current: todayRow ?? null, history: rows.results ?? [] });

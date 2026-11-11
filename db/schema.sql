@@ -11,6 +11,13 @@ CREATE TABLE IF NOT EXISTS sessions (
   token_hash TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL, created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS sessions_token_expiry ON sessions(token_hash,expires_at);
+CREATE TABLE IF NOT EXISTS auth_rate_limits (
+  scope TEXT PRIMARY KEY,
+  failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),
+  locked_until TEXT,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS auth_rate_limits_lock ON auth_rate_limits(locked_until);
 CREATE TABLE IF NOT EXISTS coin_ledger (
   id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   amount INTEGER NOT NULL CHECK (amount <> 0), kind TEXT NOT NULL, reference TEXT NOT NULL,
@@ -18,6 +25,18 @@ CREATE TABLE IF NOT EXISTS coin_ledger (
   metadata_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS coin_ledger_user_time ON coin_ledger(user_id,created_at);
+CREATE TABLE IF NOT EXISTS coin_reservations (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  amount INTEGER NOT NULL CHECK (amount > 0),
+  idempotency_key TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL CHECK (status IN ('reserved','committed','released')),
+  ledger_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS coin_reservations_user_status ON coin_reservations(user_id,status,created_at);
 CREATE TABLE IF NOT EXISTS wallets (
   user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   balance INTEGER NOT NULL DEFAULT 0 CHECK (balance >= 0), updated_at TEXT NOT NULL

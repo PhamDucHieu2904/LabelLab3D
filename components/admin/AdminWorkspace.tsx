@@ -8,6 +8,7 @@ import OverviewPanel from "./OverviewPanel";
 import s from "./AdminWorkspace.module.css";
 const CommercePanel = dynamic(() => import("./CommercePanel"));
 const UsersPanel = dynamic(() => import("./UsersPanel"));
+const ProductionUsersPanel = dynamic(() => import("./ProductionUsersPanel"));
 const ManagementPanel = dynamic(() => import("./ManagementPanel"));
 const OperationsPanel = dynamic(() => import("./OperationsPanel"));
 const icons = { overview: LayoutDashboard, traffic: Activity, users: Users, transactions: Wallet, models: Box, assets: FolderOpen, content: Newspaper, promotions: Gift, releases: Rocket, activity: ShieldCheck, settings: Settings2 };
@@ -30,7 +31,7 @@ export default function AdminWorkspace({ section }: { section: AdminSection }) {
       <main id="admin-main" className={s.main} tabIndex={-1}>
         {section === "overview" && <OverviewPanel />}
         {section === "traffic" && <OverviewPanel detailed />}
-        {section === "users" && <><div className={s.pageHeading}><h1>Người dùng</h1></div><UsersPanel /></>}
+        {section === "users" && <><div className={s.pageHeading}><h1>Người dùng</h1></div><ProductionUsersPanel /><details style={{ marginTop: 24 }}><summary style={{ cursor: "pointer" }}>Dữ liệu mẫu giao diện cũ</summary><UsersPanel /></details></>}
         {section === "transactions" && <CommercePanel />}
         {["models", "assets", "content", "promotions", "releases"].includes(section) && <><div className={s.pageHeading}><h1>{current.title}</h1></div><ManagementPanel key={section} section={section as "models" | "assets" | "content" | "promotions" | "releases"} /></>}
         {(section === "activity" || section === "settings") && <><div className={s.pageHeading}><h1>{current.title}</h1></div><OperationsPanel key={section} section={section} /></>}

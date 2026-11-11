@@ -287,6 +287,21 @@ export default function LabellabApp() {
     setExportBusy(true);
     setRenderProgress(0);
     try {
+      const spendResponse = await fetch("/api/account/spend", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idempotencyKey: `render_${crypto.randomUUID()}`, modelId: model.id, resolution: settings.resolution }),
+      });
+      if (spendResponse.status === 401 || spendResponse.status === 403) {
+        setToast("Please sign in before spending coins on a render.");
+        return;
+      }
+      if (!spendResponse.ok) {
+        const payload = await spendResponse.json().catch(() => null) as { error?: string } | null;
+        setToast(payload?.error === "INSUFFICIENT_COINS" ? "You do not have enough coins for this render." : "Could not charge the render. Please try again.");
+        return;
+      }
       const blob = await sceneRef.current!.capture(setRenderProgress);
       if (resultRef.current) URL.revokeObjectURL(resultRef.current);
       const url = URL.createObjectURL(blob);

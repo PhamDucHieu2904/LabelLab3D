@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import AdminWorkspace from "@/components/admin/AdminWorkspace";
 import AdminLoginPage from "@/components/admin/AdminLoginPage";
+import AdminSetupPage from "@/components/admin/AdminSetupPage";
 import { ADMIN_SECTIONS, type AdminSection } from "@/lib/admin/navigation";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -12,6 +13,7 @@ export default async function AdminPage({ params }: { params: Promise<{ section?
   const { section } = await params;
   const key = section?.[0] ?? "overview";
   if (key === "login" && section?.length === 1) return <AdminLoginPage />;
+  if (key === "setup" && section?.length === 1) return <AdminSetupPage />;
   if ((section?.length ?? 0) > 1 || !ADMIN_SECTIONS.some(item => item.key === key)) notFound();
   try {
     const { env } = await getCloudflareContext({ async: true });
