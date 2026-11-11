@@ -2,6 +2,7 @@ import { nowIso, requireDb, sha256, type AppEnv } from "./db";
 
 const MAX_FAILURES = 5;
 const LOCK_MINUTES = 15;
+const REGISTER_MAX_ATTEMPTS = 10;
 
 const tableReady = new WeakSet<object>();
 async function ensureTable(env: AppEnv) {
@@ -31,4 +32,16 @@ export async function recordLoginFailure(env: AppEnv, scope: string) {
 
 export async function clearLoginFailures(env: AppEnv, scope: string) {
   await (await ensureTable(env)).prepare("DELETE FROM auth_rate_limits WHERE scope=?").bind(scope).run();
+}
+
+export async function assertRegistrationAllowed(env: AppEnv, ip: string) {
+  const scope = `register:v1:${await sha256(ip)}`;
+  const row = await (await ensureTable(env)).prepare("SELECT failures,updated_at AS updatedAt FROM auth_rate_limits WHERE scope=?").bind(scope).first<{ failures: number; updatedAt: string }>();
+  if (row && Date.parse(row.updatedAt) > Date.now() - LOCK_MINUTES * 60_000 && row.failures >= REGISTER_MAX_ATTEMPTS) throw new Error("AUTH_RATE_LIMIT");
+  return scope;
+}
+
+export async function recordRegistrationAttempt(env: AppEnv, scope: string) {
+  const db = await ensureTable(env), now = nowIso();
+  await db.prepare("INSERT INTO auth_rate_limits (scope,failures,locked_until,updated_at) VALUES (?,1,NULL,?) ON CONFLICT(scope) DO UPDATE SET failures=CASE WHEN julianday(?) - julianday(auth_rate_limits.updated_at) > (15.0/1440.0) THEN 1 ELSE auth_rate_limits.failures+1 END,locked_until=NULL,updated_at=excluded.updated_at").bind(scope, now, now).run();
 }
