@@ -14,5 +14,7 @@
       "database_name": "labellab3d-production",
       "database_id": "dc0975db-13d2-425f-a7c2-b182798e03d2"
     }
-  }
+  ],
+  "workers_dev": true,
+  "preview_urls": true
 }
