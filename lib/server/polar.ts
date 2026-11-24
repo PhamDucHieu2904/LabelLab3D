@@ -56,6 +56,7 @@ export async function createPolarCheckoutSession(
     amountCents: number;
     customerId: string;
     customerEmail: string;
+    embedOrigin?: string;
     successUrl: string;
     returnUrl: string;
   },
@@ -81,6 +82,7 @@ export async function createPolarCheckoutSession(
       },
       customer_email: input.customerEmail,
       external_customer_id: input.customerId,
+      ...(input.embedOrigin ? { embed_origin: input.embedOrigin } : {}),
       metadata: {
         order_id: input.orderId,
         order_code: input.orderCode,

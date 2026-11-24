@@ -151,6 +151,7 @@ test('Polar checkout creation uses ad-hoc USD cents pricing and validates HTTPS 
     amountCents: 200,
     customerId: 'usr_1',
     customerEmail: 'buyer@example.com',
+    embedOrigin: 'https://www.labellab3d.workers.dev',
     successUrl: 'https://www.labellab3d.workers.dev/payment/polar/success?id=pay_1',
     returnUrl: 'https://www.labellab3d.workers.dev/',
   }, async (url, init) => {
@@ -164,6 +165,7 @@ test('Polar checkout creation uses ad-hoc USD cents pricing and validates HTTPS 
   assert.deepEqual(sentBody.products, ['prod_123']);
   assert.equal(sentBody.prices.prod_123[0].price_amount, 200);
   assert.equal(sentBody.prices.prod_123[0].price_currency, 'usd');
+  assert.equal(sentBody.embed_origin, 'https://www.labellab3d.workers.dev');
   assert.equal(sentBody.metadata.order_code, 'LLPOLAR0001234');
 });
 

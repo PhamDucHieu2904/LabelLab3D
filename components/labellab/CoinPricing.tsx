@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Check, CheckCircle2, Copy, CreditCard, Download, ExternalLink, Globe, RefreshCw, ShieldCheck } from "lucide-react";
+import { Check, CheckCircle2, Copy, CreditCard, Download, ExternalLink, Globe, Landmark, RefreshCw, ShieldCheck, Smartphone } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { COIN_PACKAGES, type CoinPackage } from "@/lib/payments/packages";
@@ -68,8 +68,12 @@ export default function CoinPricing() {
   const [copiedKey, setCopiedKey] = useState<"account" | "content" | null>(null);
   const [manualCheckHint, setManualCheckHint] = useState("");
   const [checkingNow, setCheckingNow] = useState(false);
+  const [intlMethod, setIntlMethod] = useState<"gpay" | "card" | "bank">("card");
+  const [embedOpening, setEmbedOpening] = useState(false);
+  const [embedConfirmed, setEmbedConfirmed] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const checkoutFormRef = useRef<HTMLFormElement>(null);
+  const embedInstanceRef = useRef<{ close: () => void } | null>(null);
   const orderRequestSeq = useRef(0);
   const region = regions.find((item) => item.id === regionId)!;
   const prices = new Intl.NumberFormat(region.locale, {
@@ -208,6 +212,7 @@ export default function CoinPricing() {
       setCheckout(payload.checkout ?? null);
       setPaymentOrder(payload.order ?? null);
       setClockMs(Date.now());
+      setEmbedConfirmed(false);
       setPaymentState("ready");
     } catch (error) {
       if (seq !== orderRequestSeq.current) return;
@@ -215,6 +220,65 @@ export default function CoinPricing() {
       setPaymentError(error instanceof Error ? error.message : "Không thể tạo đơn thanh toán.");
     }
   }, [openAuth, user]);
+
+  useEffect(() => {
+    return () => {
+      embedInstanceRef.current?.close();
+      embedInstanceRef.current = null;
+    };
+  }, []);
+
+  const openPolarEmbeddedCheckout = useCallback(async (url: string, orderId?: string) => {
+    if (embedOpening) return;
+    setEmbedOpening(true);
+    setPaymentError("");
+    setManualCheckHint("");
+    try {
+      embedInstanceRef.current?.close();
+      const { PolarEmbedCheckout } = await import("@polar-sh/checkout/embed");
+      const embed = await PolarEmbedCheckout.create(url, { theme: "light" });
+      embedInstanceRef.current = embed;
+      setEmbedOpening(false);
+
+      embed.addEventListener("confirmed", () => {
+        setEmbedConfirmed(true);
+      });
+
+      embed.addEventListener("success", (event) => {
+        // Stay on the homepage without navigating away; close Polar's iframe
+        // and immediately poll D1 for webhook confirmation.
+        event.preventDefault();
+        setEmbedConfirmed(true);
+        embed.close();
+        embedInstanceRef.current = null;
+        if (orderId) {
+          void (async () => {
+            for (let attempt = 0; attempt < 12; attempt += 1) {
+              const updated = await pollOrderOnce(orderId);
+              if (updated) {
+                setPaymentOrder(updated);
+                if (updated.status === "paid") {
+                  setEmbedConfirmed(false);
+                  window.dispatchEvent(new Event("labellab-account-changed"));
+                  return;
+                }
+              }
+              await new Promise((r) => window.setTimeout(r, 1500));
+            }
+            setEmbedConfirmed(false);
+          })();
+        }
+      });
+
+      embed.addEventListener("close", () => {
+        embedInstanceRef.current = null;
+        setEmbedOpening(false);
+      });
+    } catch {
+      setEmbedOpening(false);
+      setPaymentError("Could not open inline checkout popup. You can use the direct Polar link below.");
+    }
+  }, [embedOpening, pollOrderOnce]);
 
   function submitCheckout() {
     if (!checkout || !checkoutFormRef.current) return;
@@ -264,13 +328,15 @@ export default function CoinPricing() {
 
   const statusText = isPaid
     ? (isPolar ? "Paid · coins added" : "Đã thanh toán · đã cộng coin")
-    : isExpired
-      ? (isPolar ? "Session expired" : "Đơn đã hết hạn")
-      : paymentState === "loading"
-        ? (isPolar ? "Preparing Polar checkout…" : "Đang tạo mã QR…")
-        : paymentState === "ready"
-          ? (isPolar ? "Waiting for payment · auto credit" : "Chờ chuyển khoản · tự động cộng coin")
-          : (isPolar ? "Ready to checkout" : "Chưa tạo đơn");
+    : embedConfirmed
+      ? "Confirming payment…"
+      : isExpired
+        ? (isPolar ? "Session expired" : "Đơn đã hết hạn")
+        : paymentState === "loading"
+          ? (isPolar ? "Preparing Polar checkout…" : "Đang tạo mã QR…")
+          : paymentState === "ready"
+            ? (isPolar ? "Ready · Pay inline without leaving site" : "Chờ chuyển khoản · tự động cộng coin")
+            : (isPolar ? "Ready to checkout" : "Chưa tạo đơn");
 
   const statusClass = isPaid
     ? styles.statusPaid
@@ -326,19 +392,42 @@ export default function CoinPricing() {
                 <>
                   <div className={styles.polarCard}>
                     <div className={styles.polarIconWrap}>
-                      {isPaid ? <CheckCircle2 size={38} aria-hidden="true" /> : <CreditCard size={36} aria-hidden="true" />}
+                      {isPaid ? <CheckCircle2 size={34} aria-hidden="true" /> : <CreditCard size={30} aria-hidden="true" />}
                     </div>
-                    <strong className={styles.polarBrand}>Polar Checkout</strong>
-                    <span className={styles.polarBadges}>Visa · Mastercard · Apple Pay</span>
-                    <span className={styles.polarSafe}><ShieldCheck size={14} aria-hidden="true" /> Global MoR · Auto VAT</span>
+                    <strong className={styles.polarBrand}>Choose method</strong>
+                    <div className={styles.polarMethodGrid} role="group" aria-label="Payment method">
+                      {([
+                        { id: "gpay", label: "Google Pay", Icon: Smartphone },
+                        { id: "card", label: "Card", Icon: CreditCard },
+                        { id: "bank", label: "Bank", Icon: Landmark },
+                      ] as const).map(({ id, label, Icon }) => (
+                        <button
+                          key={id}
+                          type="button"
+                          className={`${styles.polarMethodBtn} ${intlMethod === id ? styles.polarMethodActive : ""}`}
+                          aria-pressed={intlMethod === id}
+                          disabled={isPaid || paymentState === "loading" || embedOpening}
+                          onClick={() => {
+                            setIntlMethod(id);
+                            if (polarCheckout && !isExpired && !isPaid) {
+                              void openPolarEmbeddedCheckout(polarCheckout.url, paymentOrder?.id);
+                            }
+                          }}
+                        >
+                          <Icon size={16} aria-hidden="true" />
+                          <span>{label}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <span className={styles.polarSafe}><ShieldCheck size={13} aria-hidden="true" /> Inline Polar Checkout · No redirect</span>
                   </div>
-                  <strong>{isPaid ? "Payment confirmed!" : isSandbox ? "Polar Sandbox Mode" : "Instant card checkout"}</strong>
+                  <strong>{isPaid ? "Payment confirmed!" : isSandbox ? "Polar Sandbox · Inline" : "Instant inline checkout"}</strong>
                   <small>
                     {isPaid
                       ? "Your coins have been credited to your account."
                       : remainingMs !== null && !isExpired
-                        ? `Checkout link valid for ${formatCountdown(remainingMs)}`
-                        : "Coins are added automatically via verified Polar webhook."}
+                        ? `Session valid for ${formatCountdown(remainingMs)}`
+                        : "Select a method above to open checkout right on this page."}
                   </small>
                 </>
               ) : directQr && !qrImageError ? (
@@ -471,16 +560,15 @@ export default function CoinPricing() {
               </button>
             ) : isPolar && polarCheckout && paymentState === "ready" && !isExpired ? (
               <>
-                <a
-                  href={polarCheckout.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
                   className={styles.payButton}
+                  disabled={embedOpening}
+                  onClick={() => void openPolarEmbeddedCheckout(polarCheckout.url, paymentOrder?.id)}
                 >
                   <CreditCard size={16} aria-hidden="true" />
-                  <span>{`Pay ${selectedPrice} with Polar`}</span>
-                  <ExternalLink size={15} aria-hidden="true" />
-                </a>
+                  <span>{embedOpening ? "Opening checkout…" : `Pay ${selectedPrice} now`}</span>
+                </button>
                 <button
                   type="button"
                   className={styles.secondaryButton}
@@ -490,6 +578,15 @@ export default function CoinPricing() {
                   <RefreshCw size={15} className={checkingNow ? styles.spin : undefined} aria-hidden="true" />
                   <span>{checkingNow ? "Checking…" : "Check status"}</span>
                 </button>
+                <a
+                  href={polarCheckout.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.fallbackLink}
+                >
+                  <span>Open in new tab</span>
+                  <ExternalLink size={13} aria-hidden="true" />
+                </a>
               </>
             ) : isDirectQr && paymentState === "ready" && !isExpired && directQr ? (
               <>

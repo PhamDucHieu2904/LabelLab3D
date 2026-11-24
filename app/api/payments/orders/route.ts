@@ -34,6 +34,10 @@ export async function POST(request: Request) {
       if (!Number.isSafeInteger(amountCents) || amountCents < 50) throw new Error("INVALID_INPUT");
 
       const expiresAt = new Date(Date.now() + 30 * 60_000).toISOString();
+      const requestOrigin = request.headers.get("origin")?.trim();
+      const embedOrigin = requestOrigin && /^https?:\/\/[^/\s]+$/i.test(requestOrigin)
+        ? requestOrigin
+        : polarConfig.publicUrl;
       const session = await createPolarCheckoutSession(polarConfig, {
         orderId: id,
         orderCode: code,
@@ -41,6 +45,7 @@ export async function POST(request: Request) {
         amountCents,
         customerId: user.id,
         customerEmail: user.email,
+        embedOrigin,
         successUrl: `${polarConfig.publicUrl}/payment/polar/success?order=${encodeURIComponent(code)}&id=${encodeURIComponent(id)}&checkout_id={CHECKOUT_ID}`,
         returnUrl: `${polarConfig.publicUrl}/`,
       });
