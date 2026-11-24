@@ -4,6 +4,7 @@ import { randomId, nowIso, requireDb } from "@/lib/server/db";
 import { env, json, errorResponse, sessionCookie, assertSameOrigin } from "@/lib/server/http";
 import { assertRegistrationAllowed, recordRegistrationAttempt } from "@/lib/server/rate-limit";
 import { verifyAndConsumeCode } from "@/lib/server/email-verification";
+import { getLiveSiteSettings } from "@/lib/server/site-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +33,8 @@ export async function POST(request: Request) {
     }
 
     const runtimeEnv = await env();
+    const siteSettings = await getLiveSiteSettings(runtimeEnv);
+    if (!siteSettings.registrations) throw new Error("REGISTRATIONS_DISABLED");
     const db = requireDb(runtimeEnv);
     const requestHeaders = await headers();
     const ip = requestHeaders.get("cf-connecting-ip") ?? requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";

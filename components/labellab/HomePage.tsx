@@ -13,7 +13,7 @@ import {
   Sparkles,
   Zap,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import MovingGrid from "./MovingGrid";
 import SiteHeader from "./SiteHeader";
 import CoinPricing from "./CoinPricing";
@@ -26,42 +26,142 @@ import { PROFILE_PREVIEW } from "@/lib/labellab/profile-preview";
 
 const noticeIcons = { pink: Gift, blue: Megaphone, mint: Sparkles } as const;
 
-const week = [
-  { day: "Day 1", reward: "20", icon: "coin" },
-  { day: "Day 2", reward: "+110", icon: "gift" },
-  { day: "Day 3", reward: "45", icon: "coin" },
-  { day: "Day 4", reward: "45", icon: "coin" },
-  { day: "Day 5", reward: "+80", icon: "gift" },
-  { day: "Day 6", reward: "70", icon: "coin" },
-  { day: "Day 7", reward: "70", icon: "coin" },
-] as const;
+type LiveAnnouncement = {
+  id: string;
+  tone: "pink" | "blue" | "mint";
+  title: string;
+  body: string;
+  time: string;
+  url: string;
+  unread: boolean;
+};
+
+type CheckInState = {
+  enabled: boolean;
+  claimed: boolean;
+  schedule: number[];
+  nextDayIndex: number;
+  todayReward: number;
+};
+
+const DEFAULT_SCHEDULE = [20, 30, 45, 45, 60, 70, 100];
+
+const DEFAULT_ANNOUNCEMENTS: LiveAnnouncement[] = LABELLAB_UPDATES.map((item, idx) => ({
+  id: `default-${idx}`,
+  tone: item.tone,
+  title: item.title,
+  body: item.title,
+  time: item.time,
+  url: "/studio",
+  unread: item.unread,
+}));
 
 export default function HomePage() {
-  const [claimed, setClaimed] = useState(false);
+  const [checkIn, setCheckIn] = useState<CheckInState>({
+    enabled: true,
+    claimed: false,
+    schedule: DEFAULT_SCHEDULE,
+    nextDayIndex: 0,
+    todayReward: DEFAULT_SCHEDULE[0],
+  });
+  const [announcements, setAnnouncements] = useState<LiveAnnouncement[]>(DEFAULT_ANNOUNCEMENTS);
   const [checkinBusy, setCheckinBusy] = useState(false);
   const [featuredModel, setFeaturedModel] = useState(FEATURED_MODELS[0]);
   const openAuth = useAuthDialog();
-  useEffect(() => {
-    let cancelled = false;
-    void fetch("/api/account/check-in", { credentials: "same-origin" })
-      .then(async (response) => response.ok ? await response.json() as { claimed?: boolean } : null)
-      .then((payload) => { if (!cancelled && payload?.claimed) setClaimed(true); })
-      .catch(() => undefined);
-    return () => { cancelled = true; };
+
+  const loadLiveHomeData = useCallback(async () => {
+    try {
+      const [configRes, checkInRes] = await Promise.all([
+        fetch("/api/site/config", { cache: "no-store" }),
+        fetch("/api/account/check-in", { credentials: "same-origin", cache: "no-store" }),
+      ]);
+      if (configRes.ok) {
+        const cfg = await configRes.json() as {
+          announcements?: LiveAnnouncement[];
+          checkIn?: { enabled: boolean; schedule: number[]; reward: number };
+        };
+        if (Array.isArray(cfg.announcements)) {
+          setAnnouncements(cfg.announcements);
+        }
+        if (cfg.checkIn && !checkInRes.ok) {
+          const schedule = cfg.checkIn.schedule.length > 0 ? cfg.checkIn.schedule : DEFAULT_SCHEDULE;
+          setCheckIn((prev) => ({
+            ...prev,
+            enabled: cfg.checkIn!.enabled,
+            schedule,
+            todayReward: schedule[0] ?? cfg.checkIn!.reward,
+          }));
+        }
+      }
+      if (checkInRes.ok) {
+        const payload = await checkInRes.json() as {
+          claimed?: boolean;
+          nextDayIndex?: number;
+          todayReward?: number;
+          config?: { enabled: boolean; schedule: number[]; reward: number };
+        };
+        const schedule = payload.config?.schedule?.length ? payload.config.schedule : DEFAULT_SCHEDULE;
+        setCheckIn({
+          enabled: payload.config?.enabled ?? true,
+          claimed: Boolean(payload.claimed),
+          schedule,
+          nextDayIndex: Number(payload.nextDayIndex ?? 0),
+          todayReward: Number(payload.todayReward ?? schedule[0] ?? 20),
+        });
+      }
+    } catch {
+      // Keep page interactive if live config fetch fails transiently.
+    }
   }, []);
 
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => { void loadLiveHomeData(); });
+    const onChanged = () => { void loadLiveHomeData(); };
+    window.addEventListener("labellab-account-changed", onChanged);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("labellab-account-changed", onChanged);
+    };
+  }, [loadLiveHomeData]);
+
   const claimCheckIn = async () => {
-    if (checkinBusy || claimed) return;
+    if (checkinBusy || checkIn.claimed || !checkIn.enabled) return;
     setCheckinBusy(true);
     try {
-      const response = await fetch("/api/account/check-in", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: "{}" });
-      if (response.status === 401 || response.status === 403) { openAuth("login"); return; }
+      const response = await fetch("/api/account/check-in", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (response.status === 401 || response.status === 403) {
+        openAuth("login");
+        return;
+      }
       if (!response.ok) throw new Error("check-in failed");
-      const payload = await response.json() as { claimed?: boolean };
-      if (payload.claimed) { setClaimed(true); window.dispatchEvent(new Event("labellab-account-changed")); }
-    } catch { /* Keep the UI usable when the account service is unavailable. */ }
-    finally { setCheckinBusy(false); }
+      const payload = await response.json() as { claimed?: boolean; coins?: number };
+      if (payload.claimed) {
+        setCheckIn((prev) => ({
+          ...prev,
+          claimed: true,
+          todayReward: Number(payload.coins ?? prev.todayReward),
+        }));
+        window.dispatchEvent(new Event("labellab-account-changed"));
+      }
+    } catch {
+      // Keep the UI usable when the account service is unavailable.
+    } finally {
+      setCheckinBusy(false);
+    }
   };
+
+  const maxScheduleVal = Math.max(...checkIn.schedule, 1);
+  const weekItems = checkIn.schedule.slice(0, 7).map((coins, index) => ({
+    day: `Day ${index + 1}`,
+    coins,
+    reward: index === 6 || (coins >= maxScheduleVal && index > 0) ? `+${coins}` : String(coins),
+    icon: index === 6 || (coins >= maxScheduleVal && index > 0) ? "gift" as const : "coin" as const,
+  }));
 
   return (
     <main className="home-shell">
@@ -112,22 +212,25 @@ export default function HomePage() {
             <article className="home-card home-notices-card" id="home-updates">
               <div className="home-card-heading">
                 <div>
-                  <h2>Admin updates <span className="home-count-badge">3</span></h2>
+                  <h2>Admin updates <span className="home-count-badge">{announcements.length}</span></h2>
                 </div>
-                <button className="home-text-action" type="button">View all <ChevronRight size={14} /></button>
+                <Link className="home-text-action" href="/studio">Open Studio <ChevronRight size={14} /></Link>
               </div>
               <div className="home-notice-list">
-                {LABELLAB_UPDATES.map(({ tone, title, time, unread }) => {
-                  const Icon = noticeIcons[tone];
+                {announcements.length > 0 ? announcements.slice(0, 3).map(({ id, tone, title, time, unread, url }) => {
+                  const Icon = noticeIcons[tone] ?? Sparkles;
+                  const safeHref = url.startsWith("/") ? url : "/studio";
                   return (
-                    <button className={`home-notice ${unread ? "is-unread" : ""}`} type="button" key={title}>
+                    <Link className={`home-notice ${unread ? "is-unread" : ""}`} href={safeHref} key={id}>
                       <span className={`home-notice-icon ${tone}`}><Icon size={16} /></span>
                       <span className="home-notice-copy"><strong>{title}</strong><small><Clock3 size={11} /> {time}</small></span>
                       {unread && <span className="home-unread-dot" aria-label="Unread" />}
                       <ChevronRight size={16} className="home-notice-arrow" />
-                    </button>
+                    </Link>
                   );
-                })}
+                }) : (
+                  <p style={{ margin: "10px 0", color: "#8a5c6f", fontSize: 14 }}>No announcements right now.</p>
+                )}
               </div>
             </article>
 
@@ -135,48 +238,65 @@ export default function HomePage() {
               <Image src="/home/promo-banner-3d.jpg" alt="Colorful 3D packaging mockups" fill loading="eager" sizes="(max-width: 1240px) 70vw, 48vw" />
               <div className="home-promo-overlay" />
               <div className="home-promo-content">
-                <span className="home-promo-tag"><Sparkles size={12} /> Limited event</span>
+                <span className="home-promo-tag"><Sparkles size={12} /> Studio 3D</span>
                 <h2>Render more. Pay less.</h2>
-                <p>Save 35% on credits with our weekend bundle.</p>
-                <button type="button" className="home-promo-cta home-sheen">Explore offers <ArrowRight size={15} /></button>
+                <p>Instant VietQR coin top-up with automatic credit confirmation.</p>
+                <Link href="/studio#workspace" className="home-promo-cta home-sheen">Open Studio <ArrowRight size={15} /></Link>
               </div>
               <div className="home-promo-dots" aria-label="Promotion slides"><span className="is-active" /><span /><span /></div>
             </article>
           </section>
 
           <aside className="home-right-column" aria-label="Account and daily rewards">
-            <UserProfileCard profile={PROFILE_PREVIEW} notificationCount={LABELLAB_UPDATES.length} />
+            <UserProfileCard profile={PROFILE_PREVIEW} notificationCount={announcements.length} />
 
             <article className="home-card home-checkin-card">
               <div className="home-checkin-heading">
                 <h2>Daily check-in</h2>
-                <p>Earn coins every day you check in</p>
+                <p>{checkIn.enabled ? "Earn coins every day you check in" : "Daily check-in is temporarily paused"}</p>
               </div>
               <div className="home-week" role="group" aria-label="Seven day check-in progress">
-                {week.map((item, index) => (
-                  <div className={`home-day-wrap ${index === 0 ? "today" : ""}`} key={`${item.day}-${index}`}>
-                    <button
-                      className={`home-day ${index === 0 ? "today" : ""} ${item.icon === "gift" ? "is-bonus" : ""}`}
-                      type="button"
-                      aria-label={`${item.day}, ${item.reward} coins`}
-                    >
-                      <span className={`home-day-icon ${item.icon === "gift" ? "is-gift" : ""}`}>
-                        {item.icon === "gift" ? <Gift size={22} aria-hidden="true" /> : <Image src="/branding/LLCoin.svg" alt="" width={28} height={28} />}
-                      </span>
-                      <strong className="home-day-reward">{item.reward}</strong>
-                    </button>
-                    <small>{index === 0 ? "Today" : item.day}</small>
-                  </div>
-                ))}
+                {weekItems.map((item, index) => {
+                  const isToday = index === checkIn.nextDayIndex;
+                  const isCompleted = index < checkIn.nextDayIndex || (isToday && checkIn.claimed);
+                  return (
+                    <div className={`home-day-wrap ${isToday ? "today" : ""}`} key={`${item.day}-${index}`}>
+                      <button
+                        className={`home-day ${isToday ? "today" : ""} ${item.icon === "gift" ? "is-bonus" : ""}`}
+                        type="button"
+                        aria-label={`${item.day}, ${item.coins} coins${isCompleted ? ", claimed" : ""}`}
+                        onClick={() => { if (isToday && !checkIn.claimed && checkIn.enabled) void claimCheckIn(); }}
+                      >
+                        <span className={`home-day-icon ${item.icon === "gift" ? "is-gift" : ""}`}>
+                          {isCompleted ? (
+                            <Check size={20} aria-hidden="true" />
+                          ) : item.icon === "gift" ? (
+                            <Gift size={22} aria-hidden="true" />
+                          ) : (
+                            <Image src="/branding/LLCoin.svg" alt="" width={28} height={28} />
+                          )}
+                        </span>
+                        <strong className="home-day-reward">{item.reward}</strong>
+                      </button>
+                      <small>{isToday ? "Today" : item.day}</small>
+                    </div>
+                  );
+                })}
               </div>
               <button
-                className={`home-checkin-cta home-sheen ${claimed ? "is-claimed" : ""}`}
+                className={`home-checkin-cta home-sheen ${checkIn.claimed ? "is-claimed" : ""}`}
                 type="button"
                 onClick={() => void claimCheckIn()}
-                disabled={checkinBusy}
+                disabled={checkinBusy || !checkIn.enabled}
                 aria-live="polite"
               >
-                {claimed ? <><Check size={18} /> Reward claimed</> : <><CalendarCheck size={18} /> {"Claim today's +20"}</>}
+                {!checkIn.enabled ? (
+                  <>Check-in paused</>
+                ) : checkIn.claimed ? (
+                  <><Check size={18} /> {`Reward claimed (+${checkIn.todayReward})`}</>
+                ) : (
+                  <><CalendarCheck size={18} /> {`Claim today's +${checkIn.todayReward}`}</>
+                )}
               </button>
             </article>
           </aside>

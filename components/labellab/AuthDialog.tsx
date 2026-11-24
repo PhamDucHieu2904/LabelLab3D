@@ -77,6 +77,8 @@ function mapServerError(code: string | undefined, mode: AuthMode): string {
       return "Email verification service is not configured on the server yet.";
     case "EMAIL_SEND_FAILED":
       return "Could not send the verification email. Please try again in a moment.";
+    case "REGISTRATIONS_DISABLED":
+      return "New account registrations are currently paused.";
     case "INVALID_INPUT":
       return mode === "login"
         ? "Please check your email and password."

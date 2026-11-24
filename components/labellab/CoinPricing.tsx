@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Check, CheckCircle2, Copy, Download, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { COIN_PACKAGES } from "@/lib/payments/packages";
+import { COIN_PACKAGES, type CoinPackage } from "@/lib/payments/packages";
 import { useAccount, useAuthDialog } from "./AuthDialog";
 import styles from "./CoinPricing.module.css";
 
@@ -45,6 +45,7 @@ export default function CoinPricing() {
   const { user } = useAccount();
   const openAuth = useAuthDialog();
   const [regionId, setRegionId] = useState<typeof regions[number]["id"]>("vietnam");
+  const [packages, setPackages] = useState<readonly CoinPackage[]>(COIN_PACKAGES);
   const [selectedCoins, setSelectedCoins] = useState<number>(20);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [paymentState, setPaymentState] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -124,7 +125,20 @@ export default function CoinPricing() {
     return () => window.clearInterval(interval);
   }, [checkoutOpen, paymentOrder]);
 
-  const selectedPackage = COIN_PACKAGES.find((item) => item.coins === selectedCoins)!;
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/site/config", { cache: "no-store" })
+      .then(async (res) => res.ok ? await res.json() as { coinPackages?: CoinPackage[] } : null)
+      .then((payload) => {
+        if (!active || !Array.isArray(payload?.coinPackages) || payload.coinPackages.length === 0) return;
+        setPackages(payload.coinPackages);
+        setSelectedCoins((curr) => payload.coinPackages!.some((p) => p.coins === curr) ? curr : payload.coinPackages![0].coins);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  const selectedPackage = packages.find((item) => item.coins === selectedCoins) ?? packages[0] ?? COIN_PACKAGES[0];
   const selectedPrice = prices.format(regionId === "vietnam" ? selectedPackage.vnd : selectedPackage.usd);
 
   const createPaymentOrder = useCallback(async (coinsToBuy: number) => {
@@ -486,7 +500,7 @@ export default function CoinPricing() {
       </div>
 
       <div className={styles.packs} role="group" aria-label={`${region.label} coin packages`}>
-        {COIN_PACKAGES.map((item) => {
+        {packages.map((item) => {
           const price = prices.format(regionId === "vietnam" ? item.vnd : item.usd);
           return (
             <button

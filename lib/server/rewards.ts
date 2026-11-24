@@ -1,9 +1,22 @@
 import { appendLedgerEntry } from "./wallet";
 import { requireDb, randomId, nowIso, type AppEnv } from "./db";
 import { awardBadge } from "./badges";
+import { getLiveCheckInConfig, type LiveCheckInConfig } from "./site-config";
 
 export function currentRewardDay(now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+}
+
+/**
+ * Compute today's reward amount from the live 7-day check-in schedule.
+ * Uses the user's completed check-in count modulo the schedule length so Day 1..7
+ * progresses deterministically and immediately honors admin changes in D1.
+ */
+export function resolveCheckInReward(config: LiveCheckInConfig, priorCheckInCount: number): { dayIndex: number; coins: number } {
+  const schedule = config.schedule.length > 0 ? config.schedule : [config.reward];
+  const dayIndex = Math.max(0, Math.floor(priorCheckInCount)) % schedule.length;
+  const coins = schedule[dayIndex] ?? config.reward;
+  return { dayIndex, coins };
 }
 
 export async function claimDailyCheckIn(env: AppEnv, userId: string, requestedDay?: string) {
@@ -18,8 +31,15 @@ export async function claimDailyCheckIn(env: AppEnv, userId: string, requestedDa
     if (!credited) await appendLedgerEntry(env, { userId, amount: existing.coins, kind: "daily_checkin", reference: idempotencyKey, idempotencyKey, metadata: { day, recovered: true } });
     return { claimed: false, ...existing };
   }
-  const reward = 20;
+
+  const checkInConfig = await getLiveCheckInConfig(env);
+  if (!checkInConfig.enabled) throw new Error("CHECKIN_DISABLED");
+
+  const priorCountRow = await db.prepare("SELECT COUNT(*) AS count FROM daily_checkins WHERE user_id=?").bind(userId).first<{ count: number }>();
+  const priorCount = Number(priorCountRow?.count ?? 0);
+  const { dayIndex, coins: reward } = resolveCheckInReward(checkInConfig, priorCount);
   const claimedAt = nowIso();
+
   // Claim the unique day first. This closes the race where two requests both
   // credit the ledger before one loses the UNIQUE(user_id, day) insert.
   const claim = await db.prepare("INSERT OR IGNORE INTO daily_checkins (id,user_id,day,coins,idempotency_key,claimed_at) VALUES (?,?,?,?,?,?)").bind(randomId("checkin"), userId, day, reward, idempotencyKey, claimedAt).run();
@@ -30,7 +50,7 @@ export async function claimDailyCheckIn(env: AppEnv, userId: string, requestedDa
   }
   let entry;
   try {
-    entry = await appendLedgerEntry(env, { userId, amount: reward, kind: "daily_checkin", reference: idempotencyKey, idempotencyKey, metadata: { day } });
+    entry = await appendLedgerEntry(env, { userId, amount: reward, kind: "daily_checkin", reference: idempotencyKey, idempotencyKey, metadata: { day, dayIndex } });
   } catch (error) {
     await db.prepare("DELETE FROM daily_checkins WHERE idempotency_key=?").bind(idempotencyKey).run();
     throw error;
@@ -38,5 +58,5 @@ export async function claimDailyCheckIn(env: AppEnv, userId: string, requestedDa
   const total = await db.prepare("SELECT COUNT(*) AS count FROM daily_checkins WHERE user_id=?").bind(userId).first<{ count: number }>();
   if (Number(total?.count ?? 0) >= 1) await awardBadge(env, userId, "first-checkin", { day });
   if (Number(total?.count ?? 0) >= 7) await awardBadge(env, userId, "seven-checkins", { day });
-  return { claimed: true, id: entry.id, coins: reward, claimedAt: entry.createdAt };
+  return { claimed: true, id: entry.id, coins: reward, dayIndex, claimedAt: entry.createdAt };
 }

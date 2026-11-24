@@ -1,8 +1,8 @@
-import { findCoinPackage } from "@/lib/payments/packages";
 import { nowIso, randomId, requireDb } from "@/lib/server/db";
 import { env, sessionUser, json, errorResponse, assertSameOrigin } from "@/lib/server/http";
 import { getPaymentProvider } from "@/lib/server/payment-provider";
 import { buildSepayQrImageUrl, generateOrderCode, readSepayConfig, readSepayQrConfig } from "@/lib/server/sepay";
+import { getLiveCoinPackages } from "@/lib/server/site-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +15,10 @@ export async function POST(request: Request) {
     const runtimeEnv = await env();
     const body = await request.json().catch(() => ({})) as { coins?: unknown };
     const coins = Number(body.coins);
-    const selected = Number.isSafeInteger(coins) ? findCoinPackage(coins) : null;
+    const livePackages = await getLiveCoinPackages(runtimeEnv);
+    const selected = Number.isSafeInteger(coins)
+      ? livePackages.find((pkg) => pkg.enabled && pkg.coins === coins) ?? null
+      : null;
     if (!selected) throw new Error("INVALID_INPUT");
 
     const id = randomId("pay");

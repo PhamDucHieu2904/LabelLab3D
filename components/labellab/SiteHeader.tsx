@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
@@ -24,6 +25,23 @@ export default function SiteHeader({ activePage, disabled = false, onOpenProject
   const signedIn = isLoggedIn ?? (Boolean(user) || status === "authenticated");
   const accountLabel = signedIn ? "Log out" : "Login";
   const AccountIcon = signedIn ? LogOut : LogIn;
+
+  useEffect(() => {
+    const kind = activePage === "studio" ? "studio_session" : "pageview";
+    const key = `ll_visit_${kind}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, "1");
+    } catch {
+      // Ignore storage access errors in private browsing.
+    }
+    void fetch("/api/telemetry/visit", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind, path: activePage === "studio" ? "/studio" : "/" }),
+    }).catch(() => undefined);
+  }, [activePage]);
   return (
     <header className={styles.header} inert={disabled}>
       <Link className={styles.wordmark} href="/" aria-label="Labellab home">
