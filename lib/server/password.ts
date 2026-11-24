@@ -1,6 +1,9 @@
 import { base64Url, base64UrlBytes, constantTimeEqual } from "./db";
 
-const ITERATIONS = 310_000;
+// Cloudflare Workers Web Crypto enforces a hard ceiling of 100,000 PBKDF2
+// iterations (`NotSupportedError` above 100,000). Keep verification flexible
+// up to 2,000,000 so hashes created on Node.js still verify cleanly.
+const ITERATIONS = 100_000;
 const encoder = new TextEncoder();
 
 async function derive(password: string, salt: Uint8Array, iterations: number) {

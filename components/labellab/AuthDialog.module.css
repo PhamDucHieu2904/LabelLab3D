@@ -8,7 +8,7 @@
   max-width: none;
   max-height: calc(100dvh - 48px);
   margin: auto;
-  padding: 28px 36px 0;
+  padding: 24px 34px 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -60,9 +60,9 @@
 }
 .intro h2:focus { outline: none; }
 .intro p { color: var(--auth-muted); font-size: 15px; line-height: 1.55; }
-.form { display: grid; gap: 14px; }
-.compactForm { margin-top: 18px; }
-.googleOption { display: grid; gap: 12px; }
+.form { display: grid; gap: 12px; }
+.compactForm { margin-top: 14px; }
+.googleOption { display: grid; gap: 10px; }
 .googleButton {
   display: flex;
   align-items: center;
@@ -194,9 +194,9 @@
   align-items: center;
   justify-content: center;
   column-gap: 6px;
-  min-height: 64px;
-  margin-top: 18px;
-  padding: 12px 0;
+  min-height: 56px;
+  margin-top: 14px;
+  padding: 10px 0;
   border-top: 1px solid #eddee4;
   color: var(--auth-muted);
   font-size: 14px;

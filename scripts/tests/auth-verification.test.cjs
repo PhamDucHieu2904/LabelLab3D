@@ -248,3 +248,115 @@ test('upsertGoogleUser creates wallet-backed D1 user, reuses link, and prevents 
   assert.equal(mock.users.get('usr_pre').password_hash, null, 'unverified pre-registered password must be cleared');
   assert.ok(mock.users.get('usr_pre').email_verified_at);
 });
+
+test('password hashing stays within Cloudflare Workers 100k PBKDF2 ceiling and verifies legacy hashes', async () => {
+  const load = createLoader();
+  const { hashPassword, verifyPassword } = load(path.resolve(ROOT, 'lib/server/password.ts'));
+
+  const encoded = await hashPassword('CorrectHorse99');
+  const [alg, iterText] = encoded.split('$');
+  assert.equal(alg, 'pbkdf2-sha256');
+  assert.ok(Number(iterText) >= 100_000 && Number(iterText) <= 100_000, 'must stay within Cloudflare Workers 100k PBKDF2 limit');
+  assert.equal(await verifyPassword('CorrectHorse99', encoded), true);
+  assert.equal(await verifyPassword('WrongPassword99', encoded), false);
+});
+
+test('Workers-native Google OAuth enforces CSRF, PKCE, signed state, and RS256 ID token verification', async () => {
+  const load = createLoader();
+  const oauth = load(path.resolve(ROOT, 'lib/server/google-oauth.ts'));
+  const dbMod = load(path.resolve(ROOT, 'lib/server/db.ts'));
+
+  const config = {
+    clientId: 'client-123.apps.googleusercontent.com',
+    clientSecret: 'secret-xyz',
+    secret: 'super-secret-signing-key-at-least-32-chars-long',
+    origin: 'https://www.labellab3d.workers.dev',
+  };
+
+  // CSRF pair verifies valid token and rejects tampering.
+  const csrf = await oauth.createCsrfTokenPair(config.secret);
+  assert.equal(await oauth.verifyCsrfToken(config.secret, csrf.cookieValue, csrf.csrfToken), true);
+  assert.equal(await oauth.verifyCsrfToken(config.secret, csrf.cookieValue, 'wrong-token'), false);
+  assert.equal(await oauth.verifyCsrfToken(config.secret, `${csrf.cookieValue}x`, csrf.csrfToken), false);
+
+  // Start flow emits PKCE S256, state, nonce, select_account, and clamps off-origin callback URLs.
+  const nowMs = Date.UTC(2026, 10, 24, 9, 0, 0);
+  const started = await oauth.startGoogleOAuth(config, 'https://evil.example/steal', nowMs);
+  const authUrl = new URL(started.url);
+  assert.equal(authUrl.origin, 'https://accounts.google.com');
+  assert.equal(authUrl.searchParams.get('client_id'), config.clientId);
+  assert.equal(authUrl.searchParams.get('redirect_uri'), 'https://www.labellab3d.workers.dev/api/auth/callback/google');
+  assert.equal(authUrl.searchParams.get('code_challenge_method'), 'S256');
+  assert.equal(authUrl.searchParams.get('code_challenge'), await dbMod.sha256(started.codeVerifier));
+  assert.equal(authUrl.searchParams.get('prompt'), 'select_account');
+
+  const tx = await oauth.verifyOAuthTransaction(config.secret, started.txCookieValue, started.state, nowMs + 5_000);
+  assert.ok(tx);
+  assert.equal(tx.callbackUrl, config.origin, 'off-origin callback must fall back to app origin');
+  assert.equal(await oauth.verifyOAuthTransaction(config.secret, started.txCookieValue, 'wrong-state', nowMs + 5_000), null);
+  assert.equal(await oauth.verifyOAuthTransaction(config.secret, started.txCookieValue, started.state, nowMs + 11 * 60_000), null);
+
+  // Token exchange forwards code_verifier and redirect_uri.
+  let tokenReq = null;
+  const exchanged = await oauth.exchangeGoogleCode(config, { code: 'auth-code-1', codeVerifier: started.codeVerifier }, async (url, init) => {
+    tokenReq = { url, init };
+    return new Response(JSON.stringify({ id_token: 'mock.id.token' }), { status: 200 });
+  });
+  assert.equal(exchanged.idToken, 'mock.id.token');
+  assert.equal(tokenReq.url, 'https://oauth2.googleapis.com/token');
+  const sentBody = new URLSearchParams(tokenReq.init.body);
+  assert.equal(sentBody.get('code'), 'auth-code-1');
+  assert.equal(sentBody.get('code_verifier'), started.codeVerifier);
+  assert.equal(sentBody.get('redirect_uri'), 'https://www.labellab3d.workers.dev/api/auth/callback/google');
+
+  // RS256 ID token verification with a real Web Crypto RSA keypair.
+  const keyPair = await crypto.subtle.generateKey(
+    { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+    true,
+    ['sign', 'verify'],
+  );
+  const publicJwk = { ...(await crypto.subtle.exportKey('jwk', keyPair.publicKey)), kid: 'test-key-1', use: 'sig', alg: 'RS256' };
+  const signJwt = async (payload, header = { alg: 'RS256', typ: 'JWT', kid: 'test-key-1' }) => {
+    const enc = new TextEncoder();
+    const h = dbMod.base64Url(enc.encode(JSON.stringify(header)));
+    const p = dbMod.base64Url(enc.encode(JSON.stringify(payload)));
+    const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', keyPair.privateKey, enc.encode(`${h}.${p}`));
+    return `${h}.${p}.${dbMod.base64Url(new Uint8Array(sig))}`;
+  };
+
+  const nowSec = Math.floor(nowMs / 1000);
+  const validPayload = {
+    iss: 'https://accounts.google.com',
+    aud: config.clientId,
+    sub: 'google-sub-999',
+    email: 'Hieu@Gmail.com',
+    email_verified: true,
+    name: 'Phạm Đức Hiếu',
+    picture: 'https://lh3.googleusercontent.com/avatar',
+    nonce: started.nonce,
+    iat: nowSec - 10,
+    exp: nowSec + 3600,
+  };
+  const validToken = await signJwt(validPayload);
+  const verified = await oauth.verifyGoogleIdToken(validToken, {
+    clientId: config.clientId,
+    expectedNonce: started.nonce,
+    nowMs,
+    jwks: [publicJwk],
+  });
+  assert.deepEqual(verified, {
+    sub: 'google-sub-999',
+    email: 'hieu@gmail.com',
+    name: 'Phạm Đức Hiếu',
+    avatarUrl: 'https://lh3.googleusercontent.com/avatar',
+  });
+
+  // Tampered signature, wrong aud, wrong nonce, expired exp, and unverified email must all be rejected.
+  const parts = validToken.split('.');
+  const tamperedToken = `${parts[0]}.${parts[1]}.${parts[2].slice(0, -2)}AA`;
+  await assert.rejects(() => oauth.verifyGoogleIdToken(tamperedToken, { clientId: config.clientId, expectedNonce: started.nonce, nowMs, jwks: [publicJwk] }), /BAD_SIGNATURE/);
+  await assert.rejects(async () => oauth.verifyGoogleIdToken(await signJwt({ ...validPayload, aud: 'other-client' }), { clientId: config.clientId, expectedNonce: started.nonce, nowMs, jwks: [publicJwk] }), /BAD_AUD/);
+  await assert.rejects(async () => oauth.verifyGoogleIdToken(await signJwt({ ...validPayload, nonce: 'wrong-nonce' }), { clientId: config.clientId, expectedNonce: started.nonce, nowMs, jwks: [publicJwk] }), /BAD_NONCE/);
+  await assert.rejects(async () => oauth.verifyGoogleIdToken(await signJwt({ ...validPayload, exp: nowSec - 120 }), { clientId: config.clientId, expectedNonce: started.nonce, nowMs, jwks: [publicJwk] }), /EXPIRED/);
+  await assert.rejects(async () => oauth.verifyGoogleIdToken(await signJwt({ ...validPayload, email_verified: false }), { clientId: config.clientId, expectedNonce: started.nonce, nowMs, jwks: [publicJwk] }), /UNVERIFIED_EMAIL/);
+});

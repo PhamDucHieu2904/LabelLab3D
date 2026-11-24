@@ -37,5 +37,8 @@ export function errorResponse(error: unknown) {
   const exposed = status === 400
     ? (["INVALID_CODE", "CODE_EXPIRED", "INVALID_INPUT"].includes(code) ? code : "REQUEST_FAILED")
     : code;
+  if (status === 400 && exposed === "REQUEST_FAILED") {
+    console.error("[api-error]", error instanceof Error ? `${error.name}: ${error.message}` : String(error));
+  }
   return json({ error: exposed }, { status });
 }
