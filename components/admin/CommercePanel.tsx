@@ -162,7 +162,7 @@ export default function CommercePanel() {
   const currentPage = Math.min(page, lastPage);
 
   const revenueVn = orders.filter((o) => o.status === "paid" && o.currency === "VND").reduce((sum, o) => sum + Number(o.amount), 0);
-  const revenueUsd = orders.filter((o) => o.status === "paid" && o.currency !== "VND").reduce((sum, o) => sum + Number(o.amount), 0);
+  const revenueUsd = orders.filter((o) => o.status === "paid" && o.currency !== "VND").reduce((sum, o) => sum + Number(o.amount) / 100, 0);
   const paidOrdersCount = orders.filter((o) => o.status === "paid").length;
   const paidCoins = orders.filter((o) => o.status === "paid").reduce((sum, o) => sum + Number(o.coins), 0);
   const totalLedgerDelta = ledger.reduce((sum, entry) => sum + Number(entry.amount), 0);
@@ -252,7 +252,7 @@ export default function CommercePanel() {
       downloadCsv(
         "labellab-giao-dich.csv",
         ["Mã đơn", "Người dùng", "Email", "Thời gian", "Tiền tệ", "Số tiền", "Coin", "Trạng thái", "Mã GD ngân hàng"],
-        orders.map((o) => [o.orderCode, o.userName ?? o.userId, o.userEmail ?? "", formatDate(o.createdAt), o.currency, o.amount, o.coins, ORDER_STATUS_LABELS[o.status] ?? o.status, o.providerOrderId ?? ""]),
+        orders.map((o) => [o.orderCode, o.userName ?? o.userId, o.userEmail ?? "", formatDate(o.createdAt), o.currency, o.currency === "VND" ? o.amount : (o.amount / 100).toFixed(2), o.coins, ORDER_STATUS_LABELS[o.status] ?? o.status, o.providerOrderId ?? ""]),
       );
     }
   }
@@ -364,7 +364,7 @@ export default function CommercePanel() {
                             <small>{order.userEmail || ""}</small>
                           </div>
                         </td>
-                        <td><strong>{formatMoney(Number(order.amount), order.currency === "VND" ? "vn" : "international")}</strong></td>
+                        <td><strong>{formatMoney(order.currency === "VND" ? Number(order.amount) : Number(order.amount) / 100, order.currency === "VND" ? "vn" : "international")}</strong></td>
                         <td><CoinValue value={Number(order.coins)} /></td>
                         <td>
                           <span className={s.status} data-status={order.status === "cancelled" || order.status === "expired" ? "failed" : order.status}>
@@ -497,7 +497,7 @@ export default function CommercePanel() {
               <dl className={s.detailList}>
                 <div><dt>Người dùng</dt><dd>{modal.order.userName || modal.order.userId} ({modal.order.userEmail || ""})</dd></div>
                 <div><dt>Thời gian tạo</dt><dd>{formatDate(modal.order.createdAt)}</dd></div>
-                <div><dt>Số tiền</dt><dd>{formatMoney(modal.order.amount, modal.order.currency === "VND" ? "vn" : "international")}</dd></div>
+                <div><dt>Số tiền</dt><dd>{formatMoney(modal.order.currency === "VND" ? modal.order.amount : modal.order.amount / 100, modal.order.currency === "VND" ? "vn" : "international")}</dd></div>
                 <div><dt>Coin</dt><dd><CoinValue value={modal.order.coins} /></dd></div>
                 <div><dt>Mã GD ngân hàng</dt><dd>{modal.order.providerOrderId || "—"}</dd></div>
               </dl>

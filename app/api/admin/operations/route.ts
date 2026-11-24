@@ -3,6 +3,7 @@ import { nowIso, randomId } from "@/lib/server/db";
 import { readEmailConfig } from "@/lib/server/email";
 import { readGoogleOAuthConfig } from "@/lib/server/google-oauth";
 import { assertSameOrigin, errorResponse, json } from "@/lib/server/http";
+import { readPolarConfig } from "@/lib/server/polar";
 import { readSepayConfig, readSepayQrConfig } from "@/lib/server/sepay";
 import { ensureSiteTables, getLiveSiteSettings, sanitizeSiteSettings, writeConfigJson } from "@/lib/server/site-config";
 
@@ -38,6 +39,7 @@ export async function GET(request: Request) {
 
     const qrCfg = readSepayQrConfig(env);
     const gwCfg = readSepayConfig(env);
+    const polarCfg = readPolarConfig(env);
     const emailCfg = readEmailConfig(env);
     const googleCfg = readGoogleOAuthConfig(env, origin);
 
@@ -72,9 +74,11 @@ export async function GET(request: Request) {
       },
       {
         id: "intl-pay",
-        name: "Thanh toán quốc tế (USD)",
-        connected: false,
-        detail: "Sắp mở (Stripe / LemonSqueezy)",
+        name: "Thanh toán quốc tế (Polar.sh)",
+        connected: Boolean(polarCfg),
+        detail: polarCfg
+          ? `Polar.sh MoR (${polarCfg.environment === "production" ? "Live" : "Sandbox"}) · USD`
+          : "Chưa cấu hình (cần POLAR_ACCESS_TOKEN, POLAR_WEBHOOK_SECRET, POLAR_PRODUCT_ID)",
       },
     ];
 

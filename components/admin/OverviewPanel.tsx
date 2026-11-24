@@ -453,7 +453,7 @@ export default function OverviewPanel({ detailed = false }: { detailed?: boolean
                           </small>
                         </div>
                       </td>
-                      <td>{formatMoney(order.amount, order.currency === "VND" ? "vn" : "international")}</td>
+                      <td>{formatMoney(order.currency === "VND" ? order.amount : order.amount / 100, order.currency === "VND" ? "vn" : "international")}</td>
                       <td>
                         <span className={s.status} data-status={order.status === "cancelled" || order.status === "expired" ? "failed" : order.status}>
                           {ORDER_STATUS_VI[order.status] ?? order.status}

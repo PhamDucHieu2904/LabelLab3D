@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Check, CheckCircle2, Copy, Download, RefreshCw } from "lucide-react";
+import { Check, CheckCircle2, Copy, CreditCard, Download, ExternalLink, Globe, RefreshCw, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { COIN_PACKAGES, type CoinPackage } from "@/lib/payments/packages";
@@ -10,10 +10,11 @@ import { useAccount, useAuthDialog } from "./AuthDialog";
 import styles from "./CoinPricing.module.css";
 
 const regions = [
-  { id: "vietnam", label: "Vietnam", currency: "VND", locale: "vi-VN", enabled: true },
-  { id: "international", label: "International", currency: "USD", locale: "en-US", enabled: false },
+  { id: "vietnam", label: "Vietnam", currency: "VND", locale: "vi-VN" },
+  { id: "international", label: "International", currency: "USD", locale: "en-US" },
 ] as const;
 
+type RegionId = typeof regions[number]["id"];
 type Checkout = { action: string; method: "POST"; fields: Record<string, string> };
 type DirectQr = {
   imageUrl: string;
@@ -23,6 +24,11 @@ type DirectQr = {
   accountNumber: string;
   accountOwner: string;
   transferContent: string;
+};
+type PolarCheckout = {
+  checkoutId: string;
+  url: string;
+  sandbox: boolean;
 };
 type PaymentOrder = {
   id: string;
@@ -44,14 +50,17 @@ function formatCountdown(ms: number): string {
 export default function CoinPricing() {
   const { user } = useAccount();
   const openAuth = useAuthDialog();
-  const [regionId, setRegionId] = useState<typeof regions[number]["id"]>("vietnam");
+  const [regionId, setRegionId] = useState<RegionId>("vietnam");
   const [packages, setPackages] = useState<readonly CoinPackage[]>(COIN_PACKAGES);
+  const [intlReady, setIntlReady] = useState(false);
+  const [intlSandbox, setIntlSandbox] = useState(false);
   const [selectedCoins, setSelectedCoins] = useState<number>(20);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [paymentState, setPaymentState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [paymentError, setPaymentError] = useState("");
   const [checkout, setCheckout] = useState<Checkout | null>(null);
   const [directQr, setDirectQr] = useState<DirectQr | null>(null);
+  const [polarCheckout, setPolarCheckout] = useState<PolarCheckout | null>(null);
   const [qrLoaded, setQrLoaded] = useState(false);
   const [qrImageError, setQrImageError] = useState(false);
   const [paymentOrder, setPaymentOrder] = useState<PaymentOrder | null>(null);
@@ -67,7 +76,7 @@ export default function CoinPricing() {
     style: "currency",
     currency: region.currency,
     minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    maximumFractionDigits: region.currency === "USD" ? 2 : 0,
   });
 
   useEffect(() => {
@@ -128,11 +137,20 @@ export default function CoinPricing() {
   useEffect(() => {
     let active = true;
     void fetch("/api/site/config", { cache: "no-store" })
-      .then(async (res) => res.ok ? await res.json() as { coinPackages?: CoinPackage[] } : null)
+      .then(async (res) => res.ok ? await res.json() as {
+        coinPackages?: CoinPackage[];
+        payments?: { internationalEnabled?: boolean; internationalSandbox?: boolean };
+      } : null)
       .then((payload) => {
-        if (!active || !Array.isArray(payload?.coinPackages) || payload.coinPackages.length === 0) return;
-        setPackages(payload.coinPackages);
-        setSelectedCoins((curr) => payload.coinPackages!.some((p) => p.coins === curr) ? curr : payload.coinPackages![0].coins);
+        if (!active || !payload) return;
+        if (Array.isArray(payload.coinPackages) && payload.coinPackages.length > 0) {
+          setPackages(payload.coinPackages);
+          setSelectedCoins((curr) => payload.coinPackages!.some((p) => p.coins === curr) ? curr : payload.coinPackages![0].coins);
+        }
+        if (payload.payments) {
+          setIntlReady(Boolean(payload.payments.internationalEnabled));
+          setIntlSandbox(Boolean(payload.payments.internationalSandbox));
+        }
       })
       .catch(() => undefined);
     return () => { active = false; };
@@ -141,8 +159,7 @@ export default function CoinPricing() {
   const selectedPackage = packages.find((item) => item.coins === selectedCoins) ?? packages[0] ?? COIN_PACKAGES[0];
   const selectedPrice = prices.format(regionId === "vietnam" ? selectedPackage.vnd : selectedPackage.usd);
 
-  const createPaymentOrder = useCallback(async (coinsToBuy: number) => {
-    if (regionId !== "vietnam") return;
+  const createPaymentOrder = useCallback(async (coinsToBuy: number, targetRegion: RegionId) => {
     if (!user) {
       setCheckoutOpen(false);
       openAuth("login");
@@ -153,6 +170,7 @@ export default function CoinPricing() {
     setPaymentError("");
     setManualCheckHint("");
     setDirectQr(null);
+    setPolarCheckout(null);
     setCheckout(null);
     setPaymentOrder(null);
     setQrLoaded(false);
@@ -162,24 +180,31 @@ export default function CoinPricing() {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coins: coinsToBuy }),
+        body: JSON.stringify({ coins: coinsToBuy, region: targetRegion }),
       });
       const payload = await response.json().catch(() => ({})) as {
-        mode?: "direct_qr" | "gateway";
+        mode?: "direct_qr" | "gateway" | "polar_checkout";
         qr?: DirectQr | null;
+        polar?: PolarCheckout | null;
         checkout?: Checkout | null;
         order?: PaymentOrder;
         error?: string;
       };
       if (seq !== orderRequestSeq.current) return;
-      if (!response.ok || (!payload.qr && !payload.checkout)) {
-        if (response.status === 403) throw new Error("Bạn cần đăng nhập trước khi nạp coin.");
-        if (payload.error === "PAYMENT_NOT_CONFIGURED") throw new Error("Cổng thanh toán SePay chưa được cấu hình trên máy chủ.");
+      if (!response.ok || (!payload.qr && !payload.polar && !payload.checkout)) {
+        if (response.status === 403) throw new Error(targetRegion === "international" ? "Please sign in before purchasing coins." : "Bạn cần đăng nhập trước khi nạp coin.");
+        if (payload.error === "PAYMENT_NOT_CONFIGURED") {
+          throw new Error(targetRegion === "international"
+            ? "International card checkout (Polar.sh) is being configured on the server."
+            : "Cổng thanh toán SePay chưa được cấu hình trên máy chủ.");
+        }
+        if (payload.error === "POLAR_CHECKOUT_FAILED") throw new Error("Could not initialize Polar checkout session. Please try again.");
         if (payload.error === "PAYMENT_ENV_MISMATCH") throw new Error("Cấu hình môi trường SePay (Sandbox/Production) chưa khớp với khóa merchant.");
-        if (payload.error === "PAYMENT_PUBLIC_URL_REQUIRED") throw new Error("Cần cấu hình URL HTTPS công khai để SePay gọi IPN.");
-        throw new Error("Không thể tạo đơn thanh toán. Vui lòng thử lại.");
+        if (payload.error === "PAYMENT_PUBLIC_URL_REQUIRED") throw new Error("Cần cấu hình URL HTTPS công khai để cổng thanh toán gọi webhook.");
+        throw new Error(targetRegion === "international" ? "Could not create checkout order. Please try again." : "Không thể tạo đơn thanh toán. Vui lòng thử lại.");
       }
       setDirectQr(payload.qr ?? null);
+      setPolarCheckout(payload.polar ?? null);
       setCheckout(payload.checkout ?? null);
       setPaymentOrder(payload.order ?? null);
       setClockMs(Date.now());
@@ -189,7 +214,7 @@ export default function CoinPricing() {
       setPaymentState("error");
       setPaymentError(error instanceof Error ? error.message : "Không thể tạo đơn thanh toán.");
     }
-  }, [openAuth, regionId, user]);
+  }, [openAuth, user]);
 
   function submitCheckout() {
     if (!checkout || !checkoutFormRef.current) return;
@@ -217,7 +242,9 @@ export default function CoinPricing() {
         if (updated.status === "paid") {
           window.dispatchEvent(new Event("labellab-account-changed"));
         } else if (updated.status === "pending") {
-          setManualCheckHint("Hệ thống chưa nhận được giao dịch — coin sẽ tự cộng sau vài giây khi chuyển khoản xong.");
+          setManualCheckHint(regionId === "international"
+            ? "Payment not received yet — coins will credit automatically right after Polar confirms your card payment."
+            : "Hệ thống chưa nhận được giao dịch — coin sẽ tự cộng sau vài giây khi chuyển khoản xong.");
         }
       }
     } finally {
@@ -232,17 +259,18 @@ export default function CoinPricing() {
   const isExpired = paymentOrder?.status === "expired" || (remainingMs !== null && remainingMs <= 0 && paymentOrder?.status === "pending");
   const isPaid = paymentOrder?.status === "paid";
   const isDirectQr = Boolean(directQr);
-  const isSandbox = Boolean(checkout?.action.includes("pay-sandbox.sepay.vn"));
+  const isPolar = regionId === "international" || Boolean(polarCheckout);
+  const isSandbox = Boolean(checkout?.action.includes("pay-sandbox.sepay.vn") || polarCheckout?.sandbox || (isPolar && intlSandbox));
 
   const statusText = isPaid
-    ? "Đã thanh toán · đã cộng coin"
+    ? (isPolar ? "Paid · coins added" : "Đã thanh toán · đã cộng coin")
     : isExpired
-      ? "Đơn đã hết hạn"
+      ? (isPolar ? "Session expired" : "Đơn đã hết hạn")
       : paymentState === "loading"
-        ? "Đang tạo mã QR…"
+        ? (isPolar ? "Preparing Polar checkout…" : "Đang tạo mã QR…")
         : paymentState === "ready"
-          ? "Chờ chuyển khoản · tự động cộng coin"
-          : "Chưa tạo đơn";
+          ? (isPolar ? "Waiting for payment · auto credit" : "Chờ chuyển khoản · tự động cộng coin")
+          : (isPolar ? "Ready to checkout" : "Chưa tạo đơn");
 
   const statusClass = isPaid
     ? styles.statusPaid
@@ -277,78 +305,111 @@ export default function CoinPricing() {
           </button>
           <div className={styles.checkoutHeader}>
             <div>
-              <span className={styles.eyebrow}>Nạp coin nội địa</span>
-              <h3 id="coin-checkout-title">Nạp {selectedPackage.coins} coins</h3>
+              <span className={styles.eyebrow}>{isPolar ? "International Top-Up · USD" : "Nạp coin nội địa"}</span>
+              <h3 id="coin-checkout-title">{isPolar ? `Top up ${selectedPackage.coins} coins` : `Nạp ${selectedPackage.coins} coins`}</h3>
               <p id="coin-checkout-description">
-                {isDirectQr
-                  ? "Quét mã VietQR bằng app ngân hàng — coin tự cộng ngay sau khi chuyển khoản"
-                  : isSandbox
-                    ? "Thanh toán QR VietQR qua SePay (Test Mode)"
-                    : "Thanh toán QR VietQR qua SePay"}
+                {isPolar
+                  ? `Pay securely with Visa, Mastercard, Apple Pay, or Google Pay via Polar${isSandbox ? " (Sandbox)" : ""}`
+                  : isDirectQr
+                    ? "Quét mã VietQR bằng app ngân hàng — coin tự cộng ngay sau khi chuyển khoản"
+                    : isSandbox
+                      ? "Thanh toán QR VietQR qua SePay (Test Mode)"
+                      : "Thanh toán QR VietQR qua SePay"}
               </p>
             </div>
             <Image src="/branding/LLCoin.svg" alt="" width={46} height={46} unoptimized />
           </div>
+
           <div className={styles.checkoutGrid}>
             <div className={styles.qrWrap}>
-              {directQr && !qrImageError ? (
-                <div className={styles.qrFrame}>
-                  {!qrLoaded && <div className={styles.qrSkeleton} aria-hidden="true">Đang tải QR…</div>}
-                  <Image
-                    src={directQr.imageUrl}
-                    alt={`Mã QR thanh toán ${selectedPackage.coins} coins qua ${directQr.bankName}`}
-                    width={204}
-                    height={204}
-                    unoptimized
-                    className={`${styles.qrImage} ${qrLoaded ? styles.qrImageReady : ""}`}
-                    onLoad={() => setQrLoaded(true)}
-                    onError={() => setQrImageError(true)}
-                  />
-                  {isPaid && (
-                    <div className={styles.qrOverlayPaid} aria-label="Đã thanh toán thành công">
-                      <CheckCircle2 size={44} aria-hidden="true" />
-                      <span>Đã cộng coin</span>
+              {isPolar ? (
+                <>
+                  <div className={styles.polarCard}>
+                    <div className={styles.polarIconWrap}>
+                      {isPaid ? <CheckCircle2 size={38} aria-hidden="true" /> : <CreditCard size={36} aria-hidden="true" />}
                     </div>
-                  )}
-                  {isExpired && !isPaid && (
-                    <div className={styles.qrOverlayExpired} aria-label="Mã QR đã hết hạn">
-                      <span>Mã đã hết hạn</span>
-                    </div>
-                  )}
-                </div>
+                    <strong className={styles.polarBrand}>Polar Checkout</strong>
+                    <span className={styles.polarBadges}>Visa · Mastercard · Apple Pay</span>
+                    <span className={styles.polarSafe}><ShieldCheck size={14} aria-hidden="true" /> Global MoR · Auto VAT</span>
+                  </div>
+                  <strong>{isPaid ? "Payment confirmed!" : isSandbox ? "Polar Sandbox Mode" : "Instant card checkout"}</strong>
+                  <small>
+                    {isPaid
+                      ? "Your coins have been credited to your account."
+                      : remainingMs !== null && !isExpired
+                        ? `Checkout link valid for ${formatCountdown(remainingMs)}`
+                        : "Coins are added automatically via verified Polar webhook."}
+                  </small>
+                </>
+              ) : directQr && !qrImageError ? (
+                <>
+                  <div className={styles.qrFrame}>
+                    {!qrLoaded && <div className={styles.qrSkeleton} aria-hidden="true">Đang tải QR…</div>}
+                    <Image
+                      src={directQr.imageUrl}
+                      alt={`Mã QR thanh toán ${selectedPackage.coins} coins qua ${directQr.bankName}`}
+                      width={204}
+                      height={204}
+                      unoptimized
+                      className={`${styles.qrImage} ${qrLoaded ? styles.qrImageReady : ""}`}
+                      onLoad={() => setQrLoaded(true)}
+                      onError={() => setQrImageError(true)}
+                    />
+                    {isPaid && (
+                      <div className={styles.qrOverlayPaid} aria-label="Đã thanh toán thành công">
+                        <CheckCircle2 size={44} aria-hidden="true" />
+                        <span>Đã cộng coin</span>
+                      </div>
+                    )}
+                    {isExpired && !isPaid && (
+                      <div className={styles.qrOverlayExpired} aria-label="Mã QR đã hết hạn">
+                        <span>Mã đã hết hạn</span>
+                      </div>
+                    )}
+                  </div>
+                  <strong>{isPaid ? "Thanh toán thành công!" : `VietQR · ${directQr.bankName}`}</strong>
+                  <small>
+                    {isPaid
+                      ? "Số dư coin đã được cập nhật vào tài khoản."
+                      : remainingMs !== null && !isExpired
+                        ? `Quét trực tiếp bằng app ngân hàng · Hết hạn sau ${formatCountdown(remainingMs)}`
+                        : isExpired
+                          ? "Bấm Tạo mã QR mới nếu bạn chưa chuyển khoản."
+                          : "Chỉ ghi nhận coin sau khi webhook SePay xác nhận thanh toán."}
+                  </small>
+                </>
               ) : paymentState === "loading" ? (
-                <div className={styles.qrFrame}>
-                  <div className={styles.qrSkeleton}>Đang tạo mã QR…</div>
-                </div>
+                <>
+                  <div className={styles.qrFrame}>
+                    <div className={styles.qrSkeleton}>Đang tạo mã QR…</div>
+                  </div>
+                  <strong>QR thanh toán SePay</strong>
+                  <small>Đang khởi tạo mã VietQR từ máy chủ…</small>
+                </>
               ) : (
-                <div className={styles.demoQr} aria-label="Khu vực QR thanh toán SePay">
-                  <span>VIETQR</span>
-                  <b>QR</b>
-                </div>
+                <>
+                  <div className={styles.demoQr} aria-label="Khu vực QR thanh toán SePay">
+                    <span>VIETQR</span>
+                    <b>QR</b>
+                  </div>
+                  <strong>{user ? "QR thanh toán SePay" : "Đăng nhập để hiện QR"}</strong>
+                  <small>Chỉ ghi nhận coin sau khi webhook SePay xác nhận thanh toán.</small>
+                </>
               )}
-              <strong>
-                {isPaid
-                  ? "Thanh toán thành công!"
-                  : isDirectQr
-                    ? `VietQR · ${directQr?.bankName}`
-                    : user
-                      ? "QR thanh toán SePay"
-                      : "Đăng nhập để hiện QR"}
-              </strong>
-              <small>
-                {isPaid
-                  ? "Số dư coin đã được cập nhật vào tài khoản."
-                  : isDirectQr && remainingMs !== null && !isExpired
-                    ? `Quét trực tiếp bằng app ngân hàng · Hết hạn sau ${formatCountdown(remainingMs)}`
-                    : isDirectQr && isExpired
-                      ? "Bấm Tạo mã QR mới nếu bạn chưa chuyển khoản."
-                      : "Chỉ ghi nhận coin sau khi webhook SePay xác nhận thanh toán."}
-              </small>
             </div>
+
             <dl className={styles.summary}>
-              <div><dt>Gói coin</dt><dd>{selectedPackage.coins} coins</dd></div>
-              <div><dt>Số tiền</dt><dd>{selectedPrice}</dd></div>
-              {directQr ? (
+              <div><dt>{isPolar ? "Coin pack" : "Gói coin"}</dt><dd>{selectedPackage.coins} coins</dd></div>
+              <div><dt>{isPolar ? "Price" : "Số tiền"}</dt><dd>{selectedPrice}</dd></div>
+              {isPolar ? (
+                <>
+                  <div><dt>Provider</dt><dd><Globe size={14} style={{ verticalAlign: "-2px", marginRight: 5 }} aria-hidden="true" />Polar.sh (USD)</dd></div>
+                  <div><dt>Methods</dt><dd>Card · Apple Pay · Google Pay</dd></div>
+                  {paymentOrder?.orderCode && (
+                    <div><dt>Order ID</dt><dd className={styles.orderCode}>{paymentOrder.orderCode}</dd></div>
+                  )}
+                </>
+              ) : directQr ? (
                 <>
                   <div><dt>Ngân hàng</dt><dd>{directQr.bankName}</dd></div>
                   <div>
@@ -391,13 +452,46 @@ export default function CoinPricing() {
                   {paymentOrder?.orderCode && <div><dt>Mã đơn</dt><dd className={styles.orderCode}>{paymentOrder.orderCode}</dd></div>}
                 </>
               )}
-              <div><dt>Trạng thái</dt><dd><span className={statusClass}>{statusText}</span></dd></div>
+              <div><dt>{isPolar ? "Status" : "Trạng thái"}</dt><dd><span className={statusClass}>{statusText}</span></dd></div>
             </dl>
           </div>
+
           {paymentState === "error" && <p className={styles.paymentError} role="alert">{paymentError}</p>}
           {manualCheckHint && !isPaid && <p className={styles.checkHint} role="status">{manualCheckHint}</p>}
+
           <div className={styles.paymentAction}>
-            {isDirectQr && paymentState === "ready" && !isExpired && !isPaid && directQr ? (
+            {isPaid ? (
+              <button
+                type="button"
+                className={styles.payButtonPaid}
+                onClick={() => setCheckoutOpen(false)}
+              >
+                <CheckCircle2 size={18} aria-hidden="true" />
+                <span>{isPolar ? `Added ${selectedPackage.coins} coins · Close` : `Đã cộng ${selectedPackage.coins} coins · Đóng`}</span>
+              </button>
+            ) : isPolar && polarCheckout && paymentState === "ready" && !isExpired ? (
+              <>
+                <a
+                  href={polarCheckout.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.payButton}
+                >
+                  <CreditCard size={16} aria-hidden="true" />
+                  <span>{`Pay ${selectedPrice} with Polar`}</span>
+                  <ExternalLink size={15} aria-hidden="true" />
+                </a>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => void checkPaymentNow()}
+                  disabled={checkingNow}
+                >
+                  <RefreshCw size={15} className={checkingNow ? styles.spin : undefined} aria-hidden="true" />
+                  <span>{checkingNow ? "Checking…" : "Check status"}</span>
+                </button>
+              </>
+            ) : isDirectQr && paymentState === "ready" && !isExpired && directQr ? (
               <>
                 <a
                   href={directQr.downloadUrl}
@@ -417,31 +511,22 @@ export default function CoinPricing() {
                   <span>{checkingNow ? "Đang kiểm tra…" : "Tôi đã chuyển khoản"}</span>
                 </button>
               </>
-            ) : isPaid ? (
-              <button
-                type="button"
-                className={styles.payButtonPaid}
-                onClick={() => setCheckoutOpen(false)}
-              >
-                <CheckCircle2 size={18} aria-hidden="true" />
-                <span>Đã cộng {selectedPackage.coins} coins · Đóng</span>
-              </button>
             ) : (
               <button
                 type="button"
                 className={styles.payButton}
-                onClick={checkout && paymentState === "ready" && !isExpired ? submitCheckout : () => void createPaymentOrder(selectedPackage.coins)}
+                onClick={checkout && paymentState === "ready" && !isExpired ? submitCheckout : () => void createPaymentOrder(selectedPackage.coins, regionId)}
                 disabled={paymentState === "loading"}
               >
                 {paymentState === "loading"
-                  ? "Đang tạo mã QR…"
+                  ? (isPolar ? "Preparing checkout…" : "Đang tạo mã QR…")
                   : isExpired
-                    ? "Tạo mã QR mới"
+                    ? (isPolar ? "Create new checkout" : "Tạo mã QR mới")
                     : checkout && paymentState === "ready"
                       ? "Mở QR thanh toán"
                       : user
-                        ? "Tạo mã QR thanh toán"
-                        : "Đăng nhập để nạp coin"}
+                        ? (isPolar ? `Continue to Polar (${selectedPrice})` : "Tạo mã QR thanh toán")
+                        : (isPolar ? "Sign in to buy coins" : "Đăng nhập để nạp coin")}
               </button>
             )}
             {paymentState === "ready" && checkout && (
@@ -459,13 +544,18 @@ export default function CoinPricing() {
               </form>
             )}
           </div>
+
           <div className={styles.notice}>
-            <strong>Chính sách giao dịch</strong>
-            <p>Coin là credit nội bộ, không quy đổi tiền mặt, không chuyển nhượng. Vui lòng giữ nguyên số tiền và nội dung chuyển khoản để hệ thống cộng coin tự động.</p>
+            <strong>{isPolar ? "Payment policy" : "Chính sách giao dịch"}</strong>
+            <p>
+              {isPolar
+                ? "Coins are internal studio credits, non-transferable and verified automatically via signed Polar webhooks. Taxes (VAT/Sales Tax) are handled by Polar as Merchant of Record."
+                : "Coin là credit nội bộ, không quy đổi tiền mặt, không chuyển nhượng. Vui lòng giữ nguyên số tiền và nội dung chuyển khoản để hệ thống cộng coin tự động."}
+            </p>
             <div>
-              <Link href="/legal/terms">Điều khoản</Link>
-              <Link href="/legal/refund">Hoàn tiền</Link>
-              <Link href="/legal/privacy">Bảo mật</Link>
+              <Link href="/legal/terms">{isPolar ? "Terms" : "Điều khoản"}</Link>
+              <Link href="/legal/refund">{isPolar ? "Refunds" : "Hoàn tiền"}</Link>
+              <Link href="/legal/privacy">{isPolar ? "Privacy" : "Bảo mật"}</Link>
             </div>
           </div>
         </section>
@@ -489,12 +579,13 @@ export default function CoinPricing() {
           <button
             key={item.id}
             type="button"
-            disabled={!item.enabled}
             aria-pressed={regionId === item.id}
             onClick={() => setRegionId(item.id)}
           >
             <span className={styles.marketLabel}>{item.label}</span>
-            <small className={styles.marketCurrency}>{item.enabled ? item.currency : "Sắp mở"}</small>
+            <small className={styles.marketCurrency}>
+              {item.id === "international" && !intlReady ? "USD" : item.currency}
+            </small>
           </button>
         ))}
       </div>
@@ -513,11 +604,12 @@ export default function CoinPricing() {
                 setSelectedCoins(item.coins);
                 setCheckoutOpen(true);
                 if (user) {
-                  void createPaymentOrder(item.coins);
+                  void createPaymentOrder(item.coins, regionId);
                 } else {
                   orderRequestSeq.current += 1;
                   setPaymentState("idle");
                   setDirectQr(null);
+                  setPolarCheckout(null);
                   setCheckout(null);
                   setPaymentOrder(null);
                   setPaymentError("");

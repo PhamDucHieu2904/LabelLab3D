@@ -164,12 +164,13 @@ export async function GET(request: Request) {
       if (ord.status === "paid") {
         revenue.paid += 1;
         revenue.coins += Number(ord.coins);
-        if (isVn) revenue.vn += Number(ord.amount);
-        else revenue.international += Number(ord.amount);
+        const majorAmount = isVn ? Number(ord.amount) : Number(ord.amount) / 100;
+        if (isVn) revenue.vn += majorAmount;
+        else revenue.international += majorAmount;
         const idx = bucketIndexForIso(ord.createdAt, granularity);
         if (idx >= 0 && idx < points.length) {
-          if (isVn) vnBars[idx] += Number(ord.amount);
-          else intlBars[idx] += Number(ord.amount);
+          if (isVn) vnBars[idx] += majorAmount;
+          else intlBars[idx] += majorAmount;
         }
         const entry = paidCoinsByUser.get(ord.userId) ?? { all: 0, vn: 0, international: 0 };
         entry.all += Number(ord.coins);
