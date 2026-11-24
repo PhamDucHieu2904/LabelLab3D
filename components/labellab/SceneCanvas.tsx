@@ -18,7 +18,9 @@ import type {
   MockupStatus,
   MockupCameraPreset,
   MockupBackdropPainter,
+  ProceduralSubject,
 } from "@/lib/mockup/contracts";
+import type { QualityPreference, QualityRuntimeReport } from "@/lib/mockup/quality-tier";
 import type { ScenePreferences } from "@/lib/labellab/preferences";
 import { createMaterialOverrides } from "@/lib/labellab/material-overrides";
 import { paintRenderBackdrop, prepareRenderBackdrop, snapshotRenderBackdrop } from "@/lib/labellab/render-backdrop";
@@ -31,10 +33,22 @@ export interface SceneCanvasHandle {
   fov: (deltaDegrees: number) => void;
   reset: () => void;
   camera: (preset: MockupCameraPreset) => void;
+  cameraAngles: (yawDeg: number, pitchDeg: number, fov?: number, animate?: boolean) => void;
   orbit: (yaw: number, pitch: number) => void;
+  refreshProceduralBounds: (refitCamera?: boolean) => void;
+  requestFrame: () => void;
+  getCanvas: () => HTMLCanvasElement | null;
 }
 interface Props {
   model: LabModel;
+  /** When provided, mounts a procedural subject (e.g. Parametric Box/Tray) instead of static GLB. */
+  proceduralSubject?: ProceduralSubject | null;
+  /** Accessible subject name for screen readers (defaults to model.name). */
+  subjectName?: string;
+  /** User-selected or Auto 4-tier rendering quality preference. */
+  qualityPreference?: QualityPreference;
+  /** Reports detected hardware tier, effective tier, scene weight and MSAA level. */
+  onQualityChange?: (report: QualityRuntimeReport) => void;
   settings: ScenePreferences;
   artwork?: string;
   artworkEditing?: boolean;
@@ -58,19 +72,19 @@ function applyMotion(
 }
 
 const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
-  { model, settings, artwork, artworkEditing = false, deferSelection = false, onStatus, renderCanvasRef, interaction = "studio", displayScale = 1, paintBackground },
+  { model, proceduralSubject = null, subjectName, qualityPreference = "auto", onQualityChange, settings, artwork, artworkEditing = false, deferSelection = false, onStatus, renderCanvasRef, interaction = "studio", displayScale = 1, paintBackground },
   ref,
 ) {
   const outerRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<MockupRuntime | null>(null);
-  const propsRef = useRef({ model, settings, artwork, artworkEditing, onStatus, paintBackground });
+  const propsRef = useRef({ model, settings, artwork, artworkEditing, onStatus, onQualityChange, qualityPreference, paintBackground });
   const [readyVersion, setReadyVersion] = useState(0);
   const [status, setStatus] = useState("loading-model");
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   useEffect(() => {
-    propsRef.current = { model, settings, artwork, artworkEditing, onStatus, paintBackground };
+    propsRef.current = { model, settings, artwork, artworkEditing, onStatus, onQualityChange, qualityPreference, paintBackground };
   });
 
   useImperativeHandle(
@@ -95,7 +109,11 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
       fov: (deltaDegrees) => runtimeRef.current?.adjustFov(deltaDegrees),
       reset: () => runtimeRef.current?.resetView(),
       camera: (preset) => runtimeRef.current?.setCamera(preset),
+      cameraAngles: (yawDeg, pitchDeg, fov, animate = true) => runtimeRef.current?.setCameraAngles(yawDeg, pitchDeg, fov, animate),
       orbit: (yaw, pitch) => runtimeRef.current?.orbitView(yaw, pitch),
+      refreshProceduralBounds: (refitCamera = false) => runtimeRef.current?.refreshProceduralBounds({ refitCamera }),
+      requestFrame: () => runtimeRef.current?.requestFrame(),
+      getCanvas: () => runtimeRef.current?.getCanvas() ?? null,
     }),
     [],
   );
@@ -126,6 +144,10 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
           owned = createMockupRuntime(hostRef.current, {
             enableWheelZoom: interaction !== "drag-only",
             displayScale,
+            qualityPreference: propsRef.current.qualityPreference,
+            onQualityChange: (report) => {
+              if (alive) propsRef.current.onQualityChange?.(report);
+            },
             paintBackground: (context, width, height) => {
               if (propsRef.current.paintBackground) {
                 propsRef.current.paintBackground(context, width, height);
@@ -172,6 +194,10 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
   useEffect(() => {
     const runtime = runtimeRef.current;
     if (!runtime || deferSelection) return;
+    if (proceduralSubject) {
+      runtime.setProceduralSubject(proceduralSubject);
+      return;
+    }
     const appearance = artwork
       ? {
           ...model.appearance,
@@ -183,7 +209,7 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
         }
       : model.appearance;
     runtime.select(model.asset, appearance, model.frontYaw);
-  }, [model, artwork, deferSelection, readyVersion]);
+  }, [model, proceduralSubject, artwork, deferSelection, readyVersion]);
 
   useEffect(() => {
     const runtime = runtimeRef.current;
@@ -194,8 +220,14 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
         ? { type: "white" }
         : { type: "transparent" },
     );
-    runtime.setMaterialOverrides(createMaterialOverrides(settings, model, getModelMaterialDefaults(model.id)));
-  }, [model, settings, readyVersion]);
+    if (!proceduralSubject) {
+      runtime.setMaterialOverrides(createMaterialOverrides(settings, model, getModelMaterialDefaults(model.id)));
+    }
+  }, [model, proceduralSubject, settings, readyVersion]);
+
+  useEffect(() => {
+    runtimeRef.current?.setQualityPreference(qualityPreference);
+  }, [qualityPreference, readyVersion]);
 
   useEffect(() => {
     const runtime = runtimeRef.current;
@@ -240,8 +272,8 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
         ref={hostRef}
         role="region"
         aria-label={interaction === "drag-only"
-          ? `Interactive 3D demo of ${model.name}. Drag the product to rotate it.`
-          : `3D view of ${model.name}. Use left and right arrows to rotate, up and down arrows to change field of view, and WASD to pan.`}
+          ? `Interactive 3D demo of ${subjectName ?? model.name}. Drag the product to rotate it.`
+          : `3D view of ${subjectName ?? model.name}. Use left and right arrows to rotate, up and down arrows to change field of view, and WASD to pan.`}
         tabIndex={interaction === "drag-only" ? undefined : 0}
         onKeyDown={interaction === "drag-only" ? undefined : (event) => {
           const key = event.key.toLowerCase();

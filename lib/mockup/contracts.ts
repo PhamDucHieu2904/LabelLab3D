@@ -1,6 +1,31 @@
+import type * as THREE from 'three';
 import type { ProductAppearance, ProductAsset } from '../viewer-config';
 import type { LiveMaterialOverrides } from '../viewer/material-adjustments';
 import type { UnityCameraPresetId } from './unity-camera-presets';
+import type { QualityPreference, QualityRuntimeReport } from './quality-tier';
+
+export interface ProceduralContactFootprint {
+  width: number;
+  depth: number;
+  shape: 'circle' | 'rounded-box';
+}
+
+/**
+ * Domain-agnostic 3D subject adapter mounted inside the shared MockupRuntime.
+ * Used by Parametric Boxes/Trays today and Apparel/Fashion modules in the future.
+ */
+export interface ProceduralSubject {
+  readonly id: string;
+  readonly root: THREE.Group;
+  /** Measure upright world bounds in metres for camera framing, depth range and ground contact. */
+  getBounds(): THREE.Box3;
+  /** Optional contact shadow footprint on the Studio floor. */
+  getContactFootprint?(): ProceduralContactFootprint;
+  /** Optional per-frame animation hook (e.g., folding playback). Returns true to keep rendering. */
+  update?(dt: number): boolean;
+  /** Dispose owned geometries, materials and textures when unmounted. */
+  dispose(): void;
+}
 
 export type MockupCameraPreset = 'front' | 'three-quarter' | UnityCameraPresetId;
 export type MockupFocalPreset = 'ultraWide' | 'wide' | 'standard' | 'long' | 'telephoto';
@@ -30,6 +55,10 @@ export interface MockupStatus {
 }
 export interface MockupRuntimeOptions {
   onStatus(value: MockupStatus): void;
+  /** Optional quality tier preference ('auto' | 'low' | 'medium' | 'high' | 'ultra'). */
+  qualityPreference?: QualityPreference;
+  /** Notifies Studio UI of the detected & active quality tier / MSAA state. */
+  onQualityChange?(report: QualityRuntimeReport): void;
   /** Demo embeds allow dragging while wheel gestures keep scrolling the page. */
   enableWheelZoom?: boolean;
   /** Optical display scale for an embed; leaves model geometry and Studio fit intact. */
@@ -42,10 +71,18 @@ export interface MockupRuntimeOptions {
 export interface MockupRuntime {
   setSceneMode(mode: 'website' | 'studio'): void;
   select(asset: ProductAsset, appearance?: ProductAppearance, frontYaw?: number): void;
+  /** Mount a domain procedural subject (e.g. Parametric Box/Tray or Apparel) inside the shared runtime. */
+  setProceduralSubject(subject: ProceduralSubject | null): void;
+  /** Recompute bounds, studio ground floor/shadow and optionally refit camera after live procedural edits. */
+  refreshProceduralBounds(options?: { refitCamera?: boolean }): void;
+  /** Smoothly transition camera to arbitrary spherical angles (degrees) fitted to current product bounds. */
+  setCameraAngles(yawDegrees: number, pitchDegrees: number, fov?: number, animate?: boolean): void;
   setMaterialOverrides(overrides?: LiveMaterialOverrides): void;
   setCamera(preset: MockupCameraPreset): void;
   /** Changes perspective and compensates camera distance to retain the framing. */
   setFocalLength(preset: MockupFocalPreset): void;
+  /** Switch live rendering quality tier ('auto' | 'low' | 'medium' | 'high' | 'ultra'). */
+  setQualityPreference(preference: QualityPreference): void;
   setBackground(background: MockupBackground): void;
   setAnimation(animation: MockupAnimation): void;
   /** Suspend background rendering for a modal without resetting the view or animation clock. */
@@ -62,6 +99,8 @@ export interface MockupRuntime {
   zoom(factor: number): void;
   resetView(): void;
   requestFrame(): void;
+  /** Access live WebGL canvas for video recording (e.g. folding animation export). */
+  getCanvas(): HTMLCanvasElement;
   setRenderPreview(canvas: HTMLCanvasElement | null, options: MockupRenderPreviewOptions): void;
   capture(options: MockupCaptureOptions): Promise<Blob>;
   dispose(): void;

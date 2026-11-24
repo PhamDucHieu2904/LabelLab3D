@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   ArrowDown,
   ArrowLeft,
@@ -14,23 +14,61 @@ import {
   Droplets,
   FileImage,
   FolderOpen,
+  Gauge,
   Globe2,
   Grid2X2,
   Maximize2,
   Minus,
   Move3D,
+  Package,
   Palette,
   Plus,
   RotateCcw,
   RotateCw,
   Save,
   Search,
+  Shirt,
   SlidersHorizontal,
   Sparkles,
   Sun,
   Upload,
   X,
 } from "lucide-react";
+import {
+  getStudioDomain,
+  loadSavedDomain,
+  saveDomain,
+  STUDIO_DOMAINS,
+  type StudioDomainId,
+} from "@/lib/domains/registry";
+import type {
+  PackagingArtworkState,
+  PackagingParams,
+  PackagingPartGroup,
+  PackagingTemplateDefinition,
+} from "@/lib/packaging-cad/types";
+import {
+  createDefaultPackagingParams,
+  getPackagingTemplate,
+  PACKAGING_TEMPLATES,
+  solvePackagingTemplate,
+} from "@/lib/packaging-cad/templates/registry";
+import { loadPackagingParams, savePackagingParams } from "@/lib/packaging-cad/preferences";
+import { createPackagingSubject, type PackagingSubjectController } from "@/lib/packaging-cad/adapter";
+import {
+  exportDielineDxf,
+  exportDielinePdf,
+  exportDielineSvg,
+} from "@/lib/packaging-cad/exporters/vector-dieline";
+import pkgStyles from "./packaging/PackagingStudio.module.css";
+import PackagingLibrary from "./packaging/PackagingLibrary";
+import PackagingInspector from "./packaging/PackagingInspector";
+import PackagingBottomDock, {
+  type PackagingCameraViewPreset,
+  type PackagingViewMode,
+} from "./packaging/PackagingBottomDock";
+import PackagingDielineViewport from "./packaging/PackagingDielineViewport";
+import PackagingArtworkPanel from "./packaging/PackagingArtworkPanel";
 import {
   getDefaultFamilyVariant,
   getLabModelFamily,
@@ -54,6 +92,13 @@ import {
   releaseLocalArtwork,
 } from "@/lib/labellab/local-artwork";
 import type { MockupStatus, MockupCameraPreset } from "@/lib/mockup/contracts";
+import {
+  loadQualityPreference,
+  QUALITY_PREFERENCE_OPTIONS,
+  saveQualityPreference,
+  type QualityPreference,
+  type QualityRuntimeReport,
+} from "@/lib/mockup/quality-tier";
 import { UNITY_CAMERA_PRESETS } from "@/lib/mockup/unity-camera-presets";
 import studioTheme from "./StudioNeutral.module.css";
 import modelLibrary from "./ModelLibrary.module.css";
@@ -125,9 +170,29 @@ function readProjects(): SavedProject[] {
 }
 
 export default function LabellabApp() {
+  const [domain, setDomain] = useState<StudioDomainId>("beverage");
+  const [packagingParams, setPackagingParams] = useState<PackagingParams>(() => createDefaultPackagingParams());
+  const [packagingArtwork, setPackagingArtwork] = useState<PackagingArtworkState>({
+    mode: "panel",
+    panelOverlays: {},
+  });
+  const [packagingViewMode, setPackagingViewMode] = useState<PackagingViewMode>("3d");
+  const [packagingSurface, setPackagingSurface] = useState<"outside" | "inside">("outside");
+  const [selectedPanelId, setSelectedPanelId] = useState<string>("front-wall");
+  const [packagingHoverPart, setPackagingHoverPart] = useState<PackagingPartGroup | null>(null);
+  const [packagingFoldPlaying, setPackagingFoldPlaying] = useState(false);
+  const [packagingCameraId, setPackagingCameraId] = useState("iso");
+  const [packagingSubject, setPackagingSubject] = useState<PackagingSubjectController | null>(null);
+  const packagingSubjectRef = useRef<PackagingSubjectController | null>(null);
+  const packagingArtworkRef = useRef<PackagingArtworkState>(packagingArtwork);
+  const beverageSceneModeRef = useRef<ScenePreferences["sceneMode"]>("website");
+  const isPackaging = domain === "packaging";
+
   const [settings, setSettings] = useState<ScenePreferences>({
     ...DEFAULT_PREFERENCES,
   });
+  const [qualityPreference, setQualityPreference] = useState<QualityPreference>("auto");
+  const [qualityReport, setQualityReport] = useState<QualityRuntimeReport | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
@@ -176,20 +241,55 @@ export default function LabellabApp() {
     value: ScenePreferences[K],
   ) => { if (!exportBusy) setSettings((current) => ({ ...current, [key]: value })); };
 
+  const activePackagingTemplate = useMemo(
+    () => getPackagingTemplate(packagingParams.templateId),
+    [packagingParams.templateId],
+  );
+  const solvedPackaging = useMemo(
+    () => solvePackagingTemplate(packagingParams),
+    [packagingParams],
+  );
+  useEffect(() => {
+    packagingArtworkRef.current = packagingArtwork;
+  }, [packagingArtwork]);
+
   useEffect(() => {
     const initial = loadPreferences();
-    // Respect an explicit model deep link without accepting external model URLs.
+    const initialPackaging = loadPackagingParams();
+    // Respect an explicit model or domain deep link without accepting external URLs.
     const params = new URLSearchParams(location.search);
     const id = params.get("model");
-    if (
-      id &&
-      LAB_MODELS.some((item) => item.id === id) &&
-      id !== initial.modelId
-    )
-      Object.assign(initial, getModelMaterialDefaults(id), { modelId: id });
+    const requestedDomain = params.get("domain");
+    const requestedTemplate = params.get("template");
+    let nextDomain: StudioDomainId = loadSavedDomain();
+
+    if (id && LAB_MODELS.some((item) => item.id === id)) {
+      nextDomain = "beverage";
+      if (id !== initial.modelId) {
+        Object.assign(initial, getModelMaterialDefaults(id), { modelId: id });
+      }
+    } else if (requestedDomain === "packaging" || requestedTemplate) {
+      nextDomain = "packaging";
+    } else if (requestedDomain === "beverage") {
+      nextDomain = "beverage";
+    }
+
+    if (requestedTemplate && PACKAGING_TEMPLATES.some((t) => t.id === requestedTemplate)) {
+      Object.assign(initialPackaging, createDefaultPackagingParams(requestedTemplate));
+    }
+
+    beverageSceneModeRef.current = initial.sceneMode;
+    if (nextDomain === "packaging") {
+      initial.sceneMode = "studio";
+    }
+
     // Hydrate browser-only storage after the SSR render, before enabling persistence.
     /* eslint-disable react-hooks/set-state-in-effect */
+    setDomain(nextDomain);
+    setPackagingParams(initialPackaging);
+    setQualityPreference(loadQualityPreference());
     setSettings(initial);
+    if (nextDomain === "packaging") setActiveTool("materials");
     setActiveCamera(
       initial.sceneMode === "studio"
         ? "view-4"
@@ -203,8 +303,57 @@ export default function LabellabApp() {
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
   useEffect(() => {
-    if (hydrated) savePreferences(settings);
-  }, [settings, hydrated]);
+    if (hydrated && !isPackaging) savePreferences(settings);
+  }, [settings, hydrated, isPackaging]);
+  useEffect(() => {
+    if (hydrated) saveDomain(domain);
+  }, [domain, hydrated]);
+  useEffect(() => {
+    if (hydrated) savePackagingParams(packagingParams);
+  }, [packagingParams, hydrated]);
+  useEffect(() => {
+    if (hydrated) saveQualityPreference(qualityPreference);
+  }, [qualityPreference, hydrated]);
+
+  // Mount or tear down the procedural Parametric Box/Tray subject cleanly on domain transitions.
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!isPackaging) {
+      if (packagingSubjectRef.current) {
+        packagingSubjectRef.current.setFoldPlaying(false);
+        packagingSubjectRef.current = null;
+      }
+      /* eslint-disable react-hooks/set-state-in-effect */
+      setPackagingFoldPlaying(false);
+      setPackagingSubject(null);
+      /* eslint-enable react-hooks/set-state-in-effect */
+      return;
+    }
+    if (!packagingSubjectRef.current) {
+      const subject = createPackagingSubject(packagingParams, packagingArtworkRef.current, {
+        onNeedsRender: () => sceneRef.current?.requestFrame(),
+      });
+      packagingSubjectRef.current = subject;
+      setPackagingSubject(subject);
+    }
+    // Only recreate when domain toggles; live parameter updates mutate `subject` in place!
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, isPackaging]);
+
+  const revokePackagingArtworkUrls = useCallback((state: PackagingArtworkState) => {
+    if (state.outsideDielineUrl?.startsWith("blob:")) URL.revokeObjectURL(state.outsideDielineUrl);
+    if (state.insideDielineUrl?.startsWith("blob:")) URL.revokeObjectURL(state.insideDielineUrl);
+    for (const ov of Object.values(state.panelOverlays)) {
+      if (ov.imageUrl?.startsWith("blob:")) URL.revokeObjectURL(ov.imageUrl);
+    }
+  }, []);
+
+  useEffect(
+    () => () => {
+      revokePackagingArtworkUrls(packagingArtworkRef.current);
+    },
+    [revokePackagingArtworkUrls],
+  );
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 4500);
@@ -282,10 +431,133 @@ export default function LabellabApp() {
       setToast("Browser storage is unavailable. You can keep editing.");
     }
   };
+  const switchDomain = (next: StudioDomainId) => {
+    if (exportBusy || next === domain) return;
+    const meta = getStudioDomain(next);
+    if (meta.id !== next) {
+      setToast("Fashion & Apparel Studio is on our roadmap — coming soon!");
+      return;
+    }
+    setActiveFamilyId(null);
+    if (domain === "beverage") beverageSceneModeRef.current = settings.sceneMode;
+    setDomain(next);
+    if (next === "packaging") {
+      setSettings((cur) => ({ ...cur, sceneMode: "studio", motion: "off" }));
+      setActiveTool("materials");
+      setPackagingViewMode("3d");
+    } else {
+      setPackagingFoldPlaying(false);
+      setSettings((cur) => ({ ...cur, sceneMode: beverageSceneModeRef.current }));
+      setActiveTool("models");
+    }
+  };
+
+  const updatePackaging = (patch: Partial<PackagingParams>, interactive = false) => {
+    if (exportBusy) return;
+    setPackagingParams((current) => {
+      const next = { ...current, ...patch };
+      const subject = packagingSubjectRef.current;
+      if (subject) {
+        subject.syncParams(next, { interactive });
+        sceneRef.current?.refreshProceduralBounds(false);
+      }
+      return next;
+    });
+  };
+
+  const selectPackagingTemplate = (tpl: PackagingTemplateDefinition) => {
+    if (exportBusy) return;
+    setPackagingFoldPlaying(false);
+    packagingSubjectRef.current?.setFoldPlaying(false);
+    const next = createDefaultPackagingParams(tpl.id);
+    setPackagingParams(next);
+    setSelectedPanelId("front-wall");
+    const subject = packagingSubjectRef.current;
+    if (subject) {
+      subject.syncParams(next, { interactive: false });
+      sceneRef.current?.refreshProceduralBounds(true);
+      sceneRef.current?.cameraAngles(34, 28, 32, true);
+      setPackagingCameraId("iso");
+    }
+    setToast(`Loaded ${tpl.code} — ${tpl.name} (${next.lengthMm}×${next.widthMm}×${next.heightMm} mm).`);
+  };
+
+  const handlePackagingFoldChange = (progress: number) => {
+    if (packagingFoldPlaying) {
+      setPackagingFoldPlaying(false);
+      packagingSubjectRef.current?.setFoldPlaying(false);
+    }
+    setPackagingParams((cur) => ({ ...cur, foldProgress: progress }));
+    packagingSubjectRef.current?.setFoldProgress(progress);
+    sceneRef.current?.refreshProceduralBounds(false);
+  };
+
+  const togglePackagingFoldPlay = () => {
+    const nextPlaying = !packagingFoldPlaying;
+    setPackagingFoldPlaying(nextPlaying);
+    const subject = packagingSubjectRef.current;
+    if (subject) {
+      subject.setFoldPlaying(nextPlaying, (p) => {
+        setPackagingParams((cur) => ({ ...cur, foldProgress: p }));
+      });
+      sceneRef.current?.requestFrame();
+    }
+  };
+
+  const handlePackagingHoverPart = (part: PackagingPartGroup | null) => {
+    setPackagingHoverPart(part);
+    packagingSubjectRef.current?.setHighlightGroup(part);
+    sceneRef.current?.requestFrame();
+  };
+
+  const handlePackagingArtworkChange = (next: PackagingArtworkState) => {
+    setPackagingArtwork(next);
+    void packagingSubjectRef.current?.syncArtwork(next);
+  };
+
+  const clearPackagingArtwork = () => {
+    revokePackagingArtworkUrls(packagingArtworkRef.current);
+    const cleared: PackagingArtworkState = { mode: packagingArtwork.mode, panelOverlays: {} };
+    setPackagingArtwork(cleared);
+    void packagingSubjectRef.current?.syncArtwork(cleared);
+    setToast("Cleared packaging artwork.");
+  };
+
+  const downloadPackagingDieline = (format: "svg" | "pdf" | "dxf") => {
+    const solved = solvedPackaging;
+    const baseName = `labellab-${solved.templateId}-${Math.round(solved.params.lengthMm)}x${Math.round(solved.params.widthMm)}x${Math.round(solved.params.heightMm)}mm`;
+    let blob: Blob;
+    if (format === "svg") {
+      blob = new Blob([exportDielineSvg(solved, { side: packagingSurface })], { type: "image/svg+xml;charset=utf-8" });
+    } else if (format === "dxf") {
+      blob = new Blob([exportDielineDxf(solved, packagingSurface)], { type: "application/dxf;charset=utf-8" });
+    } else {
+      const bytes = exportDielinePdf(solved, packagingSurface);
+      const copy = new Uint8Array(bytes.byteLength);
+      copy.set(bytes);
+      blob = new Blob([copy], { type: "application/pdf" });
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${baseName}.${format}`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setToast(`Downloaded 1:1 mm ${format.toUpperCase()} dieline (${Math.round(solved.blankBounds.width)}×${Math.round(solved.blankBounds.height)} mm).`);
+  };
+
+  const selectPackagingCamera = (preset: PackagingCameraViewPreset) => {
+    setPackagingCameraId(preset.id);
+    sceneRef.current?.cameraAngles(preset.yawDeg, preset.pitchDeg, preset.fov ?? 32, true);
+  };
+
   const exportPreview = async () => {
     if (!ready || exportBusy) return;
     setExportBusy(true);
     setRenderProgress(0);
+    const activeExportId = isPackaging ? packagingParams.templateId : model.id;
     const reservationKey = `reserve_${crypto.randomUUID().replaceAll("-", "")}`;
     let reserved = false;
     try {
@@ -293,7 +565,7 @@ export default function LabellabApp() {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idempotencyKey: reservationKey, modelId: model.id, resolution: settings.resolution }),
+        body: JSON.stringify({ idempotencyKey: reservationKey, modelId: activeExportId, resolution: settings.resolution }),
       });
       if (reserveResponse.status === 401 || reserveResponse.status === 403) {
         setToast("Please sign in before spending coins on a render.");
@@ -311,7 +583,10 @@ export default function LabellabApp() {
       if (resultRef.current) URL.revokeObjectURL(resultRef.current);
       const url = URL.createObjectURL(blob);
       resultRef.current = url;
-      setExportResult({ url, name: `labellab-${model.id}-${settings.resolution}${settings.transparent ? "-transparent" : ""}.png` });
+      const sizeSuffix = isPackaging
+        ? `-${Math.round(packagingParams.lengthMm)}x${Math.round(packagingParams.widthMm)}x${Math.round(packagingParams.heightMm)}mm`
+        : "";
+      setExportResult({ url, name: `labellab-${activeExportId}${sizeSuffix}-${settings.resolution}${settings.transparent ? "-transparent" : ""}.png` });
       setToast("Your image is ready. Select Download image to save the PNG.");
     } catch (error) {
       if (reserved) void fetch("/api/account/coin/release", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idempotencyKey: reservationKey }) }).catch(() => undefined);
@@ -338,6 +613,19 @@ export default function LabellabApp() {
   };
   const reset = async () => {
     if (exportBusy) return;
+    if (isPackaging) {
+      setPackagingFoldPlaying(false);
+      packagingSubjectRef.current?.setFoldPlaying(false);
+      const defaults = createDefaultPackagingParams(packagingParams.templateId);
+      setPackagingParams(defaults);
+      clearPackagingArtwork();
+      packagingSubjectRef.current?.syncParams(defaults, { interactive: false });
+      sceneRef.current?.refreshProceduralBounds(true);
+      sceneRef.current?.cameraAngles(34, 28, 32, true);
+      setPackagingCameraId("iso");
+      setToast(`Restored ${activePackagingTemplate.code} defaults.`);
+      return;
+    }
     // Keep the library while clearing the current/default model's label choice.
     await Promise.all([setArtworkSelection(model.id), setArtworkSelection(DEFAULT_PREFERENCES.modelId)]).catch(() => {});
     clearArtwork();
@@ -367,10 +655,14 @@ export default function LabellabApp() {
         <div className="workspace-heading">
           <div>
             <div className="eyebrow">
-              <span /> A LITTLE LABEL. A WHOLE NEW WORLD.
+              <span /> {isPackaging ? "PARAMETRIC MILLIMETRE PACKAGING CAD" : "A LITTLE LABEL. A WHOLE NEW WORLD."}
             </div>
             <h1>
-              Your design.<span> Made real.</span>
+              {isPackaging ? (
+                <>Custom boxes.<span> Folded real.</span></>
+              ) : (
+                <>Your design.<span> Made real.</span></>
+              )}
             </h1>
           </div>
           <button className="text-guide" onClick={() => setModal("guide")}>
@@ -387,23 +679,35 @@ export default function LabellabApp() {
               <button
                 className={activeTool === "models" ? "is-active" : ""}
                 aria-pressed={activeTool === "models"}
-                aria-label="Models"
-                title="Models"
+                aria-label={isPackaging ? "Templates" : "Models"}
+                title={isPackaging ? "Box & tray templates" : "Models"}
                 onClick={() => selectTool("models")}
               >
-                <Box size={18} />
-                <span>Models</span>
+                {isPackaging ? <Package size={18} /> : <Box size={18} />}
+                <span>{isPackaging ? "Templates" : "Models"}</span>
               </button>
               <button
                 className={activeTool === "materials" ? "is-active" : ""}
                 aria-pressed={activeTool === "materials"}
-                aria-label="Properties"
-                title="Properties"
+                aria-label={isPackaging ? "Size & CAD" : "Properties"}
+                title={isPackaging ? "Dimensions, material & Pro CAD" : "Properties"}
                 onClick={() => selectTool("materials")}
               >
-                <Droplets size={18} />
-                <span>Properties</span>
+                {isPackaging ? <SlidersHorizontal size={18} /> : <Droplets size={18} />}
+                <span>{isPackaging ? "Size & CAD" : "Properties"}</span>
               </button>
+              {isPackaging && (
+                <button
+                  className={activeTool === "scene" ? "is-active" : ""}
+                  aria-pressed={activeTool === "scene"}
+                  aria-label="Design"
+                  title="Panel artwork & 1:1 dieline print"
+                  onClick={() => selectTool("scene")}
+                >
+                  <Palette size={18} />
+                  <span>Design</span>
+                </button>
+              )}
             </nav>
 
             <aside
@@ -412,16 +716,23 @@ export default function LabellabApp() {
               data-panel={activeTool}
               data-tone={studio ? "neutral" : settings.style}
               inert={exportBusy}
-              aria-label="Model library"
+              aria-label={isPackaging ? "Packaging templates" : "Model library"}
               aria-hidden={activeTool !== "models"}
             >
               <div className="panel-title">
-                <h2>Model library</h2>
+                <h2>{isPackaging ? "Box templates" : "Model library"}</h2>
                 {activeTool === "models" && (
-                  <span className="count-badge">{LAB_MODEL_FAMILIES.length}</span>
+                  <span className="count-badge">{isPackaging ? PACKAGING_TEMPLATES.length : LAB_MODEL_FAMILIES.length}</span>
                 )}
               </div>
-              {activeTool === "models" ? (
+              {activeTool === "models" && isPackaging ? (
+                <PackagingLibrary
+                  activeTemplateId={packagingParams.templateId}
+                  tone={studio ? "neutral" : settings.style}
+                  disabled={exportBusy}
+                  onSelectTemplate={selectPackagingTemplate}
+                />
+              ) : activeTool === "models" ? (
                 <>
                   <label className="search-box">
                     <Search size={16} />
@@ -504,7 +815,7 @@ export default function LabellabApp() {
                   )}
                 </>
               ) : null}
-              {activeTool === "models" && libraryPageCount > 1 && (
+              {!isPackaging && activeTool === "models" && libraryPageCount > 1 && (
                 <div className={`library-bottom ${modelLibrary.footer}`}>
                   <nav className={modelLibrary.pagination} aria-label="Model library pages">
                     <button type="button" aria-label="Previous model page" aria-controls="model-library-grid"
@@ -521,7 +832,7 @@ export default function LabellabApp() {
               )}
             </aside>
 
-            {variantsOpen && activeFamily && (
+            {!isPackaging && variantsOpen && activeFamily && (
                 <ModelVariantsPanel
                   family={activeFamily}
                   modelId={model.id}
@@ -543,33 +854,108 @@ export default function LabellabApp() {
                   <div className="product-highlight" aria-hidden="true" />
                 )}
                 <div className="scene-area">
-                  <SceneCanvas
-                    ref={sceneRef}
-                    model={model}
-                    settings={settings}
-                    artwork={artwork}
-                    artworkEditing={artworkEditing}
-                    deferSelection={!hydrated}
-                    onStatus={(value) => setStatus(value.phase)}
-                    renderCanvasRef={renderCanvasRef}
-                  />
+                  {isPackaging ? (
+                    <div
+                      className={`${pkgStyles.splitContainer} ${packagingViewMode !== "3d" ? pkgStyles.splitContainerInset : ""}`}
+                      style={
+                        {
+                          "--pkg-left-inset": activeTool ? "372px" : "88px",
+                          "--pkg-right-inset": packagingViewMode === "2d" ? "312px" : "306px",
+                        } as CSSProperties
+                      }
+                    >
+                      {(packagingViewMode === "split" || packagingViewMode === "2d") && (
+                        <PackagingDielineViewport
+                          solved={solvedPackaging}
+                          side={packagingSurface}
+                          fullWidth={packagingViewMode === "2d"}
+                          highlightPartGroup={packagingHoverPart}
+                          onChangeSide={setPackagingSurface}
+                          onSelectPanel={(panelId) => {
+                            setSelectedPanelId(panelId);
+                            setPackagingArtwork((cur) => ({ ...cur, mode: "panel" }));
+                            setActiveTool("scene");
+                          }}
+                          onDownloadDieline={downloadPackagingDieline}
+                        />
+                      )}
+                      <div className={packagingViewMode === "2d" ? pkgStyles.splitPane3DHidden : pkgStyles.splitPane3D}>
+                        <SceneCanvas
+                          ref={sceneRef}
+                          model={model}
+                          proceduralSubject={packagingSubject}
+                          subjectName={activePackagingTemplate.name}
+                          qualityPreference={qualityPreference}
+                          onQualityChange={setQualityReport}
+                          settings={settings}
+                          artwork={artwork}
+                          artworkEditing={artworkEditing}
+                          deferSelection={!hydrated}
+                          onStatus={(value) => setStatus(value.phase)}
+                          renderCanvasRef={renderCanvasRef}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <SceneCanvas
+                      ref={sceneRef}
+                      model={model}
+                      proceduralSubject={null}
+                      subjectName={model.name}
+                      qualityPreference={qualityPreference}
+                      onQualityChange={setQualityReport}
+                      settings={settings}
+                      artwork={artwork}
+                      artworkEditing={artworkEditing}
+                      deferSelection={!hydrated}
+                      onStatus={(value) => setStatus(value.phase)}
+                      renderCanvasRef={renderCanvasRef}
+                    />
+                  )}
                 </div>
               </div>
               <div className="stage-ui-layer" aria-label="Scene controls" inert={exportBusy}>
                 <div className="stage-top">
-                  <div className="mode-switch" aria-label="Choose scene">
-                    <button
-                      aria-pressed={!studio}
-                      onClick={() => switchMode("website")}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", pointerEvents: "auto" }}>
+                    <div className="mode-switch" aria-label="Choose scene">
+                      <button
+                        aria-pressed={!studio}
+                        onClick={() => switchMode("website")}
+                      >
+                        <Globe2 size={15} /> Scene 1
+                      </button>
+                      <button
+                        aria-pressed={studio}
+                        onClick={() => switchMode("studio")}
+                      >
+                        <Box size={15} /> Scene 2
+                      </button>
+                    </div>
+                    <div
+                      className={pkgStyles.domainBar}
+                      data-tone={studio ? "neutral" : settings.style}
+                      role="group"
+                      aria-label="Mockup studio category"
                     >
-                      <Globe2 size={15} /> Scene 1
-                    </button>
-                    <button
-                      aria-pressed={studio}
-                      onClick={() => switchMode("studio")}
-                    >
-                      <Box size={15} /> Scene 2
-                    </button>
+                      {STUDIO_DOMAINS.map((item) => {
+                        const Icon = item.id === "packaging" ? Package : item.id === "apparel" ? Shirt : Droplets;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className={pkgStyles.domainBtn}
+                            aria-pressed={domain === item.id}
+                            disabled={exportBusy || !item.available}
+                            title={item.description}
+                            onClick={() => switchDomain(item.id)}
+                          >
+                            <Icon size={14} aria-hidden="true" />
+                            <span>{item.shortLabel}</span>
+                            {item.badge && <span className={pkgStyles.domainBadge}>{item.badge}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                   <div className="studio-project-actions" role="group" aria-label="Project actions">
                     {!studio && <div className="studio-style-switch" role="group" aria-label="Preview style">
@@ -587,6 +973,34 @@ export default function LabellabApp() {
                         <span className="studio-style-thumb" aria-hidden="true" />
                       </button>
                     </div>}
+                    <label
+                      className={pkgStyles.qualitySelectWrap}
+                      data-tone={studio ? "neutral" : settings.style}
+                      title={
+                        qualityReport
+                          ? `Graphics quality · Active: ${qualityReport.effectiveTier.toUpperCase()} (${qualityReport.sceneWeight} scene · ${qualityReport.idleMsaa}x MSAA)`
+                          : "Choose 3D preview graphics quality"
+                      }
+                    >
+                      <Gauge size={14} aria-hidden="true" />
+                      <select
+                        aria-label="3D preview graphics quality"
+                        value={qualityPreference}
+                        disabled={exportBusy}
+                        onChange={(e) => {
+                          const next = e.target.value as QualityPreference;
+                          setQualityPreference(next);
+                        }}
+                      >
+                        {QUALITY_PREFERENCE_OPTIONS.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.id === "auto" && qualityReport
+                              ? `Auto (${qualityReport.effectiveTier[0].toUpperCase()}${qualityReport.effectiveTier.slice(1)})`
+                              : opt.shortLabel}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                     <button type="button" onClick={reset} aria-label="Restore default scene" title="Restore default scene">
                       <RotateCcw size={16} /><span>Restore defaults</span>
                     </button>
@@ -669,59 +1083,89 @@ export default function LabellabApp() {
                   </button>
                 </div>
                 <div className="stage-bottom">
-                  <div className="camera-presets" aria-label="Camera views">
-                    <div className="camera-mode-frame camera-mode-frame-cyan">
-                    <button
-                      className={`camera-preset animated-preset ${activeCamera === "animated" ? "is-active" : ""}`}
-                      aria-pressed={activeCamera === "animated"}
-                      disabled={studio}
-                      onClick={() => {
-                        setActiveCamera("animated");
-                        update("motion", "showcase");
+                  {isPackaging ? (
+                    <PackagingBottomDock
+                      foldProgress={packagingParams.foldProgress}
+                      foldPlaying={packagingFoldPlaying}
+                      viewMode={packagingViewMode}
+                      showDimensions={packagingParams.showDimensions}
+                      showFaceLabels={packagingParams.showFaceLabels}
+                      activeCameraId={packagingCameraId}
+                      disabled={exportBusy}
+                      onFoldChange={handlePackagingFoldChange}
+                      onToggleFoldPlay={togglePackagingFoldPlay}
+                      onViewModeChange={setPackagingViewMode}
+                      onToggleDimensions={() => {
+                        const next = !packagingParams.showDimensions;
+                        setPackagingParams((cur) => ({ ...cur, showDimensions: next }));
+                        packagingSubjectRef.current?.setDimensionsVisible(next);
+                        sceneRef.current?.requestFrame();
                       }}
-                    >
-                      <span className="camera-preset-dot" />
-                      <span>Animated</span>
-                    </button>
-                    </div>
-                    <div className="camera-mode-frame camera-mode-frame-green">
-                    <div className="camera-preset-list" aria-label="Idle camera angles">
-                      {UNITY_CAMERA_PRESETS.map(({ id: preset, label }) => (
+                      onToggleFaceLabels={() => updatePackaging({ showFaceLabels: !packagingParams.showFaceLabels })}
+                      onSelectCamera={selectPackagingCamera}
+                      onZoom={(factor) => sceneRef.current?.zoom(factor)}
+                      onResetCamera={() => {
+                        setPackagingCameraId("iso");
+                        sceneRef.current?.cameraAngles(34, 28, 32, true);
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <div className="camera-presets" aria-label="Camera views">
+                        <div className="camera-mode-frame camera-mode-frame-cyan">
                         <button
-                          key={preset}
-                          className={`camera-preset ${activeCamera === preset ? "is-active" : ""}`}
-                          aria-pressed={activeCamera === preset}
+                          className={`camera-preset animated-preset ${activeCamera === "animated" ? "is-active" : ""}`}
+                          aria-pressed={activeCamera === "animated"}
+                          disabled={studio}
                           onClick={() => {
-                            setActiveCamera(preset);
-                            update("motion", "off");
-                            sceneRef.current?.camera(preset);
+                            setActiveCamera("animated");
+                            update("motion", "showcase");
                           }}
                         >
-                          {label}
+                          <span className="camera-preset-dot" />
+                          <span>Animated</span>
                         </button>
-                      ))}
-                    </div>
-                    </div>
-                  </div>
-                  <div className="zoom-tools">
-                    <button
-                      aria-label="Zoom out"
-                      onClick={() => sceneRef.current?.zoom(1 / 1.15)}
-                    >
-                      <Minus size={16} />
-                    </button>
-                    <button
-                      aria-label="Zoom in"
-                      onClick={() => sceneRef.current?.zoom(1.15)}
-                    >
-                      <Plus size={16} />
-                    </button>
-                    <span />
-                    <button aria-label="Reset" onClick={() => { setActiveCamera("animated"); sceneRef.current?.reset(); }}>
-                      <RotateCcw size={14} />
-                      <span>Reset</span>
-                    </button>
-                  </div>
+                        </div>
+                        <div className="camera-mode-frame camera-mode-frame-green">
+                        <div className="camera-preset-list" aria-label="Idle camera angles">
+                          {UNITY_CAMERA_PRESETS.map(({ id: preset, label }) => (
+                            <button
+                              key={preset}
+                              className={`camera-preset ${activeCamera === preset ? "is-active" : ""}`}
+                              aria-pressed={activeCamera === preset}
+                              onClick={() => {
+                                setActiveCamera(preset);
+                                update("motion", "off");
+                                sceneRef.current?.camera(preset);
+                              }}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                        </div>
+                      </div>
+                      <div className="zoom-tools">
+                        <button
+                          aria-label="Zoom out"
+                          onClick={() => sceneRef.current?.zoom(1 / 1.15)}
+                        >
+                          <Minus size={16} />
+                        </button>
+                        <button
+                          aria-label="Zoom in"
+                          onClick={() => sceneRef.current?.zoom(1.15)}
+                        >
+                          <Plus size={16} />
+                        </button>
+                        <span />
+                        <button aria-label="Reset" onClick={() => { setActiveCamera("animated"); sceneRef.current?.reset(); }}>
+                          <RotateCcw size={14} />
+                          <span>Reset</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -730,116 +1174,159 @@ export default function LabellabApp() {
               id="material-settings-panel"
               className={`controls-panel tool-panel ${activeTool === "scene" || activeTool === "materials" ? "is-open" : ""}`}
               data-active-tool={activeTool ?? ""}
-              aria-label="Properties"
+              aria-label={isPackaging ? (activeTool === "scene" ? "Box design & artwork" : "Size & CAD") : "Properties"}
               inert={exportBusy}
               aria-hidden={activeTool !== "scene" && activeTool !== "materials"}
             >
               <div className="panel-title">
                 <h2>
-                  <SlidersHorizontal size={16} aria-hidden="true" /> Properties
+                  {isPackaging ? (
+                    activeTool === "scene" ? (
+                      <><Palette size={16} aria-hidden="true" /> Box design</>
+                    ) : (
+                      <><SlidersHorizontal size={16} aria-hidden="true" /> {activePackagingTemplate.code}</>
+                    )
+                  ) : (
+                    <><SlidersHorizontal size={16} aria-hidden="true" /> Properties</>
+                  )}
                 </h2>
               </div>
-              <section className="control-section" data-tool-section="scene">
-                <div className="control-heading">
-                  <Palette size={15} />
-                  <h3>Background & environment</h3>
-                </div>
-                {studio ? (
-                  <div className="studio-info">
-                    <Sun size={17} />
-                    <span>
-                      White Studio
-                      <small>White floor · Perspective grid · 20 m fade</small>
-                    </span>
-                  </div>
-                ) : (
-                  <>
-                    <div className="color-field">
-                      <label htmlFor="background-color">Background color</label>
-                      <div className="color-value">
-                        <span>{settings.background.toUpperCase()}</span>
-                        <input
-                          id="background-color"
-                          type="color"
-                          aria-label="Choose background color"
-                          value={settings.background}
-                          onInput={(e) =>
-                            update("background", e.currentTarget.value)
-                          }
-                          onChange={(e) => update("background", e.target.value)}
-                        />
+              {isPackaging ? (
+                <>
+                  <section className="control-section" data-tool-section="scene">
+                    <PackagingArtworkPanel
+                      solved={solvedPackaging}
+                      artwork={packagingArtwork}
+                      surface={packagingSurface}
+                      selectedPanelId={selectedPanelId}
+                      tone={studio ? "studio" : settings.style}
+                      disabled={exportBusy}
+                      onChangeSurface={setPackagingSurface}
+                      onSelectPanel={setSelectedPanelId}
+                      onChangeArtwork={handlePackagingArtworkChange}
+                      onDownloadDieline={downloadPackagingDieline}
+                      onClearAll={clearPackagingArtwork}
+                    />
+                  </section>
+                  <section className="control-section" data-tool-section="materials">
+                    <PackagingInspector
+                      template={activePackagingTemplate}
+                      params={packagingParams}
+                      solved={solvedPackaging}
+                      tone={studio ? "studio" : settings.style}
+                      disabled={exportBusy}
+                      onChange={updatePackaging}
+                      onReset={() => void reset()}
+                      onHoverPart={handlePackagingHoverPart}
+                      onDownloadDieline={downloadPackagingDieline}
+                    />
+                  </section>
+                </>
+              ) : (
+                <>
+                  <section className="control-section" data-tool-section="scene">
+                    <div className="control-heading">
+                      <Palette size={15} />
+                      <h3>Background & environment</h3>
+                    </div>
+                    {studio ? (
+                      <div className="studio-info">
+                        <Sun size={17} />
+                        <span>
+                          White Studio
+                          <small>White floor · Perspective grid · 20 m fade</small>
+                        </span>
                       </div>
+                    ) : (
+                      <>
+                        <div className="color-field">
+                          <label htmlFor="background-color">Background color</label>
+                          <div className="color-value">
+                            <span>{settings.background.toUpperCase()}</span>
+                            <input
+                              id="background-color"
+                              type="color"
+                              aria-label="Choose background color"
+                              value={settings.background}
+                              onInput={(e) =>
+                                update("background", e.currentTarget.value)
+                              }
+                              onChange={(e) => update("background", e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <div className="swatches">
+                          {swatches.map((color) => (
+                            <button
+                              key={color}
+                              style={{ background: color }}
+                              aria-label={`Background ${color}`}
+                              aria-pressed={
+                                settings.background.toLowerCase() === color
+                              }
+                              onClick={() => update("background", color)}
+                            >
+                              {settings.background.toLowerCase() === color && (
+                                <Check size={13} />
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                        <Toggle
+                          label="Animated grid"
+                          checked={settings.grid}
+                          onChange={() => update("grid", !settings.grid)}
+                          icon={<Grid2X2 size={14} />}
+                        />
+                        <Toggle
+                          label="Product highlight"
+                          checked={settings.highlight}
+                          onChange={() => update("highlight", !settings.highlight)}
+                          icon={<Sun size={14} />}
+                        />
+                      </>
+                    )}
+                  </section>
+                  <section className="control-section" data-tool-section="scene">
+                    <div className="control-heading">
+                      <RotateCw size={15} />
+                      <h3>Motion</h3>
                     </div>
-                    <div className="swatches">
-                      {swatches.map((color) => (
-                        <button
-                          key={color}
-                          style={{ background: color }}
-                          aria-label={`Background ${color}`}
-                          aria-pressed={
-                            settings.background.toLowerCase() === color
+                    <div className="motion-options">
+                      <button
+                        disabled={studio}
+                        aria-pressed={!studio && settings.motion === "showcase"}
+                        onClick={() => {
+                          update("motion", "showcase");
+                          if (!studio) setActiveCamera("animated");
+                        }}
+                      >
+                        <Sparkles size={16} />
+                        <strong>Website</strong>
+                        <small>Tilt & rotate</small>
+                      </button>
+                      <button
+                        aria-pressed={studio || settings.motion === "off"}
+                        onClick={() => {
+                          update("motion", "off");
+                          if (activeCamera === "animated") {
+                            setActiveCamera("view-1");
+                            sceneRef.current?.camera("view-1");
                           }
-                          onClick={() => update("background", color)}
-                        >
-                          {settings.background.toLowerCase() === color && (
-                            <Check size={13} />
-                          )}
-                        </button>
-                      ))}
+                        }}
+                      >
+                        <Circle size={15} />
+                        <strong>Idle</strong>
+                        <small>Still</small>
+                      </button>
                     </div>
-                    <Toggle
-                      label="Animated grid"
-                      checked={settings.grid}
-                      onChange={() => update("grid", !settings.grid)}
-                      icon={<Grid2X2 size={14} />}
-                    />
-                    <Toggle
-                      label="Product highlight"
-                      checked={settings.highlight}
-                      onChange={() => update("highlight", !settings.highlight)}
-                      icon={<Sun size={14} />}
-                    />
-                  </>
-                )}
-              </section>
-              <section className="control-section" data-tool-section="scene">
-                <div className="control-heading">
-                  <RotateCw size={15} />
-                  <h3>Motion</h3>
-                </div>
-                <div className="motion-options">
-                  <button
-                    disabled={studio}
-                    aria-pressed={!studio && settings.motion === "showcase"}
-                    onClick={() => {
-                      update("motion", "showcase");
-                      if (!studio) setActiveCamera("animated");
-                    }}
-                  >
-                    <Sparkles size={16} />
-                    <strong>Website</strong>
-                    <small>Tilt & rotate</small>
-                  </button>
-                  <button
-                    aria-pressed={studio || settings.motion === "off"}
-                    onClick={() => {
-                      update("motion", "off");
-                      if (activeCamera === "animated") {
-                        setActiveCamera("view-1");
-                        sceneRef.current?.camera("view-1");
-                      }
-                    }}
-                  >
-                    <Circle size={15} />
-                    <strong>Idle</strong>
-                    <small>Still</small>
-                  </button>
-                </div>
-              </section>
-              <PropertiesPanel key={model.id} model={model} settings={settings}
-                artwork={<ArtworkLibrary key={`${model.id}:${artworkReset}`} modelId={model.id} disabled={exportBusy}
-                  resetSignal={artworkReset} onApply={applyArtwork} onClear={clearArtwork} onEditorStateChange={setArtworkEditing} />}
-                onChange={(patch) => { if (!exportBusy) setSettings((current) => ({ ...current, ...patch })); }} />
+                  </section>
+                  <PropertiesPanel key={model.id} model={model} settings={settings}
+                    artwork={<ArtworkLibrary key={`${model.id}:${artworkReset}`} modelId={model.id} disabled={exportBusy}
+                      resetSignal={artworkReset} onApply={applyArtwork} onClear={clearArtwork} onEditorStateChange={setArtworkEditing} />}
+                    onChange={(patch) => { if (!exportBusy) setSettings((current) => ({ ...current, ...patch })); }} />
+                </>
+              )}
 
             </aside>
             <RenderPanel
@@ -987,7 +1474,7 @@ export default function LabellabApp() {
         )}
       </dialog>
       {toast && (
-        <div className="toast" role="status">
+        <div className={`toast ${isPackaging ? pkgStyles.toastTop : ""}`} role="status">
           <Check size={17} />
           <span>{toast}</span>
           <button aria-label="Dismiss notification" onClick={() => setToast("")}>

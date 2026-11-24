@@ -35,7 +35,16 @@ import { mockupModelKey, mockupSelectionKey } from './selection';
 import { createStudioGround } from '../labellab/studio-ground';
 import { measureProductBounds } from '../viewer/framing';
 import { renderPaperBackingCapture, disposePaperBackingCapture } from '../viewer/paper-backing-capture';
-import type { MockupAnimation, MockupBackdropPainter, MockupBackground, MockupCameraPreset, MockupFocalPreset, MockupRuntime, MockupRuntimeOptions, MockupRenderPreviewOptions, MockupStatus } from './contracts';
+import {
+  classifySceneWeight,
+  detectHardwareTier,
+  parseQualityPreference,
+  resolveQualityBudget,
+  stepTierDown,
+  type QualityPreference,
+  type QualityTier,
+} from './quality-tier';
+import type { MockupAnimation, MockupBackdropPainter, MockupBackground, MockupCameraPreset, MockupFocalPreset, MockupRuntime, MockupRuntimeOptions, MockupRenderPreviewOptions, MockupStatus, ProceduralSubject } from './contracts';
 
 type LoadedModel = {
   root: THREE.Group; content: THREE.Group; asset: ProductAsset; key: string;
@@ -50,11 +59,19 @@ const safeColor = (color: string | undefined, fallback: string) => color && /^#[
 type GpuTier = 'discrete' | 'integrated' | 'software';
 const cachedEnvironmentData = new Map<string, Promise<THREE.DataTexture>>();
 
-function detectGpuTier(renderer: THREE.WebGLRenderer): GpuTier {
+function readRendererString(renderer: THREE.WebGLRenderer): string {
   try {
     const gl = renderer.getContext();
     const ext = gl.getExtension('WEBGL_debug_renderer_info');
-    const name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER) ?? '');
+    return String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER) ?? '');
+  } catch {
+    return '';
+  }
+}
+
+function detectGpuTier(renderer: THREE.WebGLRenderer): GpuTier {
+  try {
+    const name = readRendererString(renderer);
     if (/swiftshader|llvmpipe|software|microsoft basic render|warp|subzero/i.test(name)) return 'software';
     if (/nvidia|geforce|rtx|gtx|quadro|radeon\s+rx|radeon\s+pro|arc\(tm\)|intel.*arc/i.test(name)) return 'discrete';
     if (/intel|uhd|iris|hd graphics|radeon\(tm\)\s*graphics|vega|mali|adreno|powervr/i.test(name)) return 'integrated';
@@ -130,8 +147,20 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   const renderer = createMockupRenderer();
   const gpuTier = detectGpuTier(renderer);
   const linearType = renderer.extensions.has('EXT_color_buffer_float') ? THREE.HalfFloatType : THREE.UnsignedByteType;
+  const detectedTier: QualityTier = detectHardwareTier({
+    rendererName: readRendererString(renderer),
+    maxTextureSize: renderer.capabilities.maxTextureSize,
+    maxSamples: renderer.capabilities.maxSamples,
+    hardwareConcurrency: typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 4) : 4,
+    deviceMemoryGb: typeof navigator !== 'undefined' ? (navigator as Navigator & { deviceMemory?: number }).deviceMemory : undefined,
+    isMobile: mobile,
+    supportsHalfFloat: linearType === THREE.HalfFloatType,
+  });
+  let qualityPreference: QualityPreference = parseQualityPreference(options.qualityPreference);
+  let autoCalibratedTier: QualityTier = detectedTier;
   host.dataset.mockupQuality = linearType === THREE.HalfFloatType ? 'standard' : 'compatible';
   host.dataset.gpuTier = gpuTier;
+  host.dataset.detectedQualityTier = detectedTier;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NeutralToneMapping;
   renderer.toneMappingExposure = settings.exposure;
@@ -142,8 +171,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   Object.assign(canvas.style, { width: '100%', height: '100%', display: 'block' });
   host.appendChild(canvas);
   const scene = new THREE.Scene();
-  const liveOpticalBounces = gpuTier === 'discrete' ? 6 : gpuTier === 'integrated' ? 4 : 3;
-  scene.userData.opticalMaxBounces = liveOpticalBounces;
+  scene.userData.opticalMaxBounces = resolveQualityBudget(detectedTier, 'medium', renderer.capabilities.maxSamples).opticalBounces;
   const studioGround = createStudioGround(scene);
   let sceneMode: 'website' | 'studio' = 'website';
   let websiteBackground: MockupBackground = { type: 'white' };
@@ -201,7 +229,22 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   let revision = 0;
   let readyRevision = -1;
   let active: LoadedModel | null = null;
+  let procedural: { subject: ProceduralSubject; bounds: THREE.Box3; radius: number } | null = null;
   let cached: LoadedModel | null = null;
+  const currentSubjectBounds = () => procedural?.bounds ?? active?.bounds ?? null;
+  const currentSubjectRadius = () => procedural?.radius ?? active?.radius ?? 0;
+  const hasSubject = () => Boolean(active || procedural);
+  const syncGroundToSubject = () => {
+    const bounds = currentSubjectBounds();
+    if (!bounds) return;
+    studioGround.setFloorY(bounds.min.y);
+    const footprint = procedural?.subject.getContactFootprint?.();
+    if (footprint) {
+      studioGround.setContactFootprint(footprint.width, footprint.depth, footprint.shape);
+    } else {
+      studioGround.setRadius(currentSubjectRadius());
+    }
+  };
   const candidates = new Set<LoadedModel>();
   const discarded = new WeakSet<LoadedModel>();
   let desired: { asset: ProductAsset; appearance?: ProductAppearance; frontYaw: number } | null = null;
@@ -237,6 +280,10 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   let environmentTarget: THREE.WebGLRenderTarget | null = null;
   let environmentRevision = 0;
   let previewTarget: THREE.WebGLRenderTarget | null = null;
+  let previewTargetSamples = -1;
+  let idlePreviewTarget: THREE.WebGLRenderTarget | null = null;
+  let idlePreviewTargetSamples = -1;
+  let idleRefineTimer: number | null = null;
   let studioMatteTarget: THREE.WebGLRenderTarget | null = null;
   let statusPhase: MockupStatus['phase'] = 'loading-model';
   let renderFrames = 0;
@@ -308,13 +355,20 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     statusPhase = phase; host.dataset.mockupPhase = phase; host.dataset.viewerReady = phase === 'ready' ? 'true' : 'false';
     host.dataset.modelPoolSize = String(Number(Boolean(active)) + Number(Boolean(cached)) + candidates.size);
     sampleDiagnostics();
-    if (!disposed) options.onStatus({ phase, assetId: desired?.asset.id ?? '', appearanceId: desired?.appearance?.id ?? '', selectionKey: desiredKey, revision, hasProduct: Boolean(active), materials: phase === 'ready' ? active?.pool.materialValues?.() : undefined, error, message });
+    if (!disposed) options.onStatus({ phase, assetId: procedural?.subject.id ?? desired?.asset.id ?? '', appearanceId: desired?.appearance?.id ?? '', selectionKey: desiredKey, revision, hasProduct: hasSubject(), materials: phase === 'ready' ? active?.pool.materialValues?.() : undefined, error, message });
   };
   const isVisible = () => !disposed && !contextLost && visible && !document.hidden && pausedAt === null;
-  const moving = () => Boolean(active) && !captureGate.busy && (Boolean(cameraTransition)
+  const moving = () => hasSubject() && !captureGate.busy && (Boolean(cameraTransition)
     || animation.playing && animation.mode !== 'off'
     || animation.mode === 'showcase' && (dragging || Boolean(returnFrom) || pose.angleTo(targetPose) > 0.00001 && Number.isFinite(lastInputAt)));
+  const cancelIdleRefine = () => {
+    if (idleRefineTimer !== null) {
+      clearTimeout(idleRefineTimer);
+      idleRefineTimer = null;
+    }
+  };
   const requestRender = () => {
+    cancelIdleRefine();
     dirty = true;
     if (!raf && isVisible() && !captureGate.busy) raf = requestAnimationFrame(frame);
   };
@@ -326,27 +380,40 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     }
     lastTime = performance.now(); requestRender();
   };
-  // Live preview does not need a multisampled intermediate: the final output
-  // is already a fullscreen pass and MSAA here forces an expensive resolve on
-  // every frame. Export can opt back into MSAA below, where it is worth the
-  // extra allocation for the final PNG.
   const createLinearTarget = (width: number, height: number, samples = 0) => new THREE.WebGLRenderTarget(width, height, {
     type: linearType, format: THREE.RGBAFormat, depthBuffer: true,
     samples: Math.min(Math.max(0, samples), renderer.capabilities.maxSamples),
   });
-  const heavyPreviewAssets = new Set(['glass-300-milk', 'pet-500-short-label', 'registry-pet-500-aloe', 'pet-320-full-nata', 'pet-1500-juice']);
-  const previewScaleFor = (asset: ProductAsset | undefined) => {
-    const heavy = Boolean(asset?.id && heavyPreviewAssets.has(asset.id));
-    const base = gpuTier === 'software' ? (heavy ? .5 : .6)
-      : gpuTier === 'integrated' ? (heavy ? .7 : .85)
-      : asset?.id === 'glass-300-milk' ? .75 : 1;
-    return Math.max(.5, base * adaptiveScale);
+  const effectiveQualityTier = (): QualityTier =>
+    qualityPreference === 'auto' ? autoCalibratedTier : qualityPreference;
+  const currentSceneWeight = () => classifySceneWeight(active?.asset, Boolean(procedural && !active));
+  const currentQualityBudget = () =>
+    resolveQualityBudget(effectiveQualityTier(), currentSceneWeight(), renderer.capabilities.maxSamples);
+  const reportQuality = () => {
+    const budget = currentQualityBudget();
+    scene.userData.opticalMaxBounces = budget.opticalBounces;
+    host.dataset.qualityPreference = qualityPreference;
+    host.dataset.qualityTier = budget.tier;
+    host.dataset.sceneWeight = budget.weight;
+    options.onQualityChange?.({
+      preference: qualityPreference,
+      detectedTier,
+      effectiveTier: budget.tier,
+      sceneWeight: budget.weight,
+      interactiveMsaa: budget.interactiveMsaa,
+      idleMsaa: budget.idleMsaa,
+    });
   };
-  const previewDprFor = (asset: ProductAsset | undefined) => {
-    if (gpuTier !== 'discrete') return 1;
-    return asset?.id === 'glass-300-milk' ? 1.25 : 1.5;
+  const resetAdaptiveBudget = () => {
+    adaptiveScale = 1;
+    slowFrameStreak = 0;
+    reportQuality();
   };
-  const liveMaxFps = () => mobile ? 30 : gpuTier === 'software' ? (dragging ? 15 : 8) : gpuTier === 'integrated' ? 30 : adaptiveScale < 1 ? 30 : 60;
+  const liveMaxFps = () => {
+    const budget = currentQualityBudget();
+    if (mobile) return Math.min(30, budget.maxFps);
+    return adaptiveScale < 1 ? Math.min(30, budget.maxFps) : budget.maxFps;
+  };
   const renderTo = (linear: THREE.WebGLRenderTarget, output: THREE.WebGLRenderTarget | null, view: THREE.PerspectiveCamera, transparent = false,
     backdropSurface = previewBackdrop, paintBackground: MockupBackdropPainter | undefined = options.paintBackground, backdropRegion?: RefractiveBackdropRegion) => {
     const region = outputUniforms.outputRegion.value;
@@ -357,9 +424,10 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     // Each live/thumbnail/export camera needs precision at its current distance,
     // including every frame while a Unity view is still moving. active.bounds
     // already includes the authored front yaw; only its animated parent remains.
-    if (active) {
+    const subjectBounds = currentSubjectBounds();
+    if (subjectBounds) {
       product.updateWorldMatrix(true, false);
-      updateMockupProductDepthRange(view, active.bounds, product.matrixWorld, active.radius);
+      updateMockupProductDepthRange(view, subjectBounds, product.matrixWorld, currentSubjectRadius());
     }
     // Render the display matte separately: white/grid must bypass product HDR
     // exposure and ACES/Neutral curves, including in exported PNGs.
@@ -381,7 +449,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         // The floor extends towards the eye. Give only this separate matte pass
         // its close near plane; the print/glass pass keeps its precise product
         // range. Changing Z clipping leaves camera rays and tile offsets intact.
-        view.near = Math.min(productNear, Math.max(0.00001, (active?.radius ?? 0.02) * 0.005));
+        view.near = Math.min(productNear, Math.max(0.00001, (currentSubjectRadius() || 0.02) * 0.005));
         if (view.near !== productNear) view.updateProjectionMatrix();
         renderer.toneMapping = THREE.NoToneMapping;
         renderer.setRenderTarget(studioMatteTarget); renderer.clear(); renderer.render(scene, view);
@@ -465,7 +533,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     return { fullWidth, fullHeight, offsetX, offsetY: crop.y * scale };
   };
   const paintThumbnail = (now: number, force = false) => {
-    if (!thumbnailCanvas || !active || readyRevision !== revision) return;
+    if (!thumbnailCanvas || !hasSubject() || readyRevision !== revision) return;
     const minInterval = sceneMode === 'studio' && thumbnailOptions.transparent ? 350 : 200;
     if (!force && now - thumbnailAt < minInterval) return;
     const ratio = normalizeMockupAspect(thumbnailOptions.aspect ?? aspect);
@@ -525,6 +593,40 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       })
       .catch(() => {})
       .finally(() => { thumbnailBusy = false; });
+  };
+  const paintIdleSharpFrame = () => {
+    idleRefineTimer = null;
+    if (disposed || !isVisible() || captureGate.busy || !hasSubject() || dragging || moving()) return;
+    const budget = currentQualityBudget();
+    if (budget.idleRefineMs <= 0) return;
+    const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+    const targetW = Math.max(1, Math.round(size.x * budget.idleScale));
+    const targetH = Math.max(1, Math.round(size.y * budget.idleScale));
+    if (!idlePreviewTarget || idlePreviewTargetSamples !== budget.idleMsaa) {
+      idlePreviewTarget?.dispose();
+      idlePreviewTarget = createLinearTarget(targetW, targetH, budget.idleMsaa);
+      idlePreviewTargetSamples = budget.idleMsaa;
+    } else if (idlePreviewTarget.width !== targetW || idlePreviewTarget.height !== targetH) {
+      idlePreviewTarget.setSize(targetW, targetH);
+    }
+    renderTo(idlePreviewTarget, null, camera);
+    paintThumbnail(performance.now(), true);
+    renderFrames++;
+    host.dataset.previewMode = 'idle-sharp';
+    host.dataset.previewMsaa = String(budget.idleMsaa);
+    host.dataset.previewScale = String(budget.idleScale);
+    sampleDiagnostics();
+  };
+  const scheduleIdleRefine = () => {
+    cancelIdleRefine();
+    if (disposed || !isVisible() || captureGate.busy || !hasSubject() || dragging) return;
+    const budget = currentQualityBudget();
+    const effectiveInteractiveScale = Math.max(0.5, budget.interactiveScale * adaptiveScale);
+    const needsRefine =
+      budget.idleRefineMs > 0 &&
+      (budget.idleScale > effectiveInteractiveScale + 0.01 || budget.idleMsaa > budget.interactiveMsaa);
+    if (!needsRefine) return;
+    idleRefineTimer = window.setTimeout(paintIdleSharpFrame, budget.idleRefineMs);
   };
   function frame(now: number) {
     raf = 0;
@@ -595,17 +697,30 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     }
     const bubbling = Boolean(active?.bubbles?.animated) && !matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (bubbling) { active!.bubbles!.update(dt); dirty = true; }
+    const proceduralAnimating = Boolean(procedural?.subject.update?.(dt));
+    if (proceduralAnimating) {
+      const nextBounds = procedural!.subject.getBounds();
+      procedural!.bounds = nextBounds;
+      procedural!.radius = Math.max(0.01, nextBounds.getBoundingSphere(new THREE.Sphere()).radius);
+      syncGroundToSubject();
+      dirty = true;
+    }
     if (dirty && previewTarget && now - lastDraw >= 1000 / liveMaxFps()) {
       const started = performance.now();
-      hitRegion.update(animation.mode === 'showcase' ? active?.root ?? null : null, camera, host.clientWidth, host.clientHeight, now, dragging);
+      hitRegion.update(animation.mode === 'showcase' ? (procedural?.subject.root ?? active?.root ?? null) : null, camera, host.clientWidth, host.clientHeight, now, dragging);
       renderTo(previewTarget, null, camera);
       paintThumbnail(now);
       lastFrameMs = performance.now() - started; renderFrames++;
-      if (lastFrameMs > 45 && adaptiveScale > 0.7) {
+      host.dataset.previewMode = 'interactive';
+      if (lastFrameMs > 50 && adaptiveScale > 0.65) {
         slowFrameStreak++;
-        if (slowFrameStreak >= 5) {
-          adaptiveScale = Math.max(0.7, adaptiveScale - 0.15);
+        if (slowFrameStreak >= 6) {
+          adaptiveScale = Math.max(0.65, adaptiveScale - 0.15);
           slowFrameStreak = 0;
+          if (qualityPreference === 'auto' && lastFrameMs > 85 && autoCalibratedTier !== 'low') {
+            autoCalibratedTier = stepTierDown(autoCalibratedTier);
+            reportQuality();
+          }
           resize();
         }
       } else {
@@ -619,26 +734,33 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     // The transition branch already synchronizes OrbitControls after moving
     // the camera. Avoid damping it twice in the same frame.
     const controlsMoving = transitionAtFrame ? false : controls.update();
-    if ((moving() || bubbling || controlsMoving || dirty) && !raf) raf = requestAnimationFrame(frame);
+    const stillActive = moving() || bubbling || proceduralAnimating || controlsMoving || dirty;
+    if (stillActive && !raf) raf = requestAnimationFrame(frame);
+    else if (!stillActive) scheduleIdleRefine();
   }
   const fit = (preset?: MockupCameraPreset, animate = false, targetFov = camera.fov, transitionDuration = 660) => {
-    if (!active) return;
-    const authored = preset?.startsWith('view-') ? unityCameraDestination(preset as UnityCameraPresetId) : undefined;
+    const subjectBounds = currentSubjectBounds();
+    const subjectRadius = currentSubjectRadius();
+    if (!subjectBounds) return;
+    const isProcedural = Boolean(procedural && !active);
+    const authored = !isProcedural && preset?.startsWith('view-') ? unityCameraDestination(preset as UnityCameraPresetId) : undefined;
     if (authored) targetFov = authored.fieldOfView;
-    const direction = sceneMode === 'studio' && preset === 'three-quarter' ? new THREE.Vector3(Math.sin(Math.PI / 4) * Math.cos(.34), Math.sin(.34), Math.cos(Math.PI / 4) * Math.cos(.34))
+    const direction = isProcedural && preset === 'three-quarter'
+      ? new THREE.Vector3(Math.sin(Math.PI / 5) * Math.cos(0.46), Math.sin(0.46), Math.cos(Math.PI / 5) * Math.cos(0.46))
+      : sceneMode === 'studio' && preset === 'three-quarter' ? new THREE.Vector3(Math.sin(Math.PI / 4) * Math.cos(.34), Math.sin(.34), Math.cos(Math.PI / 4) * Math.cos(.34))
       : preset === 'front' && animation.mode === 'showcase' ? new THREE.Vector3(0, 0, 1)
       : preset ? mockupCameraDirection(preset)
       : camera.position.clone().sub(controls.target).normalize();
     const tilted = animation.mode === 'showcase' || Math.abs(product.rotation.x) + Math.abs(product.rotation.z) > 0.00001;
-    const bounds = tilted ? mockupShowcaseBounds(active.bounds, animation.mode === 'showcase' ? rest : product.quaternion) : mockupOrbitBounds(active.bounds);
-    const authoredFrame = authored && active.asset.cameraFraming === 'bounds'
+    const bounds = tilted ? mockupShowcaseBounds(subjectBounds, animation.mode === 'showcase' ? rest : product.quaternion) : mockupOrbitBounds(subjectBounds);
+    const authoredFrame = authored && active && active.asset.cameraFraming === 'bounds'
       ? authoredMockupCameraFrame(active.bounds, active.asset, preset as UnityCameraPresetId, aspect) : undefined;
-    const nextDistance = authoredFrame?.distanceMetres ?? (authored ? authored.distanceMetres : fitMockupCamera(bounds, direction, aspect, targetFov));
+    const nextDistance = authoredFrame?.distanceMetres ?? (authored ? authored.distanceMetres : fitMockupCamera(bounds, direction, aspect, targetFov, isProcedural ? 0.72 : 0.8));
     const ratio = preset ? 1 : camera.position.distanceTo(controls.target) / Math.max(fitDistance, 0.0001);
     fitDistance = nextDistance;
-    const nextTarget = authoredFrame?.target ?? (authored ? unityMockupCameraFocus(active.bounds, active.asset.src) : active.bounds.getCenter(new THREE.Vector3()));
+    const nextTarget = authoredFrame?.target ?? (authored && active ? unityMockupCameraFocus(active.bounds, active.asset.src) : subjectBounds.getCenter(new THREE.Vector3()));
     const nextPosition = nextTarget.clone().addScaledVector(direction, nextDistance * Math.min(6, Math.max(0.45, ratio)));
-    controls.minDistance = Math.max(active.radius * 1.1, nextDistance * 0.35);
+    controls.minDistance = Math.max(subjectRadius * 0.65, nextDistance * 0.25);
     controls.maxDistance = nextDistance * 6;
     // Keep the full 12–20 m ground fade inside the frustum. Actual-metre
     // bottles otherwise fit with a 10 m far plane and expose a hard grid edge.
@@ -688,22 +810,30 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     const bounds = host.getBoundingClientRect();
     const width = Math.max(1, Math.round(bounds.width));
     const height = Math.max(1, Math.round(width / aspect));
-    // The 300 ml glass has 254k triangles and a transmissive shell. Keep the
-    // interactive path within a GTX 1650's budget; exports use their requested
-    // resolution and do not use this cap.
-    const dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1.25 : previewDprFor(active?.asset));
+    const budget = currentQualityBudget();
+    const dpr = Math.min(window.devicePixelRatio || 1, mobile ? Math.min(1.5, budget.maxDpr) : budget.maxDpr);
     if (renderer.getPixelRatio() !== dpr) renderer.setPixelRatio(dpr);
     const displaySize = renderer.getSize(new THREE.Vector2());
     if (displaySize.x !== width || displaySize.y !== height) renderer.setSize(width, height, false);
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    const previewScale = previewScaleFor(active?.asset);
+    const previewScale = Math.max(0.5, budget.interactiveScale * adaptiveScale);
     const targetWidth = Math.max(1, Math.round(size.x * previewScale));
     const targetHeight = Math.max(1, Math.round(size.y * previewScale));
-    if (!previewTarget) previewTarget = createLinearTarget(targetWidth, targetHeight);
-    else previewTarget.setSize(targetWidth, targetHeight);
+    if (!previewTarget || previewTargetSamples !== budget.interactiveMsaa) {
+      previewTarget?.dispose();
+      previewTarget = createLinearTarget(targetWidth, targetHeight, budget.interactiveMsaa);
+      previewTargetSamples = budget.interactiveMsaa;
+    } else if (previewTarget.width !== targetWidth || previewTarget.height !== targetHeight) {
+      previewTarget.setSize(targetWidth, targetHeight);
+    }
+    if (budget.idleRefineMs <= 0 && idlePreviewTarget) {
+      idlePreviewTarget.dispose();
+      idlePreviewTarget = null;
+      idlePreviewTargetSamples = -1;
+    }
     host.dataset.previewDpr = String(dpr);
     host.dataset.previewScale = String(previewScale);
-    host.dataset.previewMsaa = '0';
+    host.dataset.previewMsaa = String(budget.interactiveMsaa);
     // OrbitControls receives display-pixel deltas but divides by clientHeight,
     // which remains in logical CSS pixels inside the scaled page.
     controls.rotateSpeed = 0.65 * (bounds.height > 0 ? host.clientHeight / bounds.height : 1);
@@ -799,9 +929,16 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     }
   };
   let environmentReady = loadEnvironment();
+  const detachProcedural = () => {
+    if (!procedural) return;
+    procedural.subject.root.removeFromParent();
+    procedural.subject.dispose();
+    procedural = null;
+  };
   const select = (asset: ProductAsset, appearance?: ProductAppearance, frontYaw = 0) => {
     if (disposed) return;
     if (contextLost || captureGate.busy) { queuedSelection = { asset, appearance, frontYaw }; return; }
+    detachProcedural();
     const nextKey = mockupSelectionKey(asset, appearance, frontYaw);
     if (nextKey === desiredKey && readyRevision === revision && statusPhase === 'ready') { emit('ready'); return; }
     desired = { asset, appearance, frontYaw: Number.isFinite(frontYaw) ? frontYaw : 0 }; desiredKey = nextKey;
@@ -911,8 +1048,9 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
           product.add(candidate.root); product.updateMatrixWorld(true);
         }
         previewBackdrop.invalidate();
-        // A glass-300 selection changes the live target scale, so resize after
-        // committing the asset before the first preview draw.
+        // Reset adaptive downscaling whenever committing a model so heavy bottle
+        // slowdowns never carry over into lighter cans or cartons.
+        resetAdaptiveBudget();
         resize();
         studioGround.setFloorY(candidate.bounds.min.y);
         studioGround.setRadius(candidate.radius);
@@ -971,13 +1109,14 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     lastInputAt = motionTime; returnFrom = null; requestRender();
   };
   const pointerDown = (event: PointerEvent) => {
-    if (animation.mode !== 'showcase' || !active || captureGate.busy || contextLost || event.button !== 0 || pointers.has(event.pointerId)) return;
+    const rootObj = procedural?.subject.root ?? active?.root;
+    if (animation.mode !== 'showcase' || !rootObj || captureGate.busy || contextLost || event.button !== 0 || pointers.has(event.pointerId)) return;
     if ((event.pointerType === 'touch' || event.pointerType === 'pen') && event.target !== hitRegion.element) return;
     const rect = canvas.getBoundingClientRect();
     if (!(rect.width > 0 && rect.height > 0)) return;
     pointer.set((event.clientX - rect.left) / rect.width * 2 - 1, 1 - (event.clientY - rect.top) / rect.height * 2);
     product.updateWorldMatrix(true, true); camera.updateMatrixWorld(); raycaster.setFromCamera(pointer, camera);
-    if (!hitVisibleProduct(raycaster, visibleProductGestureMeshes(active.root))) return;
+    if (!hitVisibleProduct(raycaster, visibleProductGestureMeshes(rootObj))) return;
     targetPose.copy(pose); returnFrom = null;
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     try { canvas.setPointerCapture(event.pointerId); } catch { pointers.delete(event.pointerId); return; }
@@ -1029,7 +1168,8 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     transition.fromFov = fromFov;
   };
   const adjustFov = (deltaDegrees: number) => {
-    if (disposed || captureGate.busy || !active || !Number.isFinite(deltaDegrees)) return;
+    const subjectBounds = currentSubjectBounds();
+    if (disposed || captureGate.busy || !subjectBounds || !Number.isFinite(deltaDegrees)) return;
     const nextFov = THREE.MathUtils.clamp(camera.fov + deltaDegrees, 10, 90);
     if (Math.abs(nextFov - camera.fov) < 0.001) return;
 
@@ -1037,7 +1177,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     // recalculates the distance required by the new FOV and preserves the
     // current zoom ratio, but it intentionally recenters the controls target.
     // Save and restore that offset so WASD/pan adjustments do not jump.
-    const center = active.bounds.getCenter(new THREE.Vector3());
+    const center = subjectBounds.getCenter(new THREE.Vector3());
     const targetOffset = controls.target.clone().sub(center);
     const previousFov = camera.fov;
     cameraTransition = null; pauseFromInteraction();
@@ -1050,15 +1190,16 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   const panView = (horizontal: number, vertical: number) => {
     if (disposed || captureGate.busy || !Number.isFinite(horizontal) || !Number.isFinite(vertical)) return;
     cameraTransition = null; pauseFromInteraction();
-    if (!active) return;
+    const subjectBounds = currentSubjectBounds();
+    if (!subjectBounds) return;
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
     right.y = 0;
     if (right.lengthSq() < 0.0001) right.set(1, 0, 0);
     else right.normalize();
     const delta = right.multiplyScalar(horizontal).add(up.set(0, vertical, 0));
-    const center = active.bounds.getCenter(new THREE.Vector3());
+    const center = subjectBounds.getCenter(new THREE.Vector3());
     const nextTarget = controls.target.clone().add(delta);
-    const maxOffset = Math.max(active.radius * 2.5, fitDistance * 0.7, 0.05);
+    const maxOffset = Math.max(currentSubjectRadius() * 2.5, fitDistance * 0.7, 0.05);
     const offset = nextTarget.clone().sub(center);
     if (offset.length() > maxOffset) nextTarget.copy(center).add(offset.setLength(maxOffset));
     const applied = nextTarget.sub(controls.target);
@@ -1071,7 +1212,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     requestRender();
   };
   const wheel = (event: WheelEvent) => {
-    if (options.enableWheelZoom === false || animation.mode !== 'showcase' || !active || !isVisible() || captureGate.busy || event.ctrlKey) return;
+    if (options.enableWheelZoom === false || animation.mode !== 'showcase' || !hasSubject() || !isVisible() || captureGate.busy || event.ctrlKey) return;
     event.preventDefault();
     const pixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? host.clientHeight : 1);
     zoomCamera(Math.exp(THREE.MathUtils.clamp(-pixels * 0.001 * controls.zoomSpeed, -0.5, 0.5)));
@@ -1084,11 +1225,11 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   const onControlsChange = () => requestRender();
   controls.addEventListener('start', onControlsStart); controls.addEventListener('change', onControlsChange);
   const syncVisibility = () => {
-    if (!isVisible()) { cancelPointers(); hitRegion.clear(); if (raf) cancelAnimationFrame(raf); raf = 0; prefetch.setEnabled(false); }
+    if (!isVisible()) { cancelIdleRefine(); cancelPointers(); hitRegion.clear(); if (raf) cancelAnimationFrame(raf); raf = 0; prefetch.setEnabled(false); }
     else { lastTime = performance.now(); prefetch.setEnabled(readyRevision === revision); requestRender(); }
   };
   const lostContext = (event: Event) => {
-    event.preventDefault(); contextLost = true; readyRevision = -1; request?.abort(); exportAbort?.abort();
+    event.preventDefault(); cancelIdleRefine(); contextLost = true; readyRevision = -1; request?.abort(); exportAbort?.abort();
     controls.enabled = false; syncVisibility(); emit('error', 'webgl', 'WebGL context lost');
   };
   const restoredContext = () => {
@@ -1109,10 +1250,108 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   if (scaledSurface) scaleObserver?.observe(scaledSurface, { attributes: true, attributeFilter: ['style'] });
   window.addEventListener('resize', resize);
   const intersection = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; syncVisibility(); }); intersection.observe(host);
+  reportQuality();
   resize();
 
   return {
     select,
+    setProceduralSubject(subject) {
+      if (disposed) return;
+      if (subject && procedural?.subject === subject) return;
+      request?.abort(); request = null;
+      queuedSelection = null;
+      if (pointers.size) cancelPointers();
+      detachProcedural();
+      if (active) { recycle(active); active = null; }
+      desired = null; desiredKey = '';
+      if (!subject) {
+        revision++; readyRevision = -1;
+        requestRender();
+        return;
+      }
+      const thisRevision = ++revision;
+      product.add(subject.root);
+      product.quaternion.copy(sceneMode !== 'studio' && animation.mode === 'showcase' ? rest : new THREE.Quaternion());
+      pose.copy(product.quaternion); targetPose.copy(pose); lastInputAt = -Infinity; returnFrom = null;
+      const bounds = subject.getBounds();
+      const radius = Math.max(0.01, bounds.getBoundingSphere(new THREE.Sphere()).radius);
+      procedural = { subject, bounds, radius };
+      host.dataset.productId = subject.id;
+      void environmentReady.then(() => {
+        if (disposed || revision !== thisRevision || procedural?.subject !== subject) return;
+        const freshBounds = subject.getBounds();
+        procedural.bounds = freshBounds;
+        procedural.radius = Math.max(0.01, freshBounds.getBoundingSphere(new THREE.Sphere()).radius);
+        resetAdaptiveBudget();
+        resize();
+        syncGroundToSubject();
+        lights.forEach((light, index) => light.position.set(...settings.lights[index].position).multiplyScalar(procedural!.radius));
+        fit('three-quarter', false, 32);
+        if (previewTarget && isVisible()) { renderTo(previewTarget, null, camera); renderFrames++; }
+        readyRevision = thisRevision;
+        emit('ready');
+        requestRender();
+      });
+    },
+    refreshProceduralBounds(refreshOptions) {
+      if (disposed || !procedural) return;
+      const nextBounds = procedural.subject.getBounds();
+      procedural.bounds = nextBounds;
+      procedural.radius = Math.max(0.01, nextBounds.getBoundingSphere(new THREE.Sphere()).radius);
+      syncGroundToSubject();
+      lights.forEach((light, index) => light.position.set(...settings.lights[index].position).multiplyScalar(procedural!.radius));
+      if (refreshOptions?.refitCamera) {
+        fit(undefined, false);
+      } else {
+        controls.minDistance = Math.max(procedural.radius * 0.65, 0.04);
+        controls.maxDistance = Math.max(fitDistance * 6, procedural.radius * 18);
+      }
+      requestRender();
+    },
+    setCameraAngles(yawDegrees, pitchDegrees, targetFov = 32, animate = true) {
+      const subjectBounds = currentSubjectBounds();
+      if (disposed || captureGate.busy || !subjectBounds) return;
+      const wasAnimated = animation.mode !== 'off';
+      cancelPointers();
+      if (animation.mode !== 'off' || animation.playing) {
+        animation = { ...animation, mode: 'off', playing: false };
+        controls.enableRotate = true; controls.enableZoom = true;
+        host.dataset.motionMode = 'off';
+      }
+      if (wasAnimated) { product.quaternion.identity(); pose.identity(); targetPose.identity(); }
+      returnFrom = null; lastInputAt = -Infinity;
+      const yawRad = THREE.MathUtils.degToRad(yawDegrees);
+      const pitchRad = THREE.MathUtils.degToRad(THREE.MathUtils.clamp(pitchDegrees, -88, 88));
+      const direction = new THREE.Vector3(
+        Math.sin(yawRad) * Math.cos(pitchRad),
+        Math.sin(pitchRad),
+        Math.cos(yawRad) * Math.cos(pitchRad),
+      ).normalize();
+      const fov = THREE.MathUtils.clamp(targetFov, 15, 65);
+      const nextDistance = fitMockupCamera(subjectBounds, direction, aspect, fov, 0.72);
+      fitDistance = nextDistance;
+      const nextTarget = subjectBounds.getCenter(new THREE.Vector3());
+      const nextPosition = nextTarget.clone().addScaledVector(direction, nextDistance);
+      controls.minDistance = Math.max(currentSubjectRadius() * 0.55, nextDistance * 0.25);
+      controls.maxDistance = nextDistance * 6;
+      camera.far = Math.max(sceneMode === 'studio' ? 30 : 10, nextDistance * 30);
+      if (animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        cameraTransition = {
+          fromPosition: camera.position.clone(), fromTarget: controls.target.clone(),
+          toPosition: nextPosition, toTarget: nextTarget,
+          fromFov: camera.fov, toFov: fov,
+          startedAt: performance.now(), duration: 480,
+        };
+      } else {
+        cameraTransition = null;
+        camera.fov = fov; camera.updateProjectionMatrix();
+        controls.target.copy(nextTarget); camera.position.copy(nextPosition);
+        camera.lookAt(controls.target); controls.update();
+      }
+      pauseFromInteraction();
+      requestRender();
+    },
+    getCanvas() { return canvas; },
     setSceneMode(mode) {
       if (disposed || captureGate.busy || mode === sceneMode) return;
       cancelPointers(); hitRegion.clear();
@@ -1123,11 +1362,11 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         product.quaternion.identity(); pose.identity(); targetPose.identity(); returnFrom = null;
         controls.enableRotate = true; controls.enableZoom = true;
         controls.maxPolarAngle = Math.PI / 2 - .015;
-        if (active) { studioGround.setFloorY(active.bounds.min.y); studioGround.setRadius(active.radius); }
+        if (hasSubject()) syncGroundToSubject();
       } else controls.maxPolarAngle = Math.PI - .04;
       setBackground(websiteBackground);
       host.dataset.sceneMode = mode;
-      fit(mode === 'studio' ? 'view-4' : animation.mode === 'showcase' ? 'front' : 'view-1'); requestRender();
+      fit(procedural ? 'three-quarter' : mode === 'studio' ? 'view-4' : animation.mode === 'showcase' ? 'front' : 'view-1'); requestRender();
     },
     setMaterialOverrides(overrides = {}) {
       if (disposed || captureGate.busy) return;
@@ -1144,11 +1383,22 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       host.dataset.focalLength = focal; host.dataset.cameraFov = String(camera.fov);
       fit(); requestRender();
     },
+    setQualityPreference(next) {
+      if (disposed) return;
+      const normalized = parseQualityPreference(next);
+      if (normalized === qualityPreference) return;
+      qualityPreference = normalized;
+      if (normalized === 'auto') autoCalibratedTier = detectedTier;
+      resetAdaptiveBudget();
+      resize();
+      requestRender();
+    },
     setBackground,
     setPaused(paused) {
       if (disposed || paused === (pausedAt !== null)) return;
       const now = performance.now();
       if (paused) {
+        cancelIdleRefine();
         pausedAt = now;
         if (raf) cancelAnimationFrame(raf);
         raf = 0;
@@ -1220,11 +1470,12 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       product.quaternion.copy(animation.mode === 'showcase' ? rest : new THREE.Quaternion());
       pose.copy(product.quaternion); targetPose.copy(pose); lastInputAt = -Infinity; returnFrom = null;
       focal = 'standard'; camera.fov = MOCKUP_FOCAL_FOV[focal]; camera.updateProjectionMatrix();
-      host.dataset.focalLength = focal; host.dataset.cameraFov = String(camera.fov); fit(sceneMode === 'studio' ? 'view-4' : animation.mode === 'showcase' ? 'front' : 'view-1');
+      host.dataset.focalLength = focal; host.dataset.cameraFov = String(camera.fov); fit(procedural ? 'three-quarter' : sceneMode === 'studio' ? 'view-4' : animation.mode === 'showcase' ? 'front' : 'view-1');
     },
     async capture(captureOptions) {
-      if (disposed || contextLost || !active || readyRevision !== revision || statusPhase !== 'ready') throw new Error('The selected scene is not ready for export');
-      const captureModel = active;
+      if (disposed || contextLost || !hasSubject() || readyRevision !== revision || statusPhase !== 'ready') throw new Error('The selected scene is not ready for export');
+      const captureBounds = currentSubjectBounds()!.clone();
+      const captureRadius = currentSubjectRadius();
       const exportAspect = normalizeMockupAspect(captureOptions.aspect ?? aspect);
       const snapshotRevision = revision;
       const previousTarget = renderer.getRenderTarget();
@@ -1249,6 +1500,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         captureOptions.signal?.addEventListener('abort', abortExport, { once: true });
         if (captureOptions.signal?.aborted) exportAbort.abort();
         if (pointers.size) cancelPointers();
+        cancelIdleRefine();
         if (raf) cancelAnimationFrame(raf); raf = 0; controls.enabled = false; emit('exporting');
         paintThumbnail(performance.now(), true);
         const gl = renderer.getContext();
@@ -1299,7 +1551,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
               const productVisible = product.visible, near = captureCamera.near, tone = renderer.toneMapping;
               try {
                 product.visible = false;
-                captureCamera.near = Math.min(near, Math.max(.00001, captureModel.radius * .005));
+                captureCamera.near = Math.min(near, Math.max(.00001, captureRadius * .005));
                 captureCamera.updateProjectionMatrix();
                 renderer.toneMapping = THREE.NoToneMapping;
                 renderer.setRenderTarget(frozenMatte); renderer.clear(); renderer.render(scene, captureCamera);
@@ -1311,7 +1563,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
             }
             captureCamera.setViewOffset(frame.fullWidth, frame.fullHeight, frame.offsetX, frame.offsetY, size.width, size.height);
             product.updateWorldMatrix(true, false);
-            const sourceRect = projectedRefractionRect(captureModel.bounds, product.matrixWorld, captureCamera, size.width, size.height);
+            const sourceRect = projectedRefractionRect(captureBounds, product.matrixWorld, captureCamera, size.width, size.height);
             if (sourceRect.width > renderer.capabilities.maxTextureSize || sourceRect.height > renderer.capabilities.maxTextureSize) {
               throw new Error('This device cannot allocate the full-resolution refraction source for this export.');
             }
@@ -1380,7 +1632,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       }).catch(error => {
         if (!disposed && !contextLost && !(error instanceof DOMException && error.name === 'AbortError')) {
           // Export failure is recoverable and does not invalidate committed geometry.
-          options.onStatus({ phase: 'ready', assetId: desired?.asset.id ?? '', appearanceId: desired?.appearance?.id ?? '', selectionKey: desiredKey, revision, hasProduct: Boolean(active), error: 'export',
+          options.onStatus({ phase: 'ready', assetId: procedural?.subject.id ?? desired?.asset.id ?? '', appearanceId: desired?.appearance?.id ?? '', selectionKey: desiredKey, revision, hasProduct: hasSubject(), error: 'export',
             message: error instanceof Error ? error.message : 'PNG export failed' });
         }
         throw error;
@@ -1394,6 +1646,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     },
     dispose() {
       if (disposed) return;
+      cancelIdleRefine();
       cancelPointers(); hitRegion.dispose();
       disposed = true; revision++; environmentRevision++; queuedSelection = null; request?.abort(); exportAbort?.abort();
       if (raf) cancelAnimationFrame(raf); raf = 0;
@@ -1406,8 +1659,9 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       canvas.removeEventListener('lostpointercapture', pointerUp);
       host.removeEventListener('wheel', wheel);
       controls.removeEventListener('start', onControlsStart); controls.removeEventListener('change', onControlsChange); controls.dispose();
+      detachProcedural();
       discard(active); active = null; discard(cached); cached = null; [...candidates].forEach(discard);
-      prefetch.dispose(); previewTarget?.dispose(); environmentTarget?.dispose();
+      prefetch.dispose(); previewTarget?.dispose(); idlePreviewTarget?.dispose(); environmentTarget?.dispose();
       thumbnailLinear?.dispose(); thumbnailOutput?.dispose();
       thumbnailCanvas = null; thumbnailScratch.width = 1; thumbnailScratch.height = 1;
       studioMatteTarget?.dispose();

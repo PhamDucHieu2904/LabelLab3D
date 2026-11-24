@@ -47,6 +47,7 @@ Production foundation hiện đã có đăng ký/đăng nhập email-mật khẩ
 
 ## Tài liệu
 
+- [Handoff & Chiến lược Thùng/Khay Parametric CAD + Multi-Domain + Quality Engine](docs/PARAMETRIC_PACKAGING_HANDOFF.md)
 - [Kế hoạch sản phẩm thương mại](LABELLAB3D_MASTER_PLAN.md)
 - [Bàn giao triển khai](docs/IMPLEMENTATION_HANDOFF.md)
 - [Định hướng UI và mapping ảnh tham chiếu](docs/LABELLAB_UI_DIRECTION.md)

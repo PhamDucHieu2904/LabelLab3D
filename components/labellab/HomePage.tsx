@@ -200,9 +200,30 @@ export default function HomePage() {
                   ))}
                 </div>
               </div>
-              <Link className="home-showcase-action home-sheen" href="/studio#workspace">
-                <span>Start a new mockup</span><ArrowRight size={21} />
-              </Link>
+              <div style={{ display: "grid", gap: 8 }}>
+                <Link className="home-showcase-action home-sheen" href="/studio#workspace">
+                  <span>Start a new mockup</span><ArrowRight size={21} />
+                </Link>
+                <Link
+                  href="/studio?domain=packaging#workspace"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "10px 16px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(255,255,255,0.34)",
+                    background: "rgba(255,255,255,0.14)",
+                    color: "#fff",
+                    fontSize: 13,
+                    fontWeight: 650,
+                    textDecoration: "none",
+                  }}
+                >
+                  <span>Parametric Boxes &amp; Trays (mm CAD)</span>
+                  <ArrowRight size={16} />
+                </Link>
+              </div>
             </div>
           </section>
 

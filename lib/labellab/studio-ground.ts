@@ -1,9 +1,12 @@
 import * as THREE from "three";
 
+export type StudioContactShape = "circle" | "rounded-box";
+
 export interface StudioGroundController {
   setEnabled(enabled: boolean): void;
   setFloorY(y: number): void;
   setRadius(radius: number): void;
+  setContactFootprint(width: number, depth: number, shape?: StudioContactShape): void;
   setVisible(visible: boolean): void;
   dispose(): void;
 }
@@ -88,6 +91,11 @@ export function createStudioGround(scene: THREE.Scene): StudioGroundController {
     depthTest: false,
     depthWrite: false,
     side: THREE.DoubleSide,
+    uniforms: {
+      uShape: { value: 0 }, // 0 = radial circle (bottles/cans), 1 = rounded box (boxes/trays)
+      uBoxHalf: { value: new THREE.Vector2(0.55, 0.55) },
+      uFeather: { value: 0.35 },
+    },
     vertexShader: `
       varying vec2 contactUv;
       void main() {
@@ -97,9 +105,23 @@ export function createStudioGround(scene: THREE.Scene): StudioGroundController {
     `,
     fragmentShader: `
       varying vec2 contactUv;
+      uniform float uShape;
+      uniform vec2 uBoxHalf;
+      uniform float uFeather;
       void main() {
-        float r = length((contactUv - 0.5) * 2.0);
-        float alpha = exp(-r * r * 6.0) * (1.0 - smoothstep(0.65, 1.0, r)) * 0.20;
+        vec2 p = (contactUv - 0.5) * 2.0;
+        float alpha = 0.0;
+        if (uShape < 0.5) {
+          float r = length(p);
+          alpha = exp(-r * r * 6.0) * (1.0 - smoothstep(0.65, 1.0, r)) * 0.20;
+        } else {
+          // Soft rounded-rectangle SDF contact occlusion for boxes, trays & flat dielines.
+          vec2 d = abs(p) - uBoxHalf;
+          float dist = length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+          float core = 1.0 - smoothstep(-0.08, uFeather, dist);
+          float penumbra = exp(-max(dist, 0.0) * 6.5) * (1.0 - smoothstep(0.0, 0.55, max(dist, 0.0)));
+          alpha = clamp(core * 0.16 + penumbra * 0.08, 0.0, 0.22);
+        }
         gl_FragColor = vec4(vec3(0.0), alpha);
       }
     `,
@@ -139,8 +161,30 @@ export function createStudioGround(scene: THREE.Scene): StudioGroundController {
       if (!disposed && Number.isFinite(y)) group.position.y = y;
     },
     setRadius(radius) {
-      if (!disposed && Number.isFinite(radius) && radius > 0)
-        contact.scale.setScalar(radius);
+      if (!disposed && Number.isFinite(radius) && radius > 0) {
+        contactMaterial.uniforms.uShape.value = 0;
+        contact.scale.set(radius, radius, 1);
+      }
+    },
+    setContactFootprint(width, depth, shape = "rounded-box") {
+      if (disposed || !Number.isFinite(width) || !Number.isFinite(depth) || width <= 0 || depth <= 0) return;
+      if (shape === "circle") {
+        const radius = Math.max(width, depth) * 0.5;
+        contactMaterial.uniforms.uShape.value = 0;
+        contact.scale.set(radius, radius, 1);
+        return;
+      }
+      // PlaneGeometry(2.4, 2.4) lies in XY then rotated -90 deg on X -> scale.x = world X, scale.y = world Z.
+      const pad = Math.max(Math.min(width, depth) * 0.35, 0.035);
+      const planeW = width + pad * 2;
+      const planeD = depth + pad * 2;
+      contactMaterial.uniforms.uShape.value = 1;
+      contactMaterial.uniforms.uBoxHalf.value.set(
+        Math.min(0.86, Math.max(0.25, (width / planeW) * 0.96)),
+        Math.min(0.86, Math.max(0.25, (depth / planeD) * 0.96)),
+      );
+      contactMaterial.uniforms.uFeather.value = 0.28;
+      contact.scale.set(planeW / 2.4, planeD / 2.4, 1);
     },
     setVisible(visible) {
       if (!disposed) group.visible = enabled && visible;
