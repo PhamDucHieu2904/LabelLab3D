@@ -9,7 +9,7 @@ import styles from "./UserProfileCard.module.css";
 
 type WalletEntry = { id: string; amount: number; kind: string; reference?: string; balance: number; createdAt: string };
 type Badge = { id: string; name: string; description: string; awardedAt: string };
-type AccountPayload = { user?: { name?: string; email?: string } | null };
+type AccountPayload = { user?: { name?: string; email?: string; avatarUrl?: string | null } | null };
 type WalletPayload = { balance?: number; entries?: WalletEntry[]; badges?: Badge[] };
 type CheckinPayload = { history?: Array<{ day: string; coins: number }> };
 type UserProfileCardProps = {
@@ -33,7 +33,7 @@ function relativeTime(value: string) {
 
 export default function UserProfileCard({ profile, notificationCount }: UserProfileCardProps) {
   const { data: session, status } = useSession();
-  const [account, setAccount] = useState<{ name: string; email: string; balance: number; entries: WalletEntry[]; badges: Badge[]; daysLoggedIn: number } | null>(null);
+  const [account, setAccount] = useState<{ name: string; email: string; avatarUrl?: string | null; balance: number; entries: WalletEntry[]; badges: Badge[]; daysLoggedIn: number } | null>(null);
   const loadAccount = () => {
     void Promise.all([
       fetch("/api/account/me", { credentials: "same-origin" }),
@@ -44,13 +44,13 @@ export default function UserProfileCard({ profile, notificationCount }: UserProf
       if (!accountPayload.user) { setAccount(null); return; }
       const wallet = walletResponse.ok ? await walletResponse.json() as WalletPayload : {};
       const checkins = checkinResponse.ok ? await checkinResponse.json() as CheckinPayload : {};
-      setAccount({ name: accountPayload.user.name || "Your account", email: accountPayload.user.email || "", balance: Number(wallet.balance ?? 0), entries: wallet.entries ?? [], badges: wallet.badges ?? [], daysLoggedIn: checkins.history?.length ?? 0 });
+      setAccount({ name: accountPayload.user.name || "Your account", email: accountPayload.user.email || "", avatarUrl: accountPayload.user.avatarUrl ?? null, balance: Number(wallet.balance ?? 0), entries: wallet.entries ?? [], badges: wallet.badges ?? [], daysLoggedIn: checkins.history?.length ?? 0 });
     }).catch(() => setAccount(null));
   };
   useEffect(() => { loadAccount(); window.addEventListener("labellab-account-changed", loadAccount); return () => window.removeEventListener("labellab-account-changed", loadAccount); }, []);
   const signedIn = Boolean(account) || status === "authenticated";
   const name = account?.name || (status === "authenticated" ? (session?.user?.name || session?.user?.email || "Your account") : profile.name);
-  const avatar = status === "authenticated" ? (session?.user?.image || profile.avatar) : profile.avatar;
+  const avatar = account?.avatarUrl || (status === "authenticated" ? (session?.user?.image || profile.avatar) : profile.avatar);
   const recentUsage: WalletEntry[] = account ? account.entries.filter((entry) => entry.amount < 0).slice(0, 3) : [];
   return (
     <article className={`home-card ${styles.card}`} aria-label="Your profile">

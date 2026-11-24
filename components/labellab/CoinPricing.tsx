@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { COIN_PACKAGES } from "@/lib/payments/packages";
 import { useAccount, useAuthDialog } from "./AuthDialog";
 import styles from "./CoinPricing.module.css";
@@ -40,7 +41,9 @@ export default function CoinPricing() {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     closeButtonRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => event.key === "Escape" && setCheckoutOpen(false);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setCheckoutOpen(false);
+    };
     document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
@@ -71,8 +74,7 @@ export default function CoinPricing() {
   async function createPaymentOrder() {
     if (regionId !== "vietnam") return;
     if (!user) {
-      setPaymentState("error");
-      setPaymentError("Bạn cần đăng nhập trước khi nạp coin.");
+      setCheckoutOpen(false);
       openAuth("login");
       return;
     }
@@ -106,6 +108,128 @@ export default function CoinPricing() {
     if (!checkout || !checkoutFormRef.current) return;
     checkoutFormRef.current.submit();
   }
+
+  const isExpired = paymentOrder?.status === "expired";
+  const isPaid = paymentOrder?.status === "paid";
+  const isSandbox = Boolean(checkout?.action.includes("pay-sandbox.sepay.vn"));
+
+  const statusText = isPaid
+    ? "Đã thanh toán · đã cộng coin"
+    : isExpired
+      ? "Đơn đã hết hạn"
+      : paymentState === "loading"
+        ? "Đang tạo đơn…"
+        : paymentState === "ready"
+          ? "Đã tạo đơn · chờ thanh toán"
+          : "Chưa tạo đơn";
+
+  const statusClass = isPaid
+    ? styles.statusPaid
+    : isExpired
+      ? styles.statusExpired
+      : styles.demoStatus;
+
+  const checkoutModal = checkoutOpen && typeof document !== "undefined"
+    ? createPortal(
+      <div
+        className={styles.overlay}
+        role="presentation"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setCheckoutOpen(false);
+        }}
+      >
+        <section
+          className={styles.checkout}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="coin-checkout-title"
+          aria-describedby="coin-checkout-description"
+        >
+          <button
+            ref={closeButtonRef}
+            className={styles.close}
+            type="button"
+            aria-label="Close top-up panel"
+            onClick={() => setCheckoutOpen(false)}
+          >
+            ×
+          </button>
+          <div className={styles.checkoutHeader}>
+            <div>
+              <span className={styles.eyebrow}>Nạp coin nội địa</span>
+              <h3 id="coin-checkout-title">Nạp {selectedPackage.coins} coins</h3>
+              <p id="coin-checkout-description">
+                {isSandbox ? "Thanh toán QR VietQR qua SePay (Test Mode)" : "Thanh toán QR VietQR qua SePay"}
+              </p>
+            </div>
+            <Image src="/branding/LLCoin.svg" alt="" width={46} height={46} unoptimized />
+          </div>
+          <div className={styles.checkoutGrid}>
+            <div className={styles.qrWrap}>
+              <div className={styles.demoQr} aria-label="Xem trước khu vực QR SePay">
+                <span>SEPAY</span>
+                <b>QR</b>
+              </div>
+              <strong>QR thật mở trên trang SePay</strong>
+              <small>Chỉ ghi nhận coin sau khi webhook SePay xác nhận thanh toán.</small>
+            </div>
+            <dl className={styles.summary}>
+              <div><dt>Gói coin</dt><dd>{selectedPackage.coins} coins</dd></div>
+              <div><dt>Số tiền</dt><dd>{selectedPrice}</dd></div>
+              <div><dt>Phương thức</dt><dd>Quét QR ngân hàng</dd></div>
+              {paymentOrder?.orderCode && <div><dt>Mã đơn</dt><dd className={styles.orderCode}>{paymentOrder.orderCode}</dd></div>}
+              <div><dt>Trạng thái</dt><dd><span className={statusClass}>{statusText}</span></dd></div>
+            </dl>
+          </div>
+          {paymentState === "error" && <p className={styles.paymentError} role="alert">{paymentError}</p>}
+          <div className={styles.paymentAction}>
+            <button
+              type="button"
+              className={styles.payButton}
+              onClick={paymentState === "ready" && !isExpired ? submitCheckout : createPaymentOrder}
+              disabled={paymentState === "loading" || isPaid}
+            >
+              {paymentState === "loading"
+                ? "Đang tạo mã QR…"
+                : isPaid
+                  ? "Đã cộng coin vào ví"
+                  : isExpired
+                    ? "Tạo mã QR mới"
+                    : paymentState === "ready"
+                      ? "Mở QR thanh toán"
+                      : user
+                        ? "Tạo mã QR thanh toán"
+                        : "Đăng nhập để nạp coin"}
+            </button>
+            {paymentState === "ready" && checkout && (
+              <form
+                ref={checkoutFormRef}
+                method={checkout.method}
+                action={checkout.action}
+                target="_blank"
+                className={styles.hiddenForm}
+                aria-hidden="true"
+              >
+                {Object.entries(checkout.fields).map(([key, value]) => (
+                  <input key={key} type="hidden" name={key} value={value} />
+                ))}
+              </form>
+            )}
+          </div>
+          <div className={styles.notice}>
+            <strong>Chính sách giao dịch</strong>
+            <p>Coin là credit nội bộ, không quy đổi tiền mặt, không chuyển nhượng. Mọi giao dịch được xác thực tự động qua webhook máy chủ SePay.</p>
+            <div>
+              <Link href="/legal/terms">Điều khoản</Link>
+              <Link href="/legal/refund">Hoàn tiền</Link>
+              <Link href="/legal/privacy">Bảo mật</Link>
+            </div>
+          </div>
+        </section>
+      </div>,
+      document.body,
+    )
+    : null;
 
   return (
     <article className={`home-card ${styles.card}`} aria-labelledby="coin-pricing-title">
@@ -142,7 +266,14 @@ export default function CoinPricing() {
               type="button"
               aria-pressed={selectedCoins === item.coins}
               aria-label={`${item.coins} coins, ${price}`}
-            onClick={() => { setSelectedCoins(item.coins); setCheckoutOpen(true); setPaymentState("idle"); setCheckout(null); setPaymentOrder(null); setPaymentError(""); }}
+              onClick={() => {
+                setSelectedCoins(item.coins);
+                setCheckoutOpen(true);
+                setPaymentState("idle");
+                setCheckout(null);
+                setPaymentOrder(null);
+                setPaymentError("");
+              }}
             >
               <span className={styles.coinRow}>
                 <Image src="/branding/LLCoin.svg" alt="" width={20} height={20} />
@@ -155,40 +286,7 @@ export default function CoinPricing() {
         })}
       </div>
 
-      {checkoutOpen && (
-        <div className={styles.overlay} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCheckoutOpen(false); }}>
-          <section className={styles.checkout} role="dialog" aria-modal="true" aria-labelledby="coin-checkout-title" aria-describedby="coin-checkout-description">
-            <button ref={closeButtonRef} className={styles.close} type="button" aria-label="Close top-up panel" onClick={() => setCheckoutOpen(false)}>×</button>
-            <div className={styles.checkoutHeader}>
-              <div><span className={styles.eyebrow}>Nạp coin nội địa</span><h3 id="coin-checkout-title">Nạp {selectedPackage.coins} coins</h3><p id="coin-checkout-description">{checkout?.action.includes("pay-sandbox.sepay.vn") ? "Thanh toán QR VietQR qua SePay (Test Mode)" : "Thanh toán QR VietQR qua SePay"}</p></div>
-              <Image src="/branding/LLCoin.svg" alt="" width={42} height={42} />
-            </div>
-            <div className={styles.checkoutGrid}>
-              <div className={styles.qrWrap}>
-                <div className={styles.demoQr} aria-label="Xem trước khu vực QR SePay"><span>SEPAY</span><b>QR</b></div>
-                <strong>QR thật mở trên trang SePay</strong>
-                <small>Chỉ ghi nhận coin sau khi webhook SePay xác nhận thanh toán.</small>
-              </div>
-              <dl className={styles.summary}>
-                <div><dt>Gói coin</dt><dd>{selectedPackage.coins} coins</dd></div>
-                <div><dt>Số tiền</dt><dd>{selectedPrice}</dd></div>
-                <div><dt>Phương thức</dt><dd>Quét QR ngân hàng</dd></div>
-                <div><dt>Trạng thái</dt><dd><span className={styles.demoStatus}>{paymentOrder?.status === "paid" ? "Đã thanh toán · đã cộng coin" : paymentOrder?.status === "expired" ? "Đơn đã hết hạn" : paymentState === "loading" ? "Đang tạo đơn…" : paymentState === "ready" ? "Đã tạo đơn · chờ thanh toán" : "Chưa tạo đơn"}</span></dd></div>
-              </dl>
-            </div>
-            {paymentState === "error" && <p className={styles.paymentError} role="alert">{paymentError}</p>}
-            <div className={styles.paymentAction}>
-              <button type="button" className={styles.payButton} onClick={paymentState === "ready" ? submitCheckout : createPaymentOrder} disabled={paymentState === "loading" || paymentOrder?.status === "paid" || paymentOrder?.status === "expired"}>
-                {paymentState === "loading" ? "Đang tạo mã QR…" : paymentState === "ready" ? "Mở QR thanh toán" : "Tạo mã QR thanh toán"}
-              </button>
-              {paymentState === "ready" && checkout && <form ref={checkoutFormRef} method={checkout.method} action={checkout.action} target="_blank" className={styles.hiddenForm} aria-hidden="true">
-                {Object.entries(checkout.fields).map(([key, value]) => <input key={key} type="hidden" name={key} value={value} />)}
-              </form>}
-            </div>
-            <div className={styles.notice}><strong>Chính sách giao dịch</strong><p>Coin là credit nội bộ, không quy đổi tiền mặt, không chuyển nhượng. Điều khoản, chính sách hoàn tiền và bảo mật sẽ được áp dụng khi thanh toán thật được bật.</p><div><Link href="/legal/terms">Điều khoản</Link><Link href="/legal/refund">Hoàn tiền</Link><Link href="/legal/privacy">Bảo mật</Link></div></div>
-          </section>
-        </div>
-      )}
+      {checkoutModal}
     </article>
   );
 }

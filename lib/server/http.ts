@@ -29,10 +29,13 @@ export function errorResponse(error: unknown) {
   const code = error instanceof Error ? error.message : "ERROR";
   const status = code === "FORBIDDEN" || code === "CSRF" ? 403
     : code === "INVALID_CREDENTIALS" ? 401
-    : code === "AUTH_RATE_LIMIT" ? 429
+    : code === "AUTH_RATE_LIMIT" || code === "VERIFICATION_COOLDOWN" || code === "CODE_TOO_MANY_ATTEMPTS" ? 429
     : code === "NOT_FOUND" ? 404
-    : ["PAYMENT_NOT_CONFIGURED", "PAYMENT_PUBLIC_URL_REQUIRED", "PAYMENT_ENV_MISMATCH"].includes(code) ? 503
-    : ["INSUFFICIENT_COINS", "WALLET_CONFLICT_RETRY", "CHECKIN_CONFLICT_RETRY", "IDEMPOTENCY_CONFLICT", "RESERVATION_CONFLICT", "RESERVATION_NOT_READY", "RESERVATION_EXPIRED", "RESERVATION_RELEASED", "RESERVATION_COMMITTED", "RESERVATION_REQUIRED"].includes(code) ? 409
+    : ["PAYMENT_NOT_CONFIGURED", "PAYMENT_PUBLIC_URL_REQUIRED", "PAYMENT_ENV_MISMATCH", "EMAIL_NOT_CONFIGURED", "EMAIL_SEND_FAILED"].includes(code) ? 503
+    : ["EMAIL_EXISTS", "INSUFFICIENT_COINS", "WALLET_CONFLICT_RETRY", "CHECKIN_CONFLICT_RETRY", "IDEMPOTENCY_CONFLICT", "RESERVATION_CONFLICT", "RESERVATION_NOT_READY", "RESERVATION_EXPIRED", "RESERVATION_RELEASED", "RESERVATION_COMMITTED", "RESERVATION_REQUIRED"].includes(code) ? 409
     : 400;
-  return json({ error: status === 400 ? "REQUEST_FAILED" : code }, { status });
+  const exposed = status === 400
+    ? (["INVALID_CODE", "CODE_EXPIRED", "INVALID_INPUT"].includes(code) ? code : "REQUEST_FAILED")
+    : code;
+  return json({ error: exposed }, { status });
 }

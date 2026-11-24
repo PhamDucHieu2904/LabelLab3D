@@ -24,10 +24,16 @@ import {
 import styles from "./AuthDialog.module.css";
 
 type AuthMode = "login" | "register" | "forgot";
-type Field = "name" | "email" | "password";
+type Field = "name" | "email" | "code" | "password";
 type FieldErrors = Partial<Record<Field, string>>;
 type OpenAuth = (mode?: AuthMode) => void;
-export type AccountUser = { id: string; email: string; name: string; role: "user" | "admin" };
+export type AccountUser = {
+  id: string;
+  email: string;
+  name: string;
+  role: "user" | "admin";
+  avatarUrl?: string | null;
+};
 type AccountContextValue = { user: AccountUser | null; refresh: () => Promise<void> };
 
 const AuthContext = createContext<OpenAuth | null>(null);
@@ -45,11 +51,40 @@ const copy = {
     action: "Create account",
   },
   forgot: {
-    title: "Forgot your password?",
-    description: "Enter your email to request a password reset link.",
-    action: "Send reset link",
+    title: "Reset your password",
+    description: "Send a 6-digit code to your email, then set a new password.",
+    action: "Reset password",
   },
 } as const;
+
+function mapServerError(code: string | undefined, mode: AuthMode): string {
+  switch (code) {
+    case "INVALID_CREDENTIALS":
+      return "The email or password is incorrect.";
+    case "EMAIL_EXISTS":
+      return "This email is already registered. Try logging in instead.";
+    case "INVALID_CODE":
+      return "The 6-digit verification code is incorrect.";
+    case "CODE_EXPIRED":
+      return "The verification code has expired. Please request a new code.";
+    case "CODE_TOO_MANY_ATTEMPTS":
+      return "Too many incorrect code attempts. Please request a new code.";
+    case "VERIFICATION_COOLDOWN":
+      return "Please wait a moment before requesting another code.";
+    case "AUTH_RATE_LIMIT":
+      return "Too many attempts. Please wait a bit before trying again.";
+    case "EMAIL_NOT_CONFIGURED":
+      return "Email verification service is not configured on the server yet.";
+    case "EMAIL_SEND_FAILED":
+      return "Could not send the verification email. Please try again in a moment.";
+    case "INVALID_INPUT":
+      return mode === "login"
+        ? "Please check your email and password."
+        : "Use a valid email, 6-digit code, and a 12+ character password with letters and numbers.";
+    default:
+      return "Account access could not be completed. Please try again.";
+  }
+}
 
 export function useAuthDialog(): OpenAuth {
   const openAuth = useContext(AuthContext);
@@ -237,14 +272,15 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
   onSwitchMode: (mode: AuthMode, email: string) => void;
   onAuthenticated: () => void;
 }) {
-  const [values, setValues] = useState({ name: "", email: initialEmail, password: "" });
+  const [values, setValues] = useState({ name: "", email: initialEmail, code: "", password: "" });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState("");
   const [googleError, setGoogleError] = useState(initialGoogleError);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [submitBusy, setSubmitBusy] = useState(false);
-  const [verificationCode, setVerificationCode] = useState("");
-  const [verificationSent, setVerificationSent] = useState(false);
+  const [sendBusy, setSendBusy] = useState(false);
+  const [verificationSentTo, setVerificationSentTo] = useState("");
+  const [cooldown, setCooldown] = useState(0);
   const googlePending = useRef(false);
   const formActive = useRef(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -262,6 +298,12 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
     return () => { formActive.current = false; };
   }, [initialGoogleError]);
 
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = window.setTimeout(() => setCooldown((prev) => Math.max(0, prev - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [cooldown]);
+
   const continueWithGoogle = async () => {
     if (googlePending.current) return;
     googlePending.current = true;
@@ -276,7 +318,7 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
         setGoogleError("Google sign-in is not available yet. Please try again later.");
       } else {
         // NextAuth starts the server-verified OAuth flow with CSRF, PKCE and
-        // state checks. No Google credentials are collected by this form.
+        // state checks. Verified Google sign-ins also issue a D1 account session.
         await signIn("google", { callbackUrl: window.location.href });
         redirecting = true;
       }
@@ -299,9 +341,16 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
         return "Enter a valid email address.";
       }
     }
+    if (field === "code") {
+      if (!/^\d{6}$/.test(value.trim())) return "Enter the 6-digit code sent to your email.";
+    }
     if (field === "password") {
       if (!value) return "Enter your password.";
-      if (mode === "register" && value.length < 12) return "Use at least 12 characters for your password.";
+      if (mode !== "login") {
+        if (value.length < 12 || !/[A-Za-z]/.test(value) || !/\d/.test(value)) {
+          return "Use at least 12 characters with letters and numbers.";
+        }
+      }
     }
   };
 
@@ -309,18 +358,54 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
     setValues((current) => ({ ...current, [field]: value }));
     setSubmitError("");
     setGoogleError("");
-    if (field === "email") setVerificationSent(false);
+    if (field === "email" && value.trim().toLowerCase() !== verificationSentTo) {
+      setVerificationSentTo("");
+      setCooldown(0);
+    }
     if (errors[field]) setErrors((current) => ({ ...current, [field]: undefined }));
   };
 
   const emailIsValid = /^\S+@\S+\.\S+$/.test(values.email.trim());
+  const needsCode = mode === "register" || mode === "forgot";
+
+  const sendCode = async () => {
+    if (!emailIsValid || sendBusy || cooldown > 0) return;
+    const normalized = values.email.trim().toLowerCase();
+    setSendBusy(true);
+    setSubmitError("");
+    setErrors((current) => ({ ...current, email: undefined, code: undefined }));
+    try {
+      const response = await fetch("/api/account/verification/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ email: normalized, purpose: mode === "forgot" ? "reset" : "register" }),
+      });
+      const payload = await response.json().catch(() => ({})) as { ok?: boolean; cooldownSeconds?: number; error?: string };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "EMAIL_SEND_FAILED");
+      }
+      if (!formActive.current) return;
+      setVerificationSentTo(normalized);
+      setCooldown(Number(payload.cooldownSeconds) || 60);
+    } catch (error) {
+      if (!formActive.current) return;
+      setSubmitError(mapServerError(error instanceof Error ? error.message : undefined, mode));
+      requestAnimationFrame(() => errorRef.current?.focus());
+    } finally {
+      if (formActive.current) setSendBusy(false);
+    }
+  };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (googleBusy) return;
+    if (googleBusy || submitBusy) return;
     setGoogleError("");
-    const fields: Field[] = mode === "register" ? ["name", "email", "password"]
-      : mode === "login" ? ["email", "password"] : ["email"];
+    const fields: Field[] = mode === "register"
+      ? ["name", "email", "code", "password"]
+      : mode === "forgot"
+        ? ["email", "code", "password"]
+        : ["email", "password"];
     const nextErrors: FieldErrors = {};
     for (const field of fields) {
       const error = validate(field, values[field]);
@@ -329,32 +414,35 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
     setErrors(nextErrors);
     const firstInvalid = fields.find((field) => nextErrors[field]);
     if (firstInvalid) {
-      formRef.current?.querySelector<HTMLInputElement>(`[name="${firstInvalid}"]`)?.focus();
+      const targetName = firstInvalid === "code" ? "verificationCode" : firstInvalid;
+      formRef.current?.querySelector<HTMLInputElement>(`[name="${targetName}"]`)?.focus();
       return;
     }
 
-    if (mode === "forgot") {
-      setSubmitError("Password reset is not available yet. Please try again later.");
-      requestAnimationFrame(() => errorRef.current?.focus());
-      return;
-    }
     setSubmitBusy(true);
+    setSubmitError("");
     try {
-      const response = await fetch(`/api/account/${mode === "register" ? "register" : "login"}`, {
+      const endpoint = mode === "register"
+        ? "/api/account/register"
+        : mode === "forgot"
+          ? "/api/account/password/reset"
+          : "/api/account/login";
+      const body = mode === "register"
+        ? { name: values.name.trim(), email: values.email.trim(), password: values.password, verificationCode: values.code.trim() }
+        : mode === "forgot"
+          ? { email: values.email.trim(), password: values.password, verificationCode: values.code.trim() }
+          : { email: values.email.trim(), password: values.password };
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify(mode === "register"
-          ? { name: values.name.trim(), email: values.email.trim(), password: values.password }
-          : { email: values.email.trim(), password: values.password }),
+        body: JSON.stringify(body),
       });
       const payload = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) throw new Error(payload.error || "REQUEST_FAILED");
       onAuthenticated();
     } catch (error) {
-      setSubmitError(error instanceof Error && error.message === "INVALID_CREDENTIALS"
-        ? "The email or password is incorrect."
-        : "Account access could not be completed. Please try again.");
+      setSubmitError(mapServerError(error instanceof Error ? error.message : undefined, mode));
       requestAnimationFrame(() => errorRef.current?.focus());
     } finally {
       setSubmitBusy(false);
@@ -365,13 +453,15 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
     <>
       {mode !== "forgot" ? (
         <h2 className="sr-only" ref={headingRef} tabIndex={-1} id={titleId}>{content.title}</h2>
-      ) : <div className={styles.intro}>
-        <span className={styles.eyebrow}>LET’S GET YOU BACK IN</span>
-        <h2 ref={headingRef} tabIndex={-1} id={titleId}>{content.title}</h2>
-        <p id={descriptionId}>{content.description}</p>
-      </div>}
+      ) : (
+        <div className={styles.intro}>
+          <span className={styles.eyebrow}>LET’S GET YOU BACK IN</span>
+          <h2 ref={headingRef} tabIndex={-1} id={titleId}>{content.title}</h2>
+          <p id={descriptionId}>{content.description}</p>
+        </div>
+      )}
       <form ref={formRef} className={`${styles.form} ${mode !== "forgot" ? styles.compactForm : ""}`} onSubmit={submit} noValidate>
-        {mode === "login" && (
+        {mode !== "forgot" && (
           <div className={styles.googleOption}>
             <button
               type="button"
@@ -433,17 +523,23 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
           />
           {errors.email && <p className={styles.fieldError} id={`${fieldId}-email-error`}>{errors.email}</p>}
         </div>
-        {mode === "register" && (
+        {needsCode && (
           <div className={`${styles.field} ${styles.verificationField}`}>
             <div className={styles.labelRow}>
               <label htmlFor={`${fieldId}-verification`}>Email verification code</label>
               <button
                 type="button"
                 className={styles.textButton}
-                disabled={!emailIsValid || verificationSent}
-                onClick={() => setVerificationSent(true)}
+                disabled={!emailIsValid || sendBusy || cooldown > 0}
+                onClick={() => void sendCode()}
               >
-                {verificationSent ? "Code sent" : "Send code"}
+                {sendBusy
+                  ? "Sending…"
+                  : cooldown > 0
+                    ? `Resend in ${cooldown}s`
+                    : verificationSentTo
+                      ? "Resend code"
+                      : "Send code"}
               </button>
             </div>
             <input
@@ -453,55 +549,64 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
               autoComplete="one-time-code"
               maxLength={6}
               pattern="[0-9]{6}"
-              value={verificationCode}
+              required
+              value={values.code}
               placeholder="Enter 6-digit code"
-              onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              aria-invalid={Boolean(errors.code)}
+              aria-describedby={errors.code ? `${fieldId}-code-error` : undefined}
+              onChange={(event) => update("code", event.target.value.replace(/\D/g, "").slice(0, 6))}
             />
-            <p className={styles.hint}>
-              {verificationSent ? `We sent a code to ${values.email || "your email"}.` : "We’ll send a 6-digit code to your email."}
-            </p>
+            {errors.code ? (
+              <p className={styles.fieldError} id={`${fieldId}-code-error`}>{errors.code}</p>
+            ) : (
+              <p className={styles.hint}>
+                {verificationSentTo
+                  ? `We sent a 6-digit code to ${verificationSentTo}. Check Spam if you don’t see it.`
+                  : "Click Send code to receive a 6-digit verification code by email."}
+              </p>
+            )}
           </div>
         )}
-        {mode !== "forgot" && (
-          <div className={styles.field}>
-            <div className={styles.labelRow}>
-              <label htmlFor={`${fieldId}-password`}>Password</label>
-              {mode === "login" && (
-                <button type="button" className={styles.textButton} onClick={() => onSwitchMode("forgot", values.email)}>
-                  Forgot password?
-                </button>
-              )}
-            </div>
-            <div className={styles.passwordInput}>
-              <input
-                id={`${fieldId}-password`}
-                name="password"
-                type={showPassword ? "text" : "password"}
-                autoComplete={mode === "register" ? "new-password" : "current-password"}
-                required
-                minLength={mode === "register" ? 12 : undefined}
-                value={values.password}
-                placeholder={mode === "register" ? "Create a password" : "Enter your password"}
-                aria-invalid={Boolean(errors.password)}
-                aria-describedby={errors.password ? `${fieldId}-password-error`
-                  : mode === "register" ? `${fieldId}-password-hint` : undefined}
-                onChange={(event) => update("password", event.target.value)}
-              />
-              <button
-                type="button"
-                className={styles.passwordToggle}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-                aria-pressed={showPassword}
-                aria-controls={`${fieldId}-password`}
-                onClick={() => setShowPassword((shown) => !shown)}
-              >
-                {showPassword ? <EyeOff size={19} aria-hidden="true" /> : <Eye size={19} aria-hidden="true" />}
+        <div className={styles.field}>
+          <div className={styles.labelRow}>
+            <label htmlFor={`${fieldId}-password`}>{mode === "forgot" ? "New password" : "Password"}</label>
+            {mode === "login" && (
+              <button type="button" className={styles.textButton} onClick={() => onSwitchMode("forgot", values.email)}>
+                Forgot password?
               </button>
-            </div>
-            {errors.password && <p className={styles.fieldError} id={`${fieldId}-password-error`}>{errors.password}</p>}
-            {mode === "register" && !errors.password && <p className={styles.hint} id={`${fieldId}-password-hint`}>Use at least 12 characters.</p>}
+            )}
           </div>
-        )}
+          <div className={styles.passwordInput}>
+            <input
+              id={`${fieldId}-password`}
+              name="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              required
+              minLength={mode !== "login" ? 12 : undefined}
+              value={values.password}
+              placeholder={mode === "login" ? "Enter your password" : mode === "forgot" ? "Create a new password" : "Create a password"}
+              aria-invalid={Boolean(errors.password)}
+              aria-describedby={errors.password ? `${fieldId}-password-error`
+                : mode !== "login" ? `${fieldId}-password-hint` : undefined}
+              onChange={(event) => update("password", event.target.value)}
+            />
+            <button
+              type="button"
+              className={styles.passwordToggle}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-pressed={showPassword}
+              aria-controls={`${fieldId}-password`}
+              onClick={() => setShowPassword((shown) => !shown)}
+            >
+              {showPassword ? <EyeOff size={19} aria-hidden="true" /> : <Eye size={19} aria-hidden="true" />}
+            </button>
+          </div>
+          {errors.password && <p className={styles.fieldError} id={`${fieldId}-password-error`}>{errors.password}</p>}
+          {mode !== "login" && !errors.password && (
+            <p className={styles.hint} id={`${fieldId}-password-hint`}>Use at least 12 characters with letters and numbers.</p>
+          )}
+        </div>
         {submitError && (
           <div ref={errorRef} className={styles.serviceError} role="alert" tabIndex={-1}>
             <CircleAlert size={18} aria-hidden="true" />
