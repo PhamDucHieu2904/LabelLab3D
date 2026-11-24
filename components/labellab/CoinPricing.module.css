@@ -112,7 +112,7 @@
 .close:hover { background: rgba(255,255,255,.95); }
 .checkoutHeader { display:flex; align-items:center; justify-content:space-between; gap:21px; padding-right:49px; }
 .checkoutHeader h3 { margin: 4px 0; font-size: clamp(28px, 5vw, 38px); line-height: 1.12; }
-.checkoutHeader p { margin: 0; color:#8a5a6d; font-size:16px; }
+.checkoutHeader p { margin: 0; color:#8a5a6d; font-size:14px; line-height:1.4; }
 .eyebrow { color:#a12e56; font-size:13px; font-weight:750; letter-spacing:.08em; text-transform:uppercase; }
 .checkoutGrid { display:grid; grid-template-columns: 244px 1fr; gap:26px; align-items:center; margin:22px 0; }
 .qrWrap { display:flex; flex-direction:column; align-items:center; gap:9px; text-align:center; font-size:15px; }
