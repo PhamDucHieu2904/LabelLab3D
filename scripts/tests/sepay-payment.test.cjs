@@ -344,3 +344,113 @@ test('SePay webhook enforces async x-secret-key auth, credits once, deduplicates
   assert.equal(mock.wallets.get('usr_1').balance, 70);
   assert.equal(mock.orders.get('LLORDERLATE').status, 'paid');
 });
+
+test('SePay Direct VietQR builds qr.sepay.vn URLs and Bank Webhook verifies Apikey, account, code extraction, and exact amount', async () => {
+  const loadPlain = createServerLoader();
+  const sepay = loadPlain(path.resolve(ROOT, 'lib/server/sepay.ts'));
+
+  assert.equal(sepay.readSepayQrConfig({ SEPAY_BANK_CODE: 'MBBank', SEPAY_BANK_ACCOUNT: '35555678967899' }), null, 'must fail closed without webhook key');
+  const qrCfg = sepay.readSepayQrConfig({
+    SEPAY_BANK_CODE: 'MBBank',
+    SEPAY_BANK_ACCOUNT: '35555678967899',
+    SEPAY_BANK_OWNER: 'PHAM DUC HIEU',
+    SEPAY_WEBHOOK_API_KEY: 'whk_bank_secret_123',
+  });
+  assert.ok(qrCfg);
+
+  const code = sepay.generateOrderCode();
+  assert.match(code, /^LL[2-9A-HJ-NP-Z]{12}$/);
+
+  const qrUrl = new URL(sepay.buildSepayQrImageUrl(qrCfg, { amount: 10000, description: code }));
+  assert.equal(qrUrl.origin + qrUrl.pathname, 'https://qr.sepay.vn/img');
+  assert.equal(qrUrl.searchParams.get('acc'), '35555678967899');
+  assert.equal(qrUrl.searchParams.get('bank'), 'MBBank');
+  assert.equal(qrUrl.searchParams.get('amount'), '10000');
+  assert.equal(qrUrl.searchParams.get('des'), code);
+  assert.equal(qrUrl.searchParams.get('template'), 'qronly');
+
+  assert.deepEqual(
+    sepay.extractOrderCodesFromTransfer({ content: `MBVCB.849201.04921.${code}.CT tu 01234` }),
+    [code],
+  );
+
+  const mock = createMockPaymentDb([
+    {
+      id: 'pay_qr_1',
+      user_id: 'usr_qr',
+      order_code: code,
+      package_coins: 20,
+      amount_minor: 10000,
+      currency: 'VND',
+      status: 'pending',
+      provider_order_id: null,
+      expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
+    },
+  ], 0);
+
+  const runtimeEnv = {
+    DB: mock.db,
+    SEPAY_BANK_CODE: 'MBBank',
+    SEPAY_BANK_ACCOUNT: '35555678967899',
+    SEPAY_BANK_OWNER: 'PHAM DUC HIEU',
+    SEPAY_WEBHOOK_API_KEY: 'whk_bank_secret_123',
+  };
+  const load = createServerLoader({
+    '@/lib/server/http': {
+      env: async () => runtimeEnv,
+      json: (data, init) => Response.json(data, init),
+    },
+  });
+  const { POST } = load(path.resolve(ROOT, 'app/api/payments/webhook/sepay/route.ts'));
+
+  const postBank = (body, authHeader = 'Apikey whk_bank_secret_123') => POST(new Request('https://www.labellab3d.workers.dev/api/payments/webhook/sepay', {
+    method: 'POST',
+    headers: authHeader ? { Authorization: authHeader } : {},
+    body: JSON.stringify(body),
+  }));
+
+  // 1. Wrong API key -> 401.
+  assert.equal((await postBank({ id: 1, transferType: 'in', accountNumber: '35555678967899', transferAmount: 10000, content: code }, 'Apikey wrong')).status, 401);
+
+  // 2. Outgoing transfer, wrong account, or unrelated personal transfer -> 200 ignored (no retry storm, no credit).
+  assert.deepEqual(await (await postBank({ id: 2, transferType: 'out', accountNumber: '35555678967899', transferAmount: 10000, content: code })).json(), { success: true, ignored: true, reason: 'NOT_INCOMING' });
+  assert.deepEqual(await (await postBank({ id: 3, transferType: 'in', accountNumber: '9999999999', transferAmount: 10000, content: code })).json(), { success: true, ignored: true, reason: 'ACCOUNT_MISMATCH' });
+  assert.deepEqual(await (await postBank({ id: 4, transferType: 'in', accountNumber: '35555678967899', transferAmount: 50000, content: 'Chuyen tien cafe' })).json(), { success: true, ignored: true, reason: 'NO_MATCHING_ORDER' });
+  assert.equal(mock.wallets.get('usr_qr').balance, 0);
+
+  // 3. Underpayment records rejected event and returns 200 without crediting.
+  assert.deepEqual(await (await postBank({ id: 5, transferType: 'in', accountNumber: '35555678967899', transferAmount: 5000, content: `MBVCB.${code}` })).json(), { success: true, ignored: true, reason: 'AMOUNT_MISMATCH' });
+  assert.equal(mock.wallets.get('usr_qr').balance, 0);
+
+  // 4. Valid bank transfer credits coins once and marks order paid.
+  const okRes = await postBank({
+    id: 92704,
+    gateway: 'MBBank',
+    accountNumber: '35555678967899',
+    code: null,
+    content: `MBVCB.12345.${code} chuyen tien`,
+    transferType: 'in',
+    transferAmount: 10000,
+    referenceCode: 'FT261124001',
+  });
+  assert.equal(okRes.status, 200);
+  assert.deepEqual(await okRes.json(), { success: true });
+  assert.equal(mock.wallets.get('usr_qr').balance, 20);
+  assert.equal(mock.orders.get(code).status, 'paid');
+  assert.equal(mock.orders.get(code).provider_order_id, 'FT261124001');
+
+  // 5. Duplicate bank webhook retry does not double-credit.
+  const dupRes = await postBank({
+    id: 92704,
+    gateway: 'MBBank',
+    accountNumber: '35555678967899',
+    code: null,
+    content: `MBVCB.12345.${code} chuyen tien`,
+    transferType: 'in',
+    transferAmount: 10000,
+    referenceCode: 'FT261124001',
+  });
+  assert.equal(dupRes.status, 200);
+  assert.deepEqual(await dupRes.json(), { success: true, duplicate: true });
+  assert.equal(mock.wallets.get('usr_qr').balance, 20);
+});

@@ -9,6 +9,15 @@ export type SepayConfig = {
   publicUrl: string;
 };
 
+export type SepayQrConfig = {
+  bankCode: string;
+  accountNumber: string;
+  accountOwner: string;
+  webhookApiKey: string;
+};
+
+const ORDER_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+
 function stringValue(env: AppEnv, key: string) {
   const fromBinding = env[key];
   if (typeof fromBinding === "string" && fromBinding.trim()) return fromBinding.trim();
@@ -25,6 +34,79 @@ export function readSepayConfig(env: AppEnv): SepayConfig {
     ipnSecret: stringValue(env, "SEPAY_IPN_SECRET"),
     publicUrl: stringValue(env, "SEPAY_PUBLIC_URL").replace(/\/$/, ""),
   };
+}
+
+/**
+ * Direct VietQR + SePay Bank Webhook configuration. Fails closed unless the
+ * bank code, account number, and webhook API key are all configured so the UI
+ * never displays a QR code whose transfers cannot be automatically verified.
+ */
+export function readSepayQrConfig(env: AppEnv): SepayQrConfig | null {
+  const bankCode = stringValue(env, "SEPAY_BANK_CODE");
+  const accountNumber = stringValue(env, "SEPAY_BANK_ACCOUNT");
+  const accountOwner = stringValue(env, "SEPAY_BANK_OWNER");
+  const webhookApiKey = stringValue(env, "SEPAY_WEBHOOK_API_KEY");
+  if (!bankCode || !accountNumber || !webhookApiKey) return null;
+  return { bankCode, accountNumber, accountOwner, webhookApiKey };
+}
+
+export function normalizeAccountNumber(value: string): string {
+  return value.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+}
+
+export function parseSepayApikeyHeader(header: string | null): string {
+  if (!header) return "";
+  const match = header.trim().match(/^Apikey\s+(.+)$/i);
+  return match ? match[1].trim() : "";
+}
+
+export function generateOrderCode(): string {
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  let suffix = "";
+  for (const byte of bytes) {
+    suffix += ORDER_CODE_ALPHABET[byte % ORDER_CODE_ALPHABET.length];
+  }
+  return `LL${suffix}`;
+}
+
+export function buildSepayQrImageUrl(
+  config: Pick<SepayQrConfig, "bankCode" | "accountNumber">,
+  input: { amount: number; description: string; template?: "qronly" | "compact"; download?: boolean },
+): string {
+  const url = new URL("https://qr.sepay.vn/img");
+  url.searchParams.set("acc", config.accountNumber);
+  url.searchParams.set("bank", config.bankCode);
+  url.searchParams.set("amount", String(input.amount));
+  url.searchParams.set("des", input.description);
+  url.searchParams.set("template", input.template ?? "qronly");
+  if (input.download) url.searchParams.set("download", "true");
+  return url.toString();
+}
+
+export function extractOrderCodesFromTransfer(input: {
+  code?: string | null;
+  content?: string | null;
+  description?: string | null;
+}): string[] {
+  const seen = new Set<string>();
+  const add = (candidate: string) => {
+    const clean = candidate.trim().toUpperCase();
+    if (/^LL[A-Z0-9]{8,43}$/.test(clean)) seen.add(clean);
+  };
+  if (typeof input.code === "string" && input.code.trim()) {
+    add(input.code);
+  }
+  for (const field of [input.content, input.description]) {
+    if (typeof field !== "string" || !field) continue;
+    for (const match of field.matchAll(/\b(LL[A-Z0-9]{8,43})\b/gi)) {
+      if (match[1]) add(match[1]);
+    }
+    for (const match of field.matchAll(/LL[A-Z0-9]{10,43}/gi)) {
+      if (match[0]) add(match[0]);
+    }
+  }
+  return [...seen];
 }
 
 export function assertSepayConfig(config: SepayConfig) {
@@ -84,4 +166,3 @@ export function createSepayCheckout(config: SepayConfig, input: {
   const signature = createHmac("sha256", config.secretKey).update(signing).digest("base64");
   return { ...fields, signature };
 }
-
