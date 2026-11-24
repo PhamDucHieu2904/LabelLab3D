@@ -73,7 +73,40 @@ test('Glass290 uses the Basil web optical path while retaining Chia source seeds
   assert.equal(meshes['Chia Seeds'].renderOrder,1,'source seeds render inside the water layer');
   assert.equal(meshes['Chia Seeds'].material.customProgramCacheKey(),'basil-web-raw-seeds-v1');
   assert.notEqual(meshes['Chia Seeds'].onBeforeRender,THREE.Mesh.prototype.onBeforeRender,'source seeds participate in Basil capture ordering');
-  for(const name of ['GoldenCap','PaperLabel']) {assert.equal(meshes[name].material.opacity,1);assert.equal(meshes[name].material.side,THREE.DoubleSide);assert.equal(meshes[name].material.depthWrite,true);}
+  assert.equal(meshes.PaperLabel.children.some(mesh => mesh.userData.basilWebLabelBack === true), false,
+    'do not inject an un-attenuated capture backing mesh that overwrites or Z-fights with Water');
+  const paperBeauty = meshes.PaperLabel.children.find(mesh => mesh.userData.basilWebLabelBackBeauty === true);
+  assert.ok(paperBeauty, 'clear Chia keeps the unprinted 1:1 BackSide paper backing for capture and beauty');
+  assert.equal(paperBeauty.material.name, 'PaperLabelBackBeauty');
+  assert.notEqual(paperBeauty.geometry, meshes.PaperLabel.geometry, 'paper backing owns a duplicate geometry');
+  const sourceIndex = meshes.PaperLabel.geometry.getIndex();
+  const backingIndex = paperBeauty.geometry.getIndex();
+  assert.ok(sourceIndex && backingIndex);
+  assert.equal(backingIndex.getX(1), sourceIndex.getX(1), 'paper backing preserves source winding for BackSide culling');
+  assert.equal(backingIndex.getX(2), sourceIndex.getX(2), 'paper backing preserves source winding for BackSide culling');
+  assert.deepEqual(paperBeauty.scale.toArray(), [1, 1, 1], 'paper backing stays at true 1:1 wrap radius without shrinking into Water');
+  assert.equal(paperBeauty.renderOrder, 29);
+  assert.equal(paperBeauty.material.side, THREE.BackSide);
+  assert.equal(paperBeauty.material.opacity, 1);
+  assert.equal(paperBeauty.material.transparent, false);
+  assert.equal(paperBeauty.material.depthWrite, true);
+  assert.equal(paperBeauty.material.depthTest, true);
+  assert.equal(paperBeauty.visible, true);
+  assert.equal(paperBeauty.material.map, null, 'rear backing never samples the front artwork');
+  assert.notEqual(paperBeauty.onBeforeRender, THREE.Mesh.prototype.onBeforeRender, 'beauty backing stays excluded from the transmission reservoir draw');
+  assert.equal(meshes.PaperLabel.children.some(mesh => mesh.userData.basilWebLabelBackShadow === true), false, 'opaque label has no rear artwork pass');
+  assert.equal(meshes.PaperLabel.children.some(mesh => mesh.userData.basilWebWaterLabelShadow === true), false,
+    'rear visibility attenuates through Water Beer-Lambert optics, not a screen-space overlay');
+  assert.equal(meshes.GoldenCap.material.opacity,1); assert.equal(meshes.GoldenCap.material.side,THREE.DoubleSide); assert.equal(meshes.GoldenCap.material.depthWrite,true);
+  assert.equal(meshes.PaperLabel.material.opacity,1); assert.equal(meshes.PaperLabel.material.side,THREE.FrontSide); assert.equal(meshes.PaperLabel.material.depthWrite,true);
+  const { basilWebMaterialRole } = loadTs(path.resolve(__dirname, '../../lib/viewer/basil-web-materials.ts'));
+  assert.equal(basilWebMaterialRole(asset, meshes.PaperLabel, meshes.PaperLabel.material), 'label',
+    'PaperLabel itself supplies the single clean label geometry to the hollow-glass neck trace');
+  const waterShader = { uniforms: {}, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader };
+  meshes.Water.material.onBeforeCompile(waterShader, {});
+  assert.match(waterShader.fragmentShader, /paperBackingSample\(basilWaterUv\)/, 'Water samples the shaded BackSide paper capture');
+  assert.match(waterShader.fragmentShader, /basilWaterSource\*exp\(-basilWebAbsorption\*max\(0\.0,vBasilWebChord\)\)/, 'Water attenuates the paper backing through full Beer-Lambert liquid thickness');
+  assert.match(waterShader.fragmentShader, /paperBackingSample\(bottleBackdropUv\(\)\)/, 'live liquid optics also preserve the paper backing when customized');
   for(const name of ['Body','Neck','GlassBase']) assert.equal(meshes[name].material.ior,1.52);
   handle.setLiveOverrides({liquid:{color:'#ff0000',liquidOptics:optics}});
   assert.equal(meshes['Chia Seeds'].material.color.getHexString(),'302a24');
@@ -211,16 +244,23 @@ test(`${id}: real GLB keeps solid beauty layers, metric glass and water inside t
   assert.equal(neck.material.ior, 1.52); assert.equal(neck.material.transmission, 1);
   const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.physical.vertexShader, fragmentShader: THREE.ShaderLib.physical.fragmentShader };
   neck.material.onBeforeCompile(shader, renderer);
-  assert.match(shader.fragmentShader, /normalize\( refractionVector \) \* glass280WorldThickness/);
-  assert.match(shader.fragmentShader, /transmittedLight\.a = aloeCapturedCoverage/);
-  assert.doesNotMatch(shader.fragmentShader, /return normalize\( refractionVector \) \* thickness \* modelScale/);
+  if (id === 'glass-280-short-latte') {
+    assert.equal(neck.material.customProgramCacheKey(), 'pullcap-hollow-glass-neck-v1');
+    assert.match(shader.fragmentShader, /glassNeckShade\(\)/);
+  } else {
+    assert.match(shader.fragmentShader, /normalize\( refractionVector \) \* glass280WorldThickness/);
+    assert.match(shader.fragmentShader, /transmittedLight\.a = aloeCapturedCoverage/);
+    assert.doesNotMatch(shader.fragmentShader, /return normalize\( refractionVector \) \* thickness \* modelScale/);
+  }
   root.updateMatrixWorld(true);
   neck.material.onBeforeRender(renderer, scene, camera, neck.geometry, neck, null);
-  assert.ok(Math.abs(shader.uniforms.glass280WorldThickness.value - .0025) < 1e-8, 'Blender scale must not shrink 2.5 mm neck glass');
-  root.scale.setScalar(2); root.updateMatrixWorld(true);
-  neck.material.onBeforeRender(renderer, scene, camera, neck.geometry, neck, null);
-  assert.ok(Math.abs(shader.uniforms.glass280WorldThickness.value - .005) < 1e-8);
-  root.scale.setScalar(1); root.updateMatrixWorld(true);
+  if (id === 'glass-280-latte') {
+    assert.ok(Math.abs(shader.uniforms.glass280WorldThickness.value - .0025) < 1e-8, 'Blender scale must not shrink 2.5 mm neck glass');
+    root.scale.setScalar(2); root.updateMatrixWorld(true);
+    neck.material.onBeforeRender(renderer, scene, camera, neck.geometry, neck, null);
+    assert.ok(Math.abs(shader.uniforms.glass280WorldThickness.value - .005) < 1e-8);
+    root.scale.setScalar(1); root.updateMatrixWorld(true);
+  }
   const label = solids.find(mesh => mesh.material.name === 'Label'), water = meshes.find(mesh => mesh.material.name === 'Water');
   const side = water.material.side; water.material.side = THREE.DoubleSide;
   const ray = new THREE.Raycaster();

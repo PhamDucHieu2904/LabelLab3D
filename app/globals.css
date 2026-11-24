@@ -4651,10 +4651,10 @@ select {
 .render-panel-fields select { min-width: 0; width: 100%; height: clamp(42px, 8cqw, 68px); padding: 0 clamp(10px, 2.1cqw, 16px); border: 2px solid #ffffffa8; border-radius: clamp(10px, 2.5cqw, 18px); background: #ffffff12; color: inherit; font: inherit; cursor: pointer; }
 .render-panel-fields option { color: #352b32; background: #fff; }
 .render-panel-toggle { justify-content: space-between; margin: clamp(16px, 3.2cqw, 26px) 0; cursor: pointer; font-size: clamp(13px, 2.5cqw, 17px); font-weight: 650; }
-.render-panel-toggle input { appearance: none; flex: 0 0 clamp(42px, 7.5cqw, 58px); width: clamp(42px, 7.5cqw, 58px); height: clamp(24px, 4.2cqw, 32px); margin: 0; border: 2px solid #ffffffa8; border-radius: 999px; background: #2d112f38; cursor: pointer; transition: background 150ms ease, border-color 150ms ease; }
-.render-panel-toggle input::after { content: ""; display: block; width: clamp(16px, 3.5cqw, 22px); height: clamp(16px, 3.5cqw, 22px); margin: 2px; border-radius: 50%; background: #fff; box-shadow: 0 2px 5px #3f102838; transition: transform 150ms ease; }
-.render-panel-toggle input:checked { background: #ffc29a; border-color: #ffc29a; }
-.render-panel-toggle input:checked::after { transform: translateX(calc(clamp(42px, 7.5cqw, 58px) - clamp(16px, 3.5cqw, 22px) - 8px)); background: #422b36; }
+.render-panel-toggle input { --toggle-width: clamp(42px, 7.5cqw, 58px); --toggle-height: clamp(24px, 4.2cqw, 32px); --toggle-thumb: calc(var(--toggle-height) - 8px); position: relative; appearance: none; flex: 0 0 var(--toggle-width); width: var(--toggle-width); height: var(--toggle-height); padding: 0; margin: 0; border: 2px solid #ffffffa8; border-radius: 999px; background: #2d112f38; cursor: pointer; transition: background 150ms ease, border-color 150ms ease; }
+.render-panel-toggle input::after { content: ""; position: absolute; top: 50%; left: 2px; display: block; width: var(--toggle-thumb); height: var(--toggle-thumb); border-radius: 50%; background: #fff; box-shadow: 0 1px 3px #14251b26; transform: translateY(-50%); transition: transform 150ms ease; }
+.render-panel-toggle input:checked { background: #f3b7ce; border-color: #f3b7ce; }
+.render-panel-toggle input:checked::after { transform: translate(calc(var(--toggle-width) - var(--toggle-thumb) - 8px), -50%); }
 .render-panel-submit { position: relative; justify-content: center; width: 100%; min-height: clamp(58px, 14cqw, 108px); padding: 12px clamp(16px, 4.2cqw, 30px); border: 1px solid transparent; border-radius: clamp(18px, 3.6cqw, 28px); background: #f3b7ce; color: #b32c59; font-size: clamp(18px, 4.2cqw, 31px); line-height: 1; font-weight: 700; letter-spacing: -.025em; cursor: pointer; box-shadow: none; transition: transform 180ms ease, background 180ms ease; }
 .render-panel-submit-label { display: inline-flex; align-items: center; justify-content: center; gap: 10px; margin: 0; }
 .render-panel-cost { position: absolute; right: clamp(16px, 4.2cqw, 30px); top: 50%; display: inline-flex; align-items: center; gap: 6px; margin: 0; transform: translateY(-50%); color: #a52250; font-size: clamp(12px, 2.25cqw, 16px); font-weight: 650; letter-spacing: 0; }
@@ -4672,6 +4672,7 @@ select {
 .creative-space[data-style="white"] .render-panel { color: #503c48; background: #ffffff8c; border-color: #ffffffdd; }
 .creative-space[data-style="white"] .render-panel-fields select { border-color: #816a7a55; background: #ffffff66; }
 .creative-space[data-style="white"] .render-panel-toggle input { border-color: #816a7a77; }
+.creative-space[data-style="white"] .render-panel-toggle input:checked { border-color: #16a34a; background: #16a34a; }
 .creative-space[data-style="white"] .render-panel-submit { background: #35393f; color: #fff; }
 .creative-space[data-style="white"] .render-panel-submit:not(:disabled):hover { background: #24272c; }
 .creative-space[data-style="white"] .render-panel-cost { color: #f1f2f4; }

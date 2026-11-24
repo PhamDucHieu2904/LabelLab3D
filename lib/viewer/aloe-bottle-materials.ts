@@ -131,7 +131,35 @@ export interface AloeLiquidProfile {
   floorLevels: number;
 }
 const profileCache = new WeakMap<THREE.BufferGeometry, Map<string, AloeLiquidProfile>>();
+const floorTextureCache = new WeakMap<AloeLiquidProfile, THREE.DataTexture>();
 const gelDetailCache = new WeakMap<THREE.BufferGeometry, Map<string, THREE.BufferAttribute>>();
+
+/** Pack each 2x2 bilinear cell into one RGBA32F texel so GPU depth queries
+ * avoid dynamic indexing into a 64-vec4 uniform array (which stalls D3D11 FXC). */
+function getAloeFloorTexture(profile: AloeLiquidProfile): THREE.DataTexture {
+  let texture = floorTextureCache.get(profile);
+  if (texture) return texture;
+  const cells = profile.floorLevels - 1;
+  const data = new Float32Array(cells * cells * 4);
+  for (let z = 0; z < cells; z++) {
+    for (let x = 0; x < cells; x++) {
+      const dst = (z * cells + x) * 4;
+      data[dst] = profile.floor[z * profile.floorLevels + x];
+      data[dst + 1] = profile.floor[z * profile.floorLevels + x + 1];
+      data[dst + 2] = profile.floor[(z + 1) * profile.floorLevels + x];
+      data[dst + 3] = profile.floor[(z + 1) * profile.floorLevels + x + 1];
+    }
+  }
+  texture = new THREE.DataTexture(data, cells, cells, THREE.RGBAFormat, THREE.FloatType);
+  texture.name = 'aloe-floor-heightfield';
+  texture.minFilter = THREE.NearestFilter;
+  texture.magFilter = THREE.NearestFilter;
+  texture.generateMipmaps = false;
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.needsUpdate = true;
+  floorTextureCache.set(profile, texture);
+  return texture;
+}
 
 /** Stable cloud/fibre density is an authored-space property, independent of
  * camera, flavour and exposure. Bake the previous value noise once at the dense
@@ -350,7 +378,6 @@ uniform vec2 aloeHeightRange;
 uniform vec2 aloeCenter;
 uniform vec2 aloeHalfBounds;
 uniform vec4 aloeSections[${PROFILE_LEVELS}];
-uniform vec4 aloeFloor[${FLOOR_LEVELS * FLOOR_LEVELS / 4}];
 uniform vec3 aloeScatteringColor;
 uniform vec3 aloeJuiceColor;
 uniform float aloeClearRadiance;
@@ -399,20 +426,14 @@ float aloeReservoirCoverage(float path, float height) {
 // first-exit rule. Perspective-correct interpolation on the dense pulp mesh
 // replaces repeated depth marching at every overlapping fragment.
 const vertexDepthDeclarations = /* glsl */`
-float aloeFloorValue(int index) {
-  int row = index / 4;
-  int column = index - row * 4;
-  vec4 values = aloeFloor[row];
-  // Explicit components avoid emulated dynamic vector indexing on mobile GPUs.
-  return column == 0 ? values.x : column == 1 ? values.y : column == 2 ? values.z : values.w;
-}
+uniform highp sampler2D aloeFloorMap;
+uniform int aloeMaxScanSteps;
 float aloeFloorHeight(vec2 point) {
   vec2 grid = clamp((point - aloeCenter + aloeHalfBounds) / (2.0 * aloeHalfBounds), vec2(0.0), vec2(1.0)) * ${FLOOR_LEVELS - 1}.0;
   ivec2 cell = min(ivec2(floor(grid)), ivec2(${FLOOR_LEVELS - 2}));
   vec2 f = grid - vec2(cell);
-  int index = cell.y * ${FLOOR_LEVELS} + cell.x;
-  float height = mix(mix(aloeFloorValue(index), aloeFloorValue(index + 1), f.x),
-                     mix(aloeFloorValue(index + ${FLOOR_LEVELS}), aloeFloorValue(index + ${FLOOR_LEVELS + 1}), f.x), f.y);
+  vec4 corners = texelFetch(aloeFloorMap, cell, 0);
+  float height = mix(mix(corners.x, corners.y, f.x), mix(corners.z, corners.w, f.x), f.y);
   return height + 0.00025 * smoothstep(0.002, 0.01, height - aloeHeightRange.x);
 }
 bool aloeInside(vec3 p) {
@@ -434,19 +455,24 @@ float aloeExitDistance(vec3 point, vec3 direction) {
   if (abs(direction.z) > 0.000001) high = min(high, ((direction.z > 0.0 ? upper.z : lower.z) - point.z) / direction.z);
   float low = 0.0;
   float limit = high;
-  int scanSteps = point.y < aloeHeightRange.x + ${FLOOR_DEPTH} ? 64 : 16;
+  int maxSteps = aloeMaxScanSteps > 0 ? aloeMaxScanSteps : 24;
+  int scanSteps = point.y < aloeHeightRange.x + ${FLOOR_DEPTH} ? maxSteps : min(12, maxSteps);
   // The molded base is concave: stop at the first liquid exit rather than
   // accidentally jumping across its air pocket to the opposite bottle wall.
-  for (int step = 1; step <= 64; step++) {
-    if (step > scanSteps) break;
+  int step = 1;
+  while (step <= scanSteps) {
     float distance = limit * float(step) / float(scanSteps);
     if (!aloeInside(point + direction * distance)) { high = distance; break; }
     low = distance;
+    step++;
   }
-  for (int i = 0; i < 12; i++) {
+  int biLimit = maxSteps > 0 ? 8 : 0;
+  int bi = 0;
+  while (bi < biLimit) {
     float middle = (low + high) * 0.5;
     if (aloeInside(point + direction * middle)) low = middle;
     else high = middle;
+    bi++;
   }
   return max(0.0, high);
 }
@@ -537,7 +563,8 @@ export function createAloeBottleMaterialContext(root: THREE.Object3D, asset: Pro
         aloeCenter: { value: profile.center },
         aloeHalfBounds: { value: profile.halfBounds },
         aloeSections: { value: profile.sections },
-        aloeFloor: { value: Array.from({ length: profile.floor.length / 4 }, (_, i) => new THREE.Vector4().fromArray(profile.floor, i * 4)) },
+        aloeFloorMap: { value: getAloeFloorTexture(profile) },
+        aloeMaxScanSteps: { value: 24 },
         aloeScatteringColor: { value: scattering },
         aloeJuiceColor: { value: juice },
         aloeClearRadiance: { value: 1 },

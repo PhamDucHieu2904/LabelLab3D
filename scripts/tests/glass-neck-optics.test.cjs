@@ -30,6 +30,10 @@ test('Neck optics binds actual shell, current cap finish, label UV and scene bac
   assert.equal(shader.uniforms.glassNeckCapRoughness.value, .55);
   assert.equal(shader.uniforms.glassNeckRoughness.value, .15, 'app Neck finish is softer than the body .042 baseline');
   assert.equal(shader.uniforms.glassNeckLabelMap.value, label.map);
+  assert.equal(shader.uniforms.glassNeckLabelBackColor.value.getHexString(), 'c8cbd2');
+  assert.match(shader.fragmentShader, /rearLabel=step\(0\.0,dot\(direction,hit\.geometric\)\)/);
+  assert.match(shader.fragmentShader, /glassNeckLabelBackColor/);
+  assert.doesNotMatch(shader.fragmentShader, /glassNeckLabelBackShadow/);
   currentCap.color.set('#cc2222'); currentCap.roughness = .2;
   material.onBeforeRender({}, scene, camera, neck.geometry, neck, null);
   assert.equal(shader.uniforms.glassNeckCapColor.value.getHexString(), 'cc2222');

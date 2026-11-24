@@ -51,7 +51,7 @@ export function createPetRingMaterialContext(root: THREE.Object3D, asset: Produc
       const uniforms={...createBottleBackdropUniforms(),
         aloeClearRadiance:{value:1},petRingIor:{value:PET_RING_OPTICS.ior},petRingWorldThickness:{value:Number(PET_RING_OPTICS.thicknessMetres)},
         petRingTriangles:{value:data.triangles},petRingNodes:{value:data.nodes},petRingUvs:{value:data.uvs},
-        petRingDataWidth:{value:data.width},petRingEpsilon:{value:data.epsilon},petRingRoughness:{value:Number(PET_RING_OPTICS.roughness)},
+        petRingDataWidth:{value:data.width},petRingMaxBounces:{value:6},petRingEpsilon:{value:data.epsilon},petRingRoughness:{value:Number(PET_RING_OPTICS.roughness)},
         petRingMeshToTrace:{value:meshToTrace},petRingNormalToTrace:{value:new THREE.Matrix3().getNormalMatrix(meshToTrace)},
         petRingToScene:{value:new THREE.Matrix4()},petRingSceneToClip:{value:new THREE.Matrix4()},
         petRingBackgroundDistance:{value:.02},petRingCamera:{value:new THREE.Vector3()},petRingView:{value:new THREE.Vector3()},petRingOrthographic:{value:0},
@@ -61,6 +61,8 @@ export function createPetRingMaterialContext(root: THREE.Object3D, asset: Produc
       material.onBeforeRender=(renderer,scene,camera,_geometry,object)=>{
         updateBottleBackdropUniforms(uniforms,scene);uniforms.aloeClearRadiance.value=aloeTransmissionClearRadiance(renderer);
         uniforms.petRingRoughness.value=material.roughness;
+        const budget=(scene.userData as {opticalMaxBounces?:number}|undefined)?.opticalMaxBounces;
+        if(typeof budget==='number'&&budget>0)uniforms.petRingMaxBounces.value=budget;
         uniforms.petRingToScene.value.multiplyMatrices(object.matrixWorld,traceToMesh);
         sceneToTrace.copy(uniforms.petRingToScene.value).invert();
         camera.getWorldPosition(uniforms.petRingCamera.value).applyMatrix4(sceneToTrace);

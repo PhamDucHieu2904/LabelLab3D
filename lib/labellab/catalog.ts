@@ -2,7 +2,7 @@ import type { CatalogData } from "../catalog/contracts";
 import type { ProductAppearance, ProductAsset } from "../viewer-config";
 import { resolveDisplay3D } from "../catalog/resolve";
 import { canAssets } from "../product-assets";
-import sourceCatalog from "./source-catalog.json";
+import sourceCatalog from "./source-catalog-runtime.json";
 import type { MaterialPreferences } from "./preferences";
 import { getLiquidType } from "./liquid-presets";
 import glass280Manifest from "../../public/models/bottles/glass-280-latte.manifest.json";
@@ -60,6 +60,7 @@ export interface LabModelFamily {
 function fromPublished(
   displayId: string,
   details: Pick<LabModel, "id" | "name" | "description" | "category">,
+  options?: { capColor?: string },
 ): LabModel {
   const display = catalog.displays3d.find((item) => item.id === displayId);
   if (!display) throw new Error(`Missing published display: ${displayId}`);
@@ -76,7 +77,15 @@ function fromPublished(
     volume: `${asset.volumeMl ?? ""} ml`,
     poster: asset.poster ?? "",
     asset,
-    appearance: product.appearance,
+    appearance: options?.capColor && asset.materialSlots?.cap?.length
+      ? {
+          ...product.appearance,
+          slots: {
+            ...product.appearance.slots,
+            cap: { ...product.appearance.slots?.cap, color: options.capColor },
+          },
+        }
+      : product.appearance,
     frontYaw: sourceModel.mockupFrontYaw ?? 0,
   };
 }
@@ -272,7 +281,11 @@ const glass280ShortLatteModel: LabModel = {
     poster: `/models/bottles/glass-280-short-latte-poster.webp?v=${glass280ShortManifest.sha256.slice(0, 12)}`,
     materialSlots: { body: ["Body", "Neck", "GlassBase"], cap: ["Cap"], label: ["Label"], liquid: ["Water"] },
   },
-  appearance: { ...glass280LatteModel.appearance, id: "glass-280-short:latte-blank" },
+  appearance: {
+    ...glass280LatteModel.appearance,
+    id: "glass-280-short:latte-blank",
+    slots: { ...glass280LatteModel.appearance.slots, cap: { ...glass280LatteModel.appearance.slots?.cap, color: "#000000" } },
+  },
 };
 const glass290ChiaModel: LabModel = {
   id: "glass-290-chia", name: "290 ml Bottle · Chia",
@@ -283,7 +296,7 @@ const glass290ChiaModel: LabModel = {
     textureSamplers: { label: { wrapS: "repeat", wrapT: "clamp" } }, orientation: [0, 0, 0], cameraFraming: 'bounds' },
   appearance: { id: "glass-290:chia-blank", requiredSlots: ["body", "cap", "label", "liquid", "inclusions"], slots: {
     body: { color: "#ffffff", metalness: 0, roughness: .042, transmission: 1, thickness: .002, ior: 1.52 },
-    cap: { color: "#d8c738", metalness: 1, roughness: .388 }, label: { color: "#ffffff", metalness: 0, roughness: .28 },
+    cap: { color: "#c0c0c0", metalness: 1, roughness: .388 }, label: { color: "#ffffff", metalness: 0, roughness: .28 },
     // Chia uses the same opaque captured-water path as Basil; only its native
     // seed mesh and liquid type differ.
     liquid: { color: "#f14e78", metalness: 0, roughness: 1, transmission: 0 }, inclusions: { color: "#302a24", roughness: .74 },
@@ -297,7 +310,7 @@ const glass290MilkModel: LabModel = {
     textureSamplers: { label: { wrapS: "repeat", wrapT: "clamp" } }, orientation: [0, 0, 0], cameraFraming: 'bounds' },
   appearance: { id: "glass-290:milk-blank", requiredSlots: ["body", "cap", "label", "liquid"], slots: {
     body: { color: "#ffffff", metalness: 0, roughness: .042, transmission: 1, thickness: .002, ior: 1.52 },
-    cap: { color: "#d8c738", metalness: 1, roughness: .388 }, label: { color: "#ffffff", metalness: 0, roughness: .28 },
+    cap: { color: "#c0c0c0", metalness: 1, roughness: .388 }, label: { color: "#ffffff", metalness: 0, roughness: .28 },
     liquid: { color: "#fff5e4", metalness: 0, roughness: .28, transmission: 0, thickness: .035, ior: 1.333 },
   } }, frontYaw: 0,
 };
@@ -377,7 +390,7 @@ export const LAB_MODELS: LabModel[] = [
     description:
       "290 ml glass bottle with basil seeds, a strawberry label and web-optimized materials.",
     category: "glass",
-  }),
+  }, { capColor: "#c0c0c0" }),
   fromPublished("juice30-can330-mango-3d", {
     id: "can-mango",
     name: "Mango Juice",
@@ -653,10 +666,11 @@ export function getModelMaterialDefaults(id?: string | null): MaterialPreference
     capColor:
       model.appearance.slots?.cap?.color ??
       (model.category === "glass"
-        ? "#d8c738"
+        ? "#c0c0c0"
         : model.category === "can"
           ? "#c0c0c0"
           : "#ffffff"),
+    bodyColor: model.appearance.slots?.body?.color ?? "#ffffff",
     capMetalness: model.appearance.slots?.cap?.metalness ?? (model.category === "pet" ? 0 : 1),
     capRoughness: model.appearance.slots?.cap?.roughness ?? (model.category === "glass" ? 0.388 : model.category === "pet" ? 0.29 : 0.22),
     bodyMetalness: model.appearance.slots?.body?.metalness ?? (model.category === "can" ? 1 : 0),

@@ -208,37 +208,49 @@ function proxyRanges(mesh: THREE.Mesh) {
 function buildGestureProxy(geometry: THREE.BufferGeometry, ranges: number[][]): GestureProxy {
   const position = geometry.getAttribute('position'), indices = geometry.index;
   const used = new Uint8Array(position.count), references: number[] = [];
-  const minimum = [Infinity, Infinity, Infinity], maximum = [-Infinity, -Infinity, -Infinity];
+  let min0 = Infinity, min1 = Infinity, min2 = Infinity;
+  let max0 = -Infinity, max1 = -Infinity, max2 = -Infinity;
   for (const [start, end] of ranges) for (let offset = start; offset < end; offset++) {
     const id = indices ? indices.getX(offset) : offset;
     if (used[id]) continue;
     used[id] = 1;
-    const point = [position.getX(id), position.getY(id), position.getZ(id)];
-    if (!point.every(Number.isFinite)) continue;
+    const x = position.getX(id), y = position.getY(id), z = position.getZ(id);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
     references.push(id);
-    for (let axis = 0; axis < 3; axis++) { minimum[axis] = Math.min(minimum[axis], point[axis]); maximum[axis] = Math.max(maximum[axis], point[axis]); }
+    if (x < min0) min0 = x; if (x > max0) max0 = x;
+    if (y < min1) min1 = y; if (y > max1) max1 = y;
+    if (z < min2) min2 = z; if (z > max2) max2 = z;
   }
   if (!references.length) return { points: [], slabs: [] };
-  const extents = maximum.map((value, axis) => value - minimum[axis]);
-  const axis = extents.indexOf(Math.max(...extents)), u = (axis + 1) % 3, v = (axis + 2) % 3;
+  const minimum = [min0, min1, min2];
+  const extents = [max0 - min0, max1 - min1, max2 - min2];
+  const axis = extents[0] >= extents[1] && extents[0] >= extents[2] ? 0 : extents[1] >= extents[2] ? 1 : 2;
+  const u = (axis + 1) % 3, v = (axis + 2) % 3;
   const bins = Array.from({ length: extents[axis] > 1e-10 ? proxyBins : 1 }, () => ({
     scores: new Float64Array(proxyDirections).fill(-Infinity), lowIds: new Int32Array(proxyDirections).fill(-1), highIds: new Int32Array(proxyDirections).fill(-1),
     low: new Float64Array(proxyDirections).fill(Infinity), high: new Float64Array(proxyDirections).fill(-Infinity),
     first: -1, last: -1, minimum: Infinity, maximum: -Infinity,
   }));
-  for (const id of references) {
-    const point = [position.getX(id), position.getY(id), position.getZ(id)];
-    const bin = bins[Math.min(bins.length - 1, Math.floor((point[axis] - minimum[axis]) / (extents[axis] || 1) * bins.length))];
-    if (point[axis] < bin.minimum) { bin.minimum = point[axis]; bin.first = id; }
-    if (point[axis] > bin.maximum) { bin.maximum = point[axis]; bin.last = id; }
+  const binCount = bins.length;
+  const minAxis = minimum[axis], invExtent = binCount / (extents[axis] || 1);
+  for (let r = 0; r < references.length; r++) {
+    const id = references[r];
+    const px = position.getX(id), py = position.getY(id), pz = position.getZ(id);
+    const pa = axis === 0 ? px : axis === 1 ? py : pz;
+    const pu = u === 0 ? px : u === 1 ? py : pz;
+    const pv = v === 0 ? px : v === 1 ? py : pz;
+    const binIdx = Math.min(binCount - 1, Math.max(0, Math.floor((pa - minAxis) * invExtent)));
+    const bin = bins[binIdx];
+    if (pa < bin.minimum) { bin.minimum = pa; bin.first = id; }
+    if (pa > bin.maximum) { bin.maximum = pa; bin.last = id; }
     for (let direction = 0; direction < proxyDirections; direction++) {
-      const score = point[u] * supportDirections[direction][0] + point[v] * supportDirections[direction][1];
+      const score = pu * supportDirections[direction][0] + pv * supportDirections[direction][1];
       if (score > bin.scores[direction] + 1e-12) {
-        bin.scores[direction] = score; bin.lowIds[direction] = bin.highIds[direction] = id; bin.low[direction] = bin.high[direction] = point[axis];
+        bin.scores[direction] = score; bin.lowIds[direction] = bin.highIds[direction] = id; bin.low[direction] = bin.high[direction] = pa;
       } else if (Math.abs(score - bin.scores[direction]) <= 1e-12) {
         // Retain both ends of straight walls regardless of vertex ordering.
-        if (point[axis] < bin.low[direction]) { bin.low[direction] = point[axis]; bin.lowIds[direction] = id; }
-        if (point[axis] > bin.high[direction]) { bin.high[direction] = point[axis]; bin.highIds[direction] = id; }
+        if (pa < bin.low[direction]) { bin.low[direction] = pa; bin.lowIds[direction] = id; }
+        if (pa > bin.high[direction]) { bin.high[direction] = pa; bin.highIds[direction] = id; }
       }
     }
   }
@@ -344,7 +356,7 @@ export function createProductHitRegion(mount: HTMLDivElement) {
       }
       const changed = attributes.length !== previousAttributes.length || attributes.some((attribute, index) => attribute !== previousAttributes[index])
         || signature.length !== previous.length || signature.some((value, index) => value !== previous[index] && Math.abs(value - previous[index]) > 1e-7);
-      if (!force && (!changed || previous.length && now - lastUpdate < 50)) return;
+      if (!force && (!changed || previous.length && now - lastUpdate < 160)) return;
       const path = silhouette.project(meshes, camera, width, height);
       element.style.clipPath = path ? `path("${path}")` : 'path("M0,0Z")';
       element.style.display = path ? 'block' : 'none';

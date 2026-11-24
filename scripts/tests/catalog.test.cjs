@@ -52,7 +52,10 @@ for (const [id, displayId, webUrl] of scenes) {
     assert.ok(published);
     assert.equal(model.asset.src, webUrl);
     assert.deepEqual(model.asset, published.asset);
-    assert.deepEqual(model.appearance, published.appearance);
+    const expectedAppearance = id === 'basil-strawberry'
+      ? { ...published.appearance, slots: { ...published.appearance.slots, cap: { ...(published.appearance.slots?.cap ?? {}), color: '#c0c0c0' } } }
+      : published.appearance;
+    assert.deepEqual(model.appearance, expectedAppearance);
     assert.equal(model.frontYaw, sourceModel.mockupFrontYaw ?? 0);
     assert.equal(isBasilHighAsset(model.asset), false, 'Web scenes must not activate the High optics/HDRI pipeline');
     assert.equal(fs.existsSync(path.join(root, 'public', webUrl)), true);
@@ -88,7 +91,7 @@ for (const [kind, color] of [['chia', '#f14e78'], ['milk', '#fff5e4']]) {
     assert.equal(parsed.modelId,id);
     for(const key of ['liquidType','liquidColor','liquidCustomized','capColor','capRoughness','bodyRoughness','roughness','liquidClarity','liquidTurbidity']) assert.equal(parsed[key],defaults[key],key);
     assert.equal(defaults.liquidType,kind); assert.equal(defaults.liquidCustomized,false);
-    assert.equal(defaults.capColor,'#d8c738');
+    assert.equal(defaults.capColor,'#c0c0c0');
     assert.equal(model.asset.materialSlots.inclusions?.length??0,kind==='chia'?1:0);
     assert.equal(model.appearance.slots.label.baseColorMap,undefined);
   });
@@ -297,6 +300,7 @@ test(`${modelId} preserves supplied geometry/UVs and restores Milk coffee / Latt
   const defaults = getModelMaterialDefaults(model.id), restored = parsePreferences({ modelId: model.id });
   assert.equal(defaults.liquidType, 'coffee'); assert.equal(defaults.liquidColor, '#B88C69');
   assert.equal(defaults.liquidCustomized, true); assert.equal(defaults.liquidSparkling, 0);
+  assert.equal(defaults.capColor, modelId === 'glass-280-short-latte' ? '#000000' : '#c0c0c0');
   for (const key of ['liquidType', 'liquidColor', 'liquidCustomized', 'liquidSparkling', 'capColor', 'capMetalness', 'capRoughness', 'bodyRoughness']) assert.equal(restored[key], defaults[key], key);
   assert.equal(parsePreferences({ ...restored, liquidColor: '#92654D', capRoughness: .7 }).capRoughness, .7);
   const glb = fs.readFileSync(path.join(root, 'public', model.asset.src.split('?')[0]));

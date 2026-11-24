@@ -100,7 +100,7 @@ export default function PropertiesPanel({ model, settings, onChange, artwork }: 
       liquidSparkling: defaults.liquidSparkling,
     });
     if (selected === "cap") onChange({ capColor: defaults.capColor, capMetalness: defaults.capMetalness, capRoughness: defaults.capRoughness });
-    if (selected === "body") onChange({ bodyMetalness: defaults.bodyMetalness, bodyRoughness: defaults.bodyRoughness });
+    if (selected === "body") onChange({ bodyColor: defaults.bodyColor, bodyMetalness: defaults.bodyMetalness, bodyRoughness: defaults.bodyRoughness });
     if (selected === "label") onChange({ labelOffset: defaults.labelOffset, roughness: defaults.roughness, metalness: defaults.metalness });
   };
   return <section className={styles.root} data-tool-section="materials" data-theme={settings.sceneMode === "studio" ? "studio" : settings.style}>
@@ -165,7 +165,7 @@ export default function PropertiesPanel({ model, settings, onChange, artwork }: 
       <p className={styles.help}>Less roughness gives a polished finish. More adds a soft, matte look.</p>
     </>}
     {selected === "body" && <>
-      <div className={styles.surfaceType}><Layers3 size={18} aria-hidden="true" /><span>{model.category === "glass" ? "Glass bottle" : model.category === "pet" ? "PET bottle" : model.category === "pp" ? "PP bottle" : "Aluminum body"}<small>{model.volume} · {model.category === "can" ? "Unprinted surface" : "Bottle surface"}</small></span></div>
+      <PropertyColor id="body-color" label="Body color" value={settings.bodyColor} onChange={(bodyColor) => onChange({ bodyColor })} />
       <div className={styles.controlGrid}>
         <PropertyNumber id="body-metalness" label="Metallic" value={settings.bodyMetalness} onChange={(bodyMetalness) => onChange({ bodyMetalness })} />
         <PropertyNumber id="body-roughness" label="Roughness" value={settings.bodyRoughness} onChange={(bodyRoughness) => onChange({ bodyRoughness })} />

@@ -1,0 +1,10 @@
+.page { min-height: 100vh; padding: 40px 20px; background: linear-gradient(135deg, #d53660, #f7c6d4); color: #633047; }
+.card { max-width: 760px; margin: 0 auto; padding: clamp(24px, 5vw, 52px); border: 1px solid #ffffffaa; border-radius: 24px; background: #fff8fbd9; box-shadow: 0 20px 60px #70203c2b; }
+.back { color: #8c2750; font-weight: 700; text-decoration: none; }
+.eyebrow { margin: 34px 0 8px; color: #a12e56; font-size: 12px; font-weight: 800; letter-spacing: .12em; }
+.card h1 { margin: 0 0 14px; font-size: clamp(30px, 5vw, 48px); line-height: 1.05; }
+.intro { font-size: 18px; line-height: 1.6; color: #70465a; }
+.card section { margin-top: 28px; }
+.card h2 { margin: 0 0 8px; font-size: 21px; }
+.card section p, .note { margin: 0; line-height: 1.65; }
+.note { margin-top: 36px; padding-top: 20px; border-top: 1px solid #c78ba1; color: #795365; font-size: 14px; }

@@ -29,5 +29,6 @@ test('300 ml glass also defaults to Milk when selected from the library', () => 
   const defaults = catalog.getModelMaterialDefaults('glass-300-milk');
   const restored = parsePreferences({ modelId: 'glass-300-milk' });
   assert.equal(defaults.liquidType, 'milk');
+  assert.equal(defaults.capColor, '#c0c0c0');
   for (const [key, value] of Object.entries(defaults)) assert.equal(restored[key], value, key);
 });

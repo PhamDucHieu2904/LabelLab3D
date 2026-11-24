@@ -94,6 +94,6 @@ test('glass-300 Base integrates through canonical GLTF scale without changing Bo
  const bodyBefore=body.geometry;
  const context=createBasilWebBottleMaterialContext(root,{packaging:'glass',materialSlots:{body:['Base','Body'],liquid:['Water']}});
  assert.ok(context); context.configure(baseMaterial,base,'body'); context.configure(bodyMaterial,body,'body');
- assert.ok(baseMaterial.thickness>.00485&&baseMaterial.thickness<.00487); assert.equal(body.geometry,bodyBefore); assert.equal(bodyMaterial.customProgramCacheKey(),'basil-web-polished-shell-v1');
+ assert.ok(baseMaterial.thickness>.00655&&baseMaterial.thickness<.00657); assert.equal(body.geometry,bodyBefore); assert.equal(bodyMaterial.customProgramCacheKey(),'basil-web-polished-shell-v1');
  context.dispose?.();baseGeometry.dispose();bodyGeometry.dispose();waterGeometry.dispose();baseMaterial.dispose();bodyMaterial.dispose();waterMaterial.dispose();
 });

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { ProductAsset } from '../viewer-config';
 import { configureBottleBeautyOnly } from './basil-web-materials';
 import { aloeTransmissionClearRadiance, correctAloeTransmissionClear } from './aloe-bottle-materials';
+import { createGlassNeckMaterialContext } from './glass-neck-material';
 
 type Role = 'body' | 'cap' | 'liquid' | 'label' | 'inclusions';
 // Glass 290 uses the Basil web optical path. Keeping it out of this generic
@@ -46,15 +47,23 @@ export function createGlass280MaterialContext(root: THREE.Object3D, asset: Produ
     }
   });
   if (!liquid) return;
+  const shortNeckOptics = asset.id === 'glass-280-short-latte'
+    ? createGlassNeckMaterialContext(root, (mesh, material) => {
+        const role = glass280MaterialRole(asset, mesh, material);
+        if (role === 'body' && (material.name === 'Neck' || mesh.name === 'Neck')) return 1;
+        return role === 'cap' ? 3 : role === 'label' ? 4 : role === 'liquid' ? 5 : undefined;
+      })
+    : undefined;
   root.updateMatrixWorld(true);
   const rootInverse = root.matrixWorld.clone().invert();
   return {
     defaultColor: liquid.color.clone(),
     ready: undefined as Promise<void> | undefined,
-    dispose: undefined as (() => void) | undefined,
+    dispose: shortNeckOptics ? () => shortNeckOptics.dispose() : undefined,
     configure(material: THREE.MeshStandardMaterial, mesh: THREE.Mesh, role: string) {
       material.side = THREE.FrontSide;
       if (role === 'label' || role === 'cap') {
+        if (shortNeckOptics) shortNeckOptics.registerOpaque(material, role === 'cap' ? 3 : 4);
         configureBottleBeautyOnly(mesh);
         // Print remains alpha 1, but draws after transmission so the source's
         // nearly coincident glass/label heel cannot refract coffee over the print.
@@ -74,6 +83,10 @@ export function createGlass280MaterialContext(root: THREE.Object3D, asset: Produ
           const neck = material.name === 'Neck' || (material.name === 'Glass Refraction' && !base);
           const thickness = base ? GLASS_280_OPTICS.baseMetres : neck ? GLASS_280_OPTICS.neckMetres : GLASS_280_OPTICS.wallMetres;
           material.thickness = thickness;
+          if (shortNeckOptics && (material.name === 'Neck' || mesh.name === 'Neck')) {
+            shortNeckOptics.configure(material, mesh);
+            return;
+          }
           // Source objects retain nonuniform Blender scales. Thickness is a
           // metric ray length, rather than a value shrunk by those transforms.
           const meshToMetric = new THREE.Matrix4().multiplyMatrices(rootInverse, mesh.matrixWorld);
@@ -100,6 +113,7 @@ export function createGlass280MaterialContext(root: THREE.Object3D, asset: Produ
           material.customProgramCacheKey = () => 'glass-280-polished-metric-shell-v2';
         }
       } else if (role === 'liquid') {
+        if (shortNeckOptics) shortNeckOptics.registerLiquid(material.color, undefined, material);
         material.transparent = false; material.opacity = 1;
         material.depthWrite = true;
         if (material instanceof THREE.MeshPhysicalMaterial) material.transmission = 0;

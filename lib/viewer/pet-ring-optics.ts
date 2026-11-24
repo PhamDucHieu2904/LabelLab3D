@@ -12,6 +12,7 @@ uniform highp sampler2D petRingTriangles;
 uniform highp sampler2D petRingNodes;
 uniform highp sampler2D petRingUvs;
 uniform int petRingDataWidth;
+uniform int petRingMaxBounces;
 uniform float petRingEpsilon;
 uniform float petRingRoughness;
 uniform float petRingIor;
@@ -57,32 +58,9 @@ vec4 petRingEscape(vec3 origin,vec3 direction) {
   if(bottleBackdropEnabled>.5)return vec4(rear.rgb+(1.0-rear.a)*bottleBackdropAt(uv),1.0);
   return rear;
 }
-// Follow internal reflections to the next real boundary. A ray still inside
-// PET cannot be replaced by an opaque environment sample: doing so makes the
-// clear flange a black/chrome band under a white cap.
-vec3 petRingReflection(vec3 origin,vec3 direction,float medium) {
-  vec3 color=vec3(0);float weight=1.0;
-  for(int bounce=0;bounce<6;bounce++) {
-    PetRingHit hit=petRingTrace(origin,direction);
-    if(hit.distance>=999.0)return color+weight*petRingEnvironment(direction,petRingRoughness);
-    vec3 point=origin+direction*hit.distance;
-    if(hit.kind>4.5){vec4 rear=petRingReservoir(petRingProject(point));return color+weight*(rear.rgb+(1.0-rear.a)*petRingEnvironment(direction,petRingRoughness));}
-    if(hit.kind>2.5)return color+weight*petRingCap(hit,direction);
-    bool entering=dot(direction,hit.geometric)<0.0;
-    float target=entering?petRingIor:1.0;
-    vec3 n=entering?hit.normal:-hit.normal;
-    if(dot(n,direction)>=-.0001)n=entering?hit.geometric:-hit.geometric;
-    float cosine=clamp(-dot(n,direction),0.0,1.0),cosT;
-    float f=petRingFresnel(cosine,medium,target,cosT);
-    origin=point;
-    if(f>.999999){direction=reflect(direction,n);origin+=(entering?hit.geometric:-hit.geometric)*petRingEpsilon*2.0;continue;}
-    color+=weight*f*petRingEnvironment(reflect(direction,n),petRingRoughness);
-    weight*=1.0-f;
-    direction=normalize((medium/target)*direction+((medium/target)*cosine-cosT)*n);
-    medium=target;origin+=(entering?-hit.geometric:hit.geometric)*petRingEpsilon*2.0;
-  }
-  return color+weight*petRingEnvironment(direction,petRingRoughness);
-}
+// Single-loop 2-ray state machine (primary refracted ray, then entry reflection).
+// One petRingTrace call site keeps Windows D3D11/FXC shader compilation instant
+// while preserving closed-flange internal reflections, liquid reservoir and cap hits.
 vec4 petRingShade() {
   vec3 origin=vPetRingPosition;
   vec3 direction=petRingOrthographic>.5?normalize(petRingView):normalize(origin-petRingCamera);
@@ -91,33 +69,84 @@ vec4 petRingShade() {
   vec3 n=normalize(vPetRingNormal);if(dot(n,direction)>=0.0)n=geometric;
   float cosine=clamp(-dot(n,direction),0.0,1.0),cosT;
   float f=petRingFresnel(cosine,1.0,petRingIor,cosT);
-  vec3 color=f*petRingReflection(origin+geometric*petRingEpsilon*2.0,reflect(direction,n),1.0);
-  float weight=1.0-f;
-  direction=normalize(direction/petRingIor+(cosine/petRingIor-cosT)*n);
-  origin-=geometric*petRingEpsilon*2.0;
-  float medium=petRingIor;
-  for(int bounce=0;bounce<12;bounce++) {
-    PetRingHit hit=petRingTrace(origin,direction);
-    if(hit.distance>=999.0){vec4 rear=petRingEscape(origin,direction);return vec4(color+weight*rear.rgb,1.0-weight*(1.0-rear.a));}
-    vec3 point=origin+direction*hit.distance;
-    if(hit.kind>4.5){vec4 rear=petRingReservoir(petRingProject(point));return vec4(color+weight*rear.rgb,1.0-weight*(1.0-rear.a));}
-    if(hit.kind>2.5)return vec4(color+weight*petRingCap(hit,direction),1.0);
-    bool entering=dot(direction,hit.geometric)<0.0;
-    float target=entering?petRingIor:1.0;
-    n=entering?hit.normal:-hit.normal;
-    if(dot(n,direction)>=-.0001)n=entering?hit.geometric:-hit.geometric;
-    cosine=clamp(-dot(n,direction),0.0,1.0);
-    f=petRingFresnel(cosine,medium,target,cosT);
-    origin=point;
-    if(f>.999999){direction=reflect(direction,n);origin+=(entering?hit.geometric:-hit.geometric)*petRingEpsilon*2.0;continue;}
-    vec3 reflected=reflect(direction,n);
-    vec3 reflectedOrigin=origin+(entering?hit.geometric:-hit.geometric)*petRingEpsilon*2.0;
-    vec3 reflection=bounce<2&&weight*f>.025?petRingReflection(reflectedOrigin,reflected,medium):petRingEnvironment(reflected,petRingRoughness);
-    color+=weight*f*reflection;weight*=1.0-f;
-    direction=normalize((medium/target)*direction+((medium/target)*cosine-cosT)*n);
-    medium=target;origin+=(entering?-hit.geometric:hit.geometric)*petRingEpsilon*2.0;
+  int primaryLimit=petRingMaxBounces>0?petRingMaxBounces:6;
+  int reflLimit=min(4,primaryLimit);
+  bool hasPending=f>.01;
+  vec3 pOrigin=origin+geometric*petRingEpsilon*2.0;
+  vec3 pDir=reflect(direction,n);
+  float pWeight=f;
+  vec3 rOrigin=origin-geometric*petRingEpsilon*2.0;
+  vec3 rDir=normalize(direction/petRingIor+(cosine/petRingIor-cosT)*n);
+  float rWeight=1.0-f;
+  float rMedium=petRingIor;
+  bool rPrimary=true;
+  int rLeft=primaryLimit;
+  vec3 color=vec3(0);
+  float alpha=1.0;
+  int totalSteps=primaryLimit+reflLimit+2;
+  int step=0;
+  while(step<totalSteps) {
+    step++;
+    PetRingHit hit=petRingTrace(rOrigin,rDir);
+    bool done=false;
+    if(hit.distance>=999.0) {
+      if(rPrimary) {
+        vec4 rear=petRingEscape(rOrigin,rDir);
+        color+=rWeight*rear.rgb; alpha=1.0-rWeight*(1.0-rear.a);
+      } else {
+        color+=rWeight*petRingEnvironment(rDir,petRingRoughness);
+      }
+      done=true;
+    } else {
+      vec3 point=rOrigin+rDir*hit.distance;
+      if(hit.kind>4.5) {
+        vec4 rear=petRingReservoir(petRingProject(point));
+        if(rPrimary) {
+          color+=rWeight*rear.rgb; alpha=1.0-rWeight*(1.0-rear.a);
+        } else {
+          color+=rWeight*(rear.rgb+(1.0-rear.a)*petRingEnvironment(rDir,petRingRoughness));
+        }
+        done=true;
+      } else if(hit.kind>2.5) {
+        color+=rWeight*petRingCap(hit,rDir);
+        if(rPrimary) alpha=1.0;
+        done=true;
+      } else {
+        bool entering=dot(rDir,hit.geometric)<0.0;
+        float target=entering?petRingIor:1.0;
+        vec3 hn=entering?hit.normal:-hit.normal;
+        if(dot(hn,rDir)>=-.0001)hn=entering?hit.geometric:-hit.geometric;
+        float hc=clamp(-dot(hn,rDir),0.0,1.0),hCosT;
+        float hf=petRingFresnel(hc,rMedium,target,hCosT);
+        rOrigin=point;
+        rLeft--;
+        if(hf>.999999) {
+          rDir=reflect(rDir,hn);
+          rOrigin+=(entering?hit.geometric:-hit.geometric)*petRingEpsilon*2.0;
+        } else {
+          color+=rWeight*hf*petRingEnvironment(reflect(rDir,hn),petRingRoughness);
+          rWeight*=1.0-hf;
+          rDir=normalize((rMedium/target)*rDir+((rMedium/target)*hc-hCosT)*hn);
+          rMedium=target;
+          rOrigin+=(entering?-hit.geometric:hit.geometric)*petRingEpsilon*2.0;
+        }
+        if(rLeft<=0||rWeight<.005) {
+          if(rPrimary) {
+            vec4 rear=petRingEscape(rOrigin,rDir);
+            color+=rWeight*rear.rgb; alpha=1.0-rWeight*(1.0-rear.a);
+          } else {
+            color+=rWeight*petRingEnvironment(rDir,petRingRoughness);
+          }
+          done=true;
+        }
+      }
+    }
+    if(done) {
+      if(!hasPending) break;
+      hasPending=false;
+      rOrigin=pOrigin; rDir=pDir; rWeight=pWeight; rMedium=1.0; rPrimary=false; rLeft=reflLimit;
+    }
   }
-  vec4 rear=petRingEscape(origin,direction);
-  return vec4(color+weight*rear.rgb,1.0-weight*(1.0-rear.a));
+  return vec4(color,clamp(alpha,0.0,1.0));
 }
 `;

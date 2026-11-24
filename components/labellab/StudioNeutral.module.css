@@ -76,7 +76,7 @@
 .theme:global(.creative-space.is-studio) :global(.render-panel-preview) { border-color: var(--studio-line); background-color: #fff; }
 .theme:global(.creative-space.is-studio) :global(.render-panel-fields select) { color: var(--studio-ink); border-color: #d1d5da; background: #fff; }
 .theme:global(.creative-space.is-studio) :global(.render-panel-toggle input) { border-color: #c1c7ce; background: #cfd3d8; }
-.theme:global(.creative-space.is-studio) :global(.render-panel-toggle input:checked) { border-color: var(--studio-charcoal); background: var(--studio-charcoal); }
+.theme:global(.creative-space.is-studio) :global(.render-panel-toggle input:checked) { border-color: #16a34a; background: #16a34a; }
 .theme:global(.creative-space.is-studio) :global(.render-panel-toggle input::after),
 .theme:global(.creative-space.is-studio) :global(.render-panel-toggle input:checked::after) { background: #fff; box-shadow: 0 1px 3px #1d232b26; }
 .theme:global(.creative-space.is-studio) :global(.render-panel-submit) { color: #fff; background: var(--studio-charcoal); border: 0; box-shadow: none; }

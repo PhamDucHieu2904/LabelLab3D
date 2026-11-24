@@ -130,6 +130,9 @@
 }
 .textButton:hover { color: #84213f; text-decoration: underline; text-underline-offset: 4px; }
 .labelRow .textButton { margin-block: -12px; font-size: 13px; }
+.labelRow .textButton:disabled { cursor: default; color: #b9a8b0; text-decoration: none; }
+.verificationField { margin-top: -2px; }
+.verificationField .hint { margin-top: -2px; }
 .passwordInput { position: relative; }
 .passwordInput input { padding-right: 52px; }
 .passwordToggle {

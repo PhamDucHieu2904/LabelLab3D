@@ -1,15 +1,72 @@
 import * as THREE from 'three';
 import { BOTTLE_BACKDROP_GLSL, createBottleBackdropUniforms, updateBottleBackdropUniforms } from './bottle-backdrop';
-import { buildGlassNeckTraceData } from './glass-neck-trace-data';
+import { buildGlassNeckTraceData, type GlassNeckTraceData, type GlassNeckTraceKind } from './glass-neck-trace-data';
 import { GLASS_NECK_OPTICS_GLSL } from './glass-neck-optics';
 import type { LiveLiquidOptics } from './material-adjustments';
 import { liquidOpticsValues, normalizeLiquidOptics } from './liquid-adjustments';
+
+// Pool preparation clones share geometries. Reuse their immutable BVH while
+// each appearance keeps its own live material uniforms and transforms.
+const traceCache = new WeakMap<THREE.BufferGeometry, Map<string, { data: GlassNeckTraceData; owners: number }>>();
+
+function acquireGlassNeckTrace(
+  root: THREE.Object3D,
+  select: (mesh: THREE.Mesh, material: THREE.Material) => GlassNeckTraceKind | undefined,
+) {
+  root.updateMatrixWorld(true);
+  const rootInverse = root.matrixWorld.clone().invert();
+  const localToRoot = new THREE.Matrix4();
+  const parts: string[] = [];
+  let first: THREE.BufferGeometry | undefined;
+  root.traverse(node => {
+    if (!(node instanceof THREE.Mesh)) return;
+    const pos = node.geometry.getAttribute('position');
+    if (!pos) return;
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    const kinds = materials.map(material => select(node, material) ?? 0);
+    if (!kinds.some(Boolean)) return;
+    first ??= node.geometry;
+    localToRoot.multiplyMatrices(rootInverse, node.matrixWorld);
+    parts.push(
+      node.geometry.uuid,
+      kinds.join(','),
+      `${node.geometry.drawRange.start}:${node.geometry.drawRange.count}`,
+      localToRoot.elements.map(v => v.toPrecision(12)).join(','),
+    );
+  });
+  if (!first) {
+    const data = buildGlassNeckTraceData(root, select);
+    return { data, release: () => data.dispose() };
+  }
+  const key = parts.join('|');
+  let map = traceCache.get(first);
+  if (!map) { map = new Map(); traceCache.set(first, map); }
+  let entry = map.get(key);
+  if (!entry) {
+    entry = { data: buildGlassNeckTraceData(root, select), owners: 0 };
+    map.set(key, entry);
+  }
+  entry.owners++;
+  let released = false;
+  return {
+    data: entry.data,
+    release() {
+      if (released) return;
+      released = true;
+      if (--entry!.owners === 0) {
+        entry!.data.dispose();
+        map!.delete(key);
+      }
+    },
+  };
+}
 
 /** A separate whole-shell draw is necessary: native MeshPhysical transmission
  * does not follow the inner wall, cap or label through a hollow glass cavity. */
 export function createGlassNeckMaterialContext(root: THREE.Object3D,
   select: (mesh: THREE.Mesh, material: THREE.Material) => 1 | 3 | 4 | 5 | undefined) {
-  const data = buildGlassNeckTraceData(root, select);
+  const lease = acquireGlassNeckTrace(root, select);
+  const data = lease.data;
   const rootInverse = root.matrixWorld.clone().invert();
   let cap: THREE.MeshStandardMaterial | undefined, label: THREE.MeshStandardMaterial | undefined, liquidColor: THREE.Color | undefined;
   let liquidMaterial: THREE.MeshStandardMaterial | undefined;
@@ -19,6 +76,8 @@ export function createGlassNeckMaterialContext(root: THREE.Object3D,
     glassNeckCapRoughness: { value: .55 }, glassNeckCapMetalness: { value: 1 },
     glassNeckLabelColor: { value: new THREE.Color('white') }, glassNeckLabelMap: { value: null as THREE.Texture | null },
     glassNeckHasLabelMap: { value: 0 }, glassNeckLabelUvMatrix: { value: new THREE.Matrix3() },
+    // Rear-facing paper is opaque and unprinted.
+    glassNeckLabelBackColor: { value: new THREE.Color('#c8cbd2') },
     glassNeckLiquidColor: { value: new THREE.Color('#be2838') },
     glassNeckLiquidClarity: { value: defaults.clarity }, glassNeckLiquidDensity: { value: defaults.density },
     glassNeckLiquidTurbidity: { value: defaults.turbidity }, glassNeckLiquidBrightness: { value: defaults.brightness },
@@ -35,7 +94,7 @@ export function createGlassNeckMaterialContext(root: THREE.Object3D,
     if (color) opaque.glassNeckLiquidColor.value.set(color);
   };
   return {
-    dispose: () => data.dispose(),
+    dispose: () => lease.release(),
     registerOpaque(material: THREE.MeshStandardMaterial, kind: 3 | 4) { if (kind === 3) cap = material; else label = material; },
     registerLiquid(color: THREE.Color, value?: LiveLiquidOptics, material?: THREE.MeshStandardMaterial, surfaceCapture = 0) {
       liquidColor = color; liquidMaterial = material;
@@ -50,7 +109,7 @@ export function createGlassNeckMaterialContext(root: THREE.Object3D,
       const uniforms = {
         ...createBottleBackdropUniforms(), ...opaque,
         glassNeckTriangles: { value: data.triangles }, glassNeckNodes: { value: data.nodes }, glassNeckUvs: { value: data.uvs },
-        glassNeckDataWidth: { value: data.width }, glassNeckEpsilon: { value: data.epsilon },
+        glassNeckDataWidth: { value: data.width }, glassNeckMaxBounces: { value: 6 }, glassNeckEpsilon: { value: data.epsilon },
         glassNeckRoughness: { value: .042 },
         glassNeckMeshToTrace: { value: meshToTrace },
         glassNeckNormalToTrace: { value: new THREE.Matrix3().getNormalMatrix(meshToTrace) },
@@ -102,6 +161,8 @@ export function createGlassNeckMaterialContext(root: THREE.Object3D,
         // Glass290WebRenderer uses .85 smoothness for Neck vs .958 body.
         // Retain that relative finish while honoring the shared body slider.
         uniforms.glassNeckRoughness.value = THREE.MathUtils.clamp(.15 + material.roughness - .042, 0, 1);
+        const budget = (scene.userData as { opticalMaxBounces?: number } | undefined)?.opticalMaxBounces;
+        if (typeof budget === 'number' && budget > 0) uniforms.glassNeckMaxBounces.value = budget;
         if (cap) {
           opaque.glassNeckCapColor.value.copy(cap.color); opaque.glassNeckCapRoughness.value = cap.roughness;
           opaque.glassNeckCapMetalness.value = cap.metalness;
@@ -112,6 +173,8 @@ export function createGlassNeckMaterialContext(root: THREE.Object3D,
           if (label.map) opaque.glassNeckLabelUvMatrix.value.copy(label.map.matrix);
         }
         if (liquidColor) opaque.glassNeckLiquidColor.value.copy(liquidColor);
+        // Keep the traced far-side hit as unprinted opaque paper.
+        opaque.glassNeckLabelBackColor.value.set('#c8cbd2');
         if (liquidMaterial) {
           const live = liquidOpticsValues.get(liquidMaterial);
           updateLiquid(live?.value, live?.color);

@@ -223,6 +223,9 @@ export function createAppearanceHandle(root: THREE.Object3D, asset: ProductAsset
             else configurePetRingMaterial(material, binding.mesh);
           }
           else if (bottleRole) bottle.configure(material, binding.mesh, bottleRole, resolveMaterialOverride(overrides.liquid ?? {}).color, resolveMaterialOverride(overrides.cap ?? {}).color);
+          // Specialized bottle profiles establish calibrated body colors during
+          // configure; an explicit body edit must win afterwards.
+          if (bottleRole === 'body' && override.color) material.color.set(override.color);
           // Explicit finish edits must survive the calibrated optical defaults.
           if (override.metalness !== undefined) material.metalness = override.metalness;
           if (override.roughness !== undefined) material.roughness = override.roughness;

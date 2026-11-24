@@ -33,9 +33,10 @@ function buildVariant(kind){
 }
 
 test('all 290 ml screw-cap variants use the hollow glass Neck tracer',()=>{
-  const {basilWebMaterialRole,createBasilWebBottleMaterialContext}=load(resolve('lib/viewer/basil-web-materials'));
+  const {basilWebMaterialRole,createBasilWebBottleMaterialContext,prepareBasilWebLayers}=load(resolve('lib/viewer/basil-web-materials'));
   for(const kind of ['basil','chia','milk']){
     const {root,meshes,asset}=buildVariant(kind); root.updateMatrixWorld(true);
+    prepareBasilWebLayers(root,asset);
     const context=createBasilWebBottleMaterialContext(root,asset); assert.ok(context,kind);
     for(const mesh of Object.values(meshes)){
       const material=mesh.material;
@@ -46,6 +47,9 @@ test('all 290 ml screw-cap variants use the hollow glass Neck tracer',()=>{
     assert.equal(neck.material.customProgramCacheKey(),'pullcap-hollow-glass-neck-v1',kind);
     assert.equal(neck.material.transmission,1,kind);
     assert.equal(neck.material.thickness,.0026,kind);
+    const hasPaperBack=meshes.Label.children.some(child=>child.userData.basilWebLabelBackBeauty===true);
+    assert.equal(hasPaperBack,kind!=='milk',`${kind} clear 290 ml screw-cap attaches 1:1 BackSide paper backing`);
+    assert.equal(meshes.Label.material.side,kind==='milk'?THREE.DoubleSide:THREE.FrontSide,kind);
     root.traverse(node=>{if(node instanceof THREE.Mesh){node.geometry.dispose();node.material.dispose();}});
     context.dispose?.();
   }

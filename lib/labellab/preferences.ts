@@ -8,6 +8,7 @@ export interface ScenePreferences {
   background: string;
   liquidColor: string;
   capColor: string;
+  bodyColor: string;
   capMetalness: number;
   capRoughness: number;
   bodyMetalness: number;
@@ -41,7 +42,8 @@ export const DEFAULT_PREFERENCES: Readonly<ScenePreferences> = Object.freeze({
   motion: "showcase",
   background: "#d53660",
   liquidColor: "#F14E78",
-  capColor: "#d8c738",
+  capColor: "#c0c0c0",
+  bodyColor: "#ffffff",
   capMetalness: 1,
   capRoughness: 0.388,
   bodyMetalness: 0,
@@ -130,7 +132,7 @@ export const LIQUID_OPTICAL_DEFAULTS: Readonly<Record<LiquidTypeId, Readonly<Liq
 
 /** Material-only snapshots retain each model's edits without copying scene/export choices. */
 export const MATERIAL_PREFERENCE_KEYS = [
-  "liquidColor", "capColor", "capMetalness", "capRoughness", "bodyMetalness", "bodyRoughness",
+  "liquidColor", "capColor", "bodyColor", "capMetalness", "capRoughness", "bodyMetalness", "bodyRoughness",
   "liquidType", "liquidCustomized", "liquidClarity", "liquidDensity", "liquidTurbidity",
   "liquidBrightness", "liquidScattering", "liquidRoughness", "liquidIor", "liquidSparkling",
   "labelOffset", "roughness", "metalness",
@@ -197,11 +199,13 @@ export function parsePreferences(value: unknown): ScenePreferences {
     const pet = selectedModelId.startsWith("pet-");
     const can = selectedModelId.startsWith("can-");
     const coffeeGlass = selectedModelId === "glass-280-latte" || selectedModelId === "glass-280-short-latte";
+    const shortCoffeeGlass = selectedModelId === "glass-280-short-latte";
     const glass290Chia = selectedModelId === "glass-290-chia" || selectedModelId === "glass-290-pullcap-chia";
     const glass290Milk = selectedModelId === "glass-290-milk" || selectedModelId === "glass-290-pullcap-milk" || selectedModelId === "glass-300-milk" || selectedModelId === "glass-485-milk";
     const pullcapBasil = selectedModelId === "glass-290-pullcap-basil";
     const pullcap = selectedModelId.startsWith("glass-290-pullcap-");
-    const glass290 = (glass290Chia || glass290Milk) && !pullcap;
+    const screwcap290 = selectedModelId === "basil-strawberry" || glass290Chia || glass290Milk;
+    const glass290 = screwcap290 && !pullcap;
     const juicePet = selectedModelId === "pet-350-juice" || selectedModelId === "pet-1000-juice";
     const newNata = selectedModelId === "pet-320-full-nata";
     const nativeCapMetalness = batch?.capMetalness ?? (pet ? 0 : 1);
@@ -229,7 +233,8 @@ export function parsePreferences(value: unknown): ScenePreferences {
         motion === "showcase" || motion === "off" ? motion : defaults.motion,
       background: color(own("background"), defaults.background),
       liquidColor: color(own("liquidColor"), batch?.liquidColor ?? (glass290Chia || pullcapBasil ? "#f14e78" : glass290Milk ? "#fff5e4" : coffeeGlass ? "#B88C69" : selectedModelId === "pet-330-energy" ? "#FFD600" : juicePet ? "#E8B64F" : newNata ? "#ff4430" : defaults.liquidColor)),
-      capColor: color(own("capColor"), batch?.capColor ?? (glass290 ? "#d8c738" : coffeeGlass || pullcap ? "#c0c0c0" : juicePet || newNata || selectedModelId === "pet-330-energy" ? "#ffffff" : defaults.capColor)),
+      capColor: color(own("capColor"), batch?.capColor ?? (shortCoffeeGlass ? "#000000" : screwcap290 || coffeeGlass || pullcap ? "#c0c0c0" : juicePet || newNata || selectedModelId === "pet-330-energy" ? "#ffffff" : defaults.capColor)),
+      bodyColor: color(own("bodyColor"), defaults.bodyColor),
       capMetalness: bounded(own("capMetalness"), glass290 ? 1 : nativeCapMetalness, 0, 1),
       capRoughness: bounded(own("capRoughness"), glass290 ? .388 : nativeCapRoughness, 0, 1),
       bodyMetalness: bounded(own("bodyMetalness"), nativeBodyMetalness, 0, 1),

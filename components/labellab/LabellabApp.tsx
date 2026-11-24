@@ -549,6 +549,7 @@ export default function LabellabApp() {
                     settings={settings}
                     artwork={artwork}
                     artworkEditing={artworkEditing}
+                    deferSelection={!hydrated}
                     onStatus={(value) => setStatus(value.phase)}
                     renderCanvasRef={renderCanvasRef}
                   />

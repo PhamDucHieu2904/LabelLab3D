@@ -34,6 +34,7 @@ import { createRefractionAtlas, projectedRefractionRect } from './refraction-atl
 import { mockupModelKey, mockupSelectionKey } from './selection';
 import { createStudioGround } from '../labellab/studio-ground';
 import { measureProductBounds } from '../viewer/framing';
+import { renderPaperBackingCapture, disposePaperBackingCapture } from '../viewer/paper-backing-capture';
 import type { MockupAnimation, MockupBackdropPainter, MockupBackground, MockupCameraPreset, MockupFocalPreset, MockupRuntime, MockupRuntimeOptions, MockupRenderPreviewOptions, MockupStatus } from './contracts';
 
 type LoadedModel = {
@@ -46,6 +47,59 @@ type LoadedModel = {
 };
 const modelKey = mockupModelKey;
 const safeColor = (color: string | undefined, fallback: string) => color && /^#[0-9a-f]{6}$/i.test(color) ? color : fallback;
+type GpuTier = 'discrete' | 'integrated' | 'software';
+const cachedEnvironmentData = new Map<string, Promise<THREE.DataTexture>>();
+
+function detectGpuTier(renderer: THREE.WebGLRenderer): GpuTier {
+  try {
+    const gl = renderer.getContext();
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER) ?? '');
+    if (/swiftshader|llvmpipe|software|microsoft basic render|warp|subzero/i.test(name)) return 'software';
+    if (/nvidia|geforce|rtx|gtx|quadro|radeon\s+rx|radeon\s+pro|arc\(tm\)|intel.*arc/i.test(name)) return 'discrete';
+    if (/intel|uhd|iris|hd graphics|radeon\(tm\)\s*graphics|vega|mali|adreno|powervr/i.test(name)) return 'integrated';
+    // Apple Silicon and unknown modern GPUs default to discrete-like live budget unless slow frames trigger fallback.
+    return renderer.capabilities.maxTextureSize < 4096 ? 'integrated' : 'discrete';
+  } catch {
+    return 'integrated';
+  }
+}
+
+function createMockupRenderer(): THREE.WebGLRenderer {
+  // Three logs a console.error before throwing when Chromium has disabled the
+  // GPU adapter. In Next dev mode that console line opens the full-screen
+  // error inspector even though SceneCanvas catches the constructor failure
+  // and already has a recoverable inline state. Suppress only this known
+  // renderer diagnostic; all other console errors remain untouched.
+  const previousError = console.error;
+  console.error = (...args: unknown[]) => {
+    const first = args[0];
+    if (typeof first === 'string' && first.startsWith('THREE.WebGLRenderer: A WebGL context could not be created.')) return;
+    previousError(...args);
+  };
+  try {
+    // Prefer the discrete GPU on dual-GPU laptops (e.g. GTX 1650 + Intel iGPU)
+    // so WebGL does not stall on the integrated adapter, while automatically
+    // falling back if Chromium has restricted high-performance contexts.
+    let lastError: unknown;
+    for (const powerPreference of ['high-performance', 'default', 'low-power'] as const) {
+      try {
+        return new THREE.WebGLRenderer({
+          alpha: true,
+          antialias: false,
+          premultipliedAlpha: false,
+          powerPreference,
+          failIfMajorPerformanceCaveat: false,
+        });
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError;
+  } finally {
+    console.error = previousError;
+  }
+}
 const abortable = <T>(promise: Promise<T>, signal: AbortSignal, timeoutMs: number): Promise<T> => new Promise((resolve, reject) => {
   const abort = () => finish(undefined, mockupAbortError());
   const timer = setTimeout(() => finish(undefined, new Error('3D operation timed out')), timeoutMs);
@@ -68,9 +122,16 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   let settings = DEFAULT_VIEWER_PRESENTATION;
   const mobile = window.matchMedia('(max-width: 760px)').matches;
   const capacity = mobile ? 3 : 5;
-  const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false, premultipliedAlpha: false, powerPreference: 'high-performance' });
+  // Prefer the browser's currently available adapter.  Requesting
+  // `high-performance` can permanently disable context creation in Chromium
+  // after another tab has exhausted the discrete GPU context budget; the
+  // studio only needs a small transparent canvas and works reliably on the
+  // low-power adapter as well.
+  const renderer = createMockupRenderer();
+  const gpuTier = detectGpuTier(renderer);
   const linearType = renderer.extensions.has('EXT_color_buffer_float') ? THREE.HalfFloatType : THREE.UnsignedByteType;
   host.dataset.mockupQuality = linearType === THREE.HalfFloatType ? 'standard' : 'compatible';
+  host.dataset.gpuTier = gpuTier;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NeutralToneMapping;
   renderer.toneMappingExposure = settings.exposure;
@@ -81,6 +142,8 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   Object.assign(canvas.style, { width: '100%', height: '100%', display: 'block' });
   host.appendChild(canvas);
   const scene = new THREE.Scene();
+  const liveOpticalBounces = gpuTier === 'discrete' ? 6 : gpuTier === 'integrated' ? 4 : 3;
+  scene.userData.opticalMaxBounces = liveOpticalBounces;
   const studioGround = createStudioGround(scene);
   let sceneMode: 'website' | 'studio' = 'website';
   let websiteBackground: MockupBackground = { type: 'white' };
@@ -123,8 +186,8 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     scene.add(result); return result;
   });
   const pmrem = new THREE.PMREMGenerator(renderer);
-  const draco = new DRACOLoader().setDecoderPath(publicUrl(settings.decoders.dracoPath)).setWorkerLimit(2);
-  const basis = new KTX2Loader().setTranscoderPath(publicUrl(settings.decoders.basisPath)).setWorkerLimit(2).detectSupport(renderer);
+  const draco = new DRACOLoader().setDecoderPath(publicUrl(settings.decoders.dracoPath)).setWorkerLimit(gpuTier === 'software' ? 1 : 2);
+  const basis = new KTX2Loader().setTranscoderPath(publicUrl(settings.decoders.basisPath)).setWorkerLimit(1).detectSupport(renderer);
   const loader = new GLTFLoader().setDRACOLoader(draco).setKTX2Loader(basis).setMeshoptDecoder(MeshoptDecoder);
   const captureGate = createMockupCaptureGate();
   const prefetch = createResourcePrefetcher({ maxCandidates: capacity, onDiagnostics(value) {
@@ -225,9 +288,14 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   });
   const outputQuad = new FullScreenQuad(outputMaterial);
   const neckExport = createBasilNeckExport(renderer);
-  const previewBackdrop = createRefractiveBackdrop();
-  const thumbnailBackdrop = createRefractiveBackdrop(384);
-  const captureBackdrop = createRefractiveBackdrop(1536);
+  // Live refraction backdrop is blurred behind curved glass/liquid: 384px at ~8Hz
+  // avoids 60Hz DOM reflows + 2.3MB/frame texture uploads while exports stay 1536px.
+  const previewBackdrop = createRefractiveBackdrop(384, 120);
+  const thumbnailBackdrop = createRefractiveBackdrop(256, 200);
+  const captureBackdrop = createRefractiveBackdrop(1536, 0);
+  let adaptiveScale = 1;
+  let slowFrameStreak = 0;
+  let thumbnailBusy = false;
   let frozenCaptureBackdrop: THREE.Texture | null = null;
   const captureBackdropRegion = new THREE.Vector4();
   const sampleDiagnostics = () => {
@@ -258,10 +326,27 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     }
     lastTime = performance.now(); requestRender();
   };
-  const createLinearTarget = (width: number, height: number) => new THREE.WebGLRenderTarget(width, height, {
+  // Live preview does not need a multisampled intermediate: the final output
+  // is already a fullscreen pass and MSAA here forces an expensive resolve on
+  // every frame. Export can opt back into MSAA below, where it is worth the
+  // extra allocation for the final PNG.
+  const createLinearTarget = (width: number, height: number, samples = 0) => new THREE.WebGLRenderTarget(width, height, {
     type: linearType, format: THREE.RGBAFormat, depthBuffer: true,
-    samples: Math.min(4, renderer.capabilities.maxSamples),
+    samples: Math.min(Math.max(0, samples), renderer.capabilities.maxSamples),
   });
+  const heavyPreviewAssets = new Set(['glass-300-milk', 'pet-500-short-label', 'registry-pet-500-aloe', 'pet-320-full-nata', 'pet-1500-juice']);
+  const previewScaleFor = (asset: ProductAsset | undefined) => {
+    const heavy = Boolean(asset?.id && heavyPreviewAssets.has(asset.id));
+    const base = gpuTier === 'software' ? (heavy ? .5 : .6)
+      : gpuTier === 'integrated' ? (heavy ? .7 : .85)
+      : asset?.id === 'glass-300-milk' ? .75 : 1;
+    return Math.max(.5, base * adaptiveScale);
+  };
+  const previewDprFor = (asset: ProductAsset | undefined) => {
+    if (gpuTier !== 'discrete') return 1;
+    return asset?.id === 'glass-300-milk' ? 1.25 : 1.5;
+  };
+  const liveMaxFps = () => mobile ? 30 : gpuTier === 'software' ? (dragging ? 15 : 8) : gpuTier === 'integrated' ? 30 : adaptiveScale < 1 ? 30 : 60;
   const renderTo = (linear: THREE.WebGLRenderTarget, output: THREE.WebGLRenderTarget | null, view: THREE.PerspectiveCamera, transparent = false,
     backdropSurface = previewBackdrop, paintBackground: MockupBackdropPainter | undefined = options.paintBackground, backdropRegion?: RefractiveBackdropRegion) => {
     const region = outputUniforms.outputRegion.value;
@@ -339,7 +424,9 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     renderer.setRenderTarget(linear); renderer.setClearColor('#000000', 0); renderer.clear();
     try {
       neckMeshes.forEach(mesh => { mesh.visible = false; });
-      renderBottleScene(renderer, scene, view);
+      renderPaperBackingCapture(renderer, scene, view, () => {
+        renderBottleScene(renderer, scene, view);
+      });
     } finally {
       neckMeshes.forEach(mesh => { mesh.visible = true; });
     }
@@ -378,13 +465,38 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     return { fullWidth, fullHeight, offsetX, offsetY: crop.y * scale };
   };
   const paintThumbnail = (now: number, force = false) => {
-    if (!thumbnailCanvas || !active || readyRevision !== revision || !force && now - thumbnailAt < 100) return;
+    if (!thumbnailCanvas || !active || readyRevision !== revision) return;
+    const minInterval = sceneMode === 'studio' && thumbnailOptions.transparent ? 350 : 200;
+    if (!force && now - thumbnailAt < minInterval) return;
     const ratio = normalizeMockupAspect(thumbnailOptions.aspect ?? aspect);
-    const size = mockupCaptureSize(384, ratio);
-    thumbnailCanvas.width = size.width; thumbnailCanvas.height = size.height;
+    const size = mockupCaptureSize(256, ratio);
+    if (thumbnailCanvas.width !== size.width) thumbnailCanvas.width = size.width;
+    if (thumbnailCanvas.height !== size.height) thumbnailCanvas.height = size.height;
     const context = thumbnailCanvas.getContext('2d');
+    if (!context) return;
+
+    // Fast GPU-to-2D blit path: reuse the main WebGL canvas just rendered in this
+    // tick instead of rendering the entire 3D scene a second time and blocking the
+    // main thread on synchronous gl.readPixels().
+    if (sceneMode !== 'studio' || !thumbnailOptions.transparent) {
+      const srcWidth = canvas.width, srcHeight = canvas.height;
+      if (srcWidth > 0 && srcHeight > 0) {
+        const crop = centeredMockupCrop(srcWidth, srcHeight, ratio);
+        context.clearRect(0, 0, size.width, size.height);
+        if (!thumbnailOptions.transparent && sceneMode === 'website') {
+          thumbnailOptions.paintBackground?.(context, size.width, size.height);
+        }
+        context.drawImage(canvas, crop.x, crop.y, crop.width, crop.height, 0, 0, size.width, size.height);
+        thumbnailAt = now;
+        return;
+      }
+    }
+
+    // Studio mode + transparent preview: render without the white floor and read back
+    // asynchronously via WebGL2 PBO so the main thread never stalls on readPixels.
+    if (thumbnailBusy) return;
     const scratch = thumbnailScratch.getContext('2d');
-    if (!context || !scratch) return;
+    if (!scratch) return;
     if (!thumbnailLinear) thumbnailLinear = createLinearTarget(size.width, size.height);
     else thumbnailLinear.setSize(size.width, size.height);
     if (!thumbnailOutput) thumbnailOutput = new THREE.WebGLRenderTarget(size.width, size.height, { depthBuffer: false });
@@ -394,15 +506,25 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     const previousTarget = renderer.getRenderTarget();
     const previousViewport = renderer.getViewport(new THREE.Vector4());
     try {
-      renderTo(thumbnailLinear, thumbnailOutput, thumbnailCamera, thumbnailOptions.transparent, thumbnailBackdrop, thumbnailOptions.paintBackground);
-      const pixels = new Uint8Array(size.width * size.height * 4);
-      renderer.readRenderTargetPixels(thumbnailOutput, 0, 0, size.width, size.height, pixels);
-      thumbnailScratch.width = size.width; thumbnailScratch.height = size.height;
-      scratch.putImageData(new ImageData(flipMockupPixels(pixels, size.width, size.height), size.width, size.height), 0, 0);
-      thumbnailOptions.paintBackground?.(context, size.width, size.height);
-      context.drawImage(thumbnailScratch, 0, 0);
-      thumbnailAt = now;
-    } finally { renderer.setRenderTarget(previousTarget); renderer.setViewport(previousViewport); }
+      renderTo(thumbnailLinear, thumbnailOutput, thumbnailCamera, true, thumbnailBackdrop, thumbnailOptions.paintBackground);
+    } finally {
+      renderer.setRenderTarget(previousTarget); renderer.setViewport(previousViewport);
+    }
+    thumbnailAt = now;
+    thumbnailBusy = true;
+    const targetCanvas = thumbnailCanvas;
+    const pixels = new Uint8Array(size.width * size.height * 4);
+    const targetW = size.width, targetH = size.height;
+    void renderer.readRenderTargetPixelsAsync(thumbnailOutput, 0, 0, targetW, targetH, pixels)
+      .then(() => {
+        if (disposed || thumbnailCanvas !== targetCanvas || targetCanvas.width !== targetW || targetCanvas.height !== targetH) return;
+        thumbnailScratch.width = targetW; thumbnailScratch.height = targetH;
+        scratch.putImageData(new ImageData(flipMockupPixels(pixels, targetW, targetH), targetW, targetH), 0, 0);
+        context.clearRect(0, 0, targetW, targetH);
+        context.drawImage(thumbnailScratch, 0, 0);
+      })
+      .catch(() => {})
+      .finally(() => { thumbnailBusy = false; });
   };
   function frame(now: number) {
     raf = 0;
@@ -473,12 +595,22 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     }
     const bubbling = Boolean(active?.bubbles?.animated) && !matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (bubbling) { active!.bubbles!.update(dt); dirty = true; }
-    if (dirty && previewTarget && now - lastDraw >= 1000 / (mobile ? 30 : 60)) {
+    if (dirty && previewTarget && now - lastDraw >= 1000 / liveMaxFps()) {
       const started = performance.now();
       hitRegion.update(animation.mode === 'showcase' ? active?.root ?? null : null, camera, host.clientWidth, host.clientHeight, now, dragging);
       renderTo(previewTarget, null, camera);
       paintThumbnail(now);
       lastFrameMs = performance.now() - started; renderFrames++;
+      if (lastFrameMs > 45 && adaptiveScale > 0.7) {
+        slowFrameStreak++;
+        if (slowFrameStreak >= 5) {
+          adaptiveScale = Math.max(0.7, adaptiveScale - 0.15);
+          slowFrameStreak = 0;
+          resize();
+        }
+      } else {
+        slowFrameStreak = 0;
+      }
       if (now - diagnosticsAt >= 1000) sampleDiagnostics();
       lastDraw = now; dirty = false;
     }
@@ -556,12 +688,22 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     const bounds = host.getBoundingClientRect();
     const width = Math.max(1, Math.round(bounds.width));
     const height = Math.max(1, Math.round(width / aspect));
-    const dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1.25 : 1.5);
+    // The 300 ml glass has 254k triangles and a transmissive shell. Keep the
+    // interactive path within a GTX 1650's budget; exports use their requested
+    // resolution and do not use this cap.
+    const dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1.25 : previewDprFor(active?.asset));
     if (renderer.getPixelRatio() !== dpr) renderer.setPixelRatio(dpr);
     const displaySize = renderer.getSize(new THREE.Vector2());
     if (displaySize.x !== width || displaySize.y !== height) renderer.setSize(width, height, false);
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    if (!previewTarget) previewTarget = createLinearTarget(size.x, size.y); else previewTarget.setSize(size.x, size.y);
+    const previewScale = previewScaleFor(active?.asset);
+    const targetWidth = Math.max(1, Math.round(size.x * previewScale));
+    const targetHeight = Math.max(1, Math.round(size.y * previewScale));
+    if (!previewTarget) previewTarget = createLinearTarget(targetWidth, targetHeight);
+    else previewTarget.setSize(targetWidth, targetHeight);
+    host.dataset.previewDpr = String(dpr);
+    host.dataset.previewScale = String(previewScale);
+    host.dataset.previewMsaa = '0';
     // OrbitControls receives display-pixel deltas but divides by clientHeight,
     // which remains in logical CSS pixels inside the scaled page.
     controls.rotateSpeed = 0.65 * (bounds.height > 0 ? host.clientHeight / bounds.height : 1);
@@ -603,6 +745,12 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       // those orphaned polls while keeping texture/shader work out of animation.
       try { renderer.setRenderTarget(previewTarget); renderer.compile(root, camera, scene); }
       finally { renderer.setRenderTarget(previous); }
+      // Let KHR_parallel_shader_compile background threads run without freezing
+      // the main thread before the first committed draw.
+      const gl = renderer.getContext();
+      if (gl.getExtension('KHR_parallel_shader_compile')) {
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      }
     }
   };
   const createPool = (content: THREE.Group, asset: ProductAsset) => createPooledAppearanceHandle(content, asset, {
@@ -612,19 +760,43 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   });
   const loadEnvironment = async () => {
     const thisRevision = ++environmentRevision;
-    let texture: THREE.Texture;
+    let sourceTexture: THREE.DataTexture | null = null;
+    let ownsTexture = false;
     try {
       const source = settings.environment.src;
-      texture = await (/\.exr(?:\?|$)/i.test(source) ? new EXRLoader() : new HDRLoader()).loadAsync(publicUrl(source));
-    } catch { texture = createDaylightEnvironment(settings.environment.procedural); }
-    if (disposed || thisRevision !== environmentRevision) { texture.dispose(); return; }
+      const url = publicUrl(source);
+      let cached = cachedEnvironmentData.get(url);
+      if (!cached) {
+        cached = (/\.exr(?:\?|$)/i.test(source) ? new EXRLoader() : new HDRLoader()).loadAsync(url)
+          .catch(error => { cachedEnvironmentData.delete(url); throw error; });
+        cachedEnvironmentData.set(url, cached);
+      }
+      sourceTexture = await cached;
+    } catch {
+      sourceTexture = createDaylightEnvironment(settings.environment.procedural);
+      ownsTexture = true;
+    }
+    if (disposed || thisRevision !== environmentRevision) {
+      if (ownsTexture) sourceTexture.dispose();
+      return;
+    }
     try {
-      const target = pmrem.fromEquirectangular(texture);
-      environmentTarget?.dispose(); environmentTarget = target;
-      scene.environment = target.texture; scene.environmentIntensity = settings.environment.intensity;
-      scene.environmentRotation.set(...settings.environment.rotation);
-      host.dataset.environment = 'ready'; requestRender();
-    } finally { texture.dispose(); }
+      // Clone only the lightweight Three Texture wrapper around the cached
+      // decoded pixel buffer so each renderer uploads once and disposes cleanly.
+      const uploadTexture = ownsTexture ? sourceTexture : sourceTexture.clone();
+      if (!ownsTexture) uploadTexture.needsUpdate = true;
+      try {
+        const target = pmrem.fromEquirectangular(uploadTexture);
+        environmentTarget?.dispose(); environmentTarget = target;
+        scene.environment = target.texture; scene.environmentIntensity = settings.environment.intensity;
+        scene.environmentRotation.set(...settings.environment.rotation);
+        host.dataset.environment = 'ready'; requestRender();
+      } finally {
+        uploadTexture.dispose();
+      }
+    } finally {
+      if (ownsTexture) sourceTexture.dispose();
+    }
   };
   let environmentReady = loadEnvironment();
   const select = (asset: ProductAsset, appearance?: ProductAppearance, frontYaw = 0) => {
@@ -697,8 +869,9 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
           const original = measureProductBounds(content);
           const size = original.getSize(new THREE.Vector3());
           if (!Number.isFinite(size.length()) || size.length() <= 0) { disposeProduct(content); throw new Error('Model has empty bounds'); }
-          content.position.sub(original.getCenter(new THREE.Vector3())); content.updateMatrixWorld(true);
-          const bounds = measureProductBounds(content);
+          const originalCenter = original.getCenter(new THREE.Vector3());
+          content.position.sub(originalCenter); content.updateMatrixWorld(true);
+          const bounds = original.clone().translate(originalCenter.clone().negate());
           const root = new THREE.Group(); root.add(content);
           const detachedTextures = neutralizeMockupLabelArtwork(content, asset);
           candidate = { root, content, bounds, radius: bounds.getBoundingSphere(new THREE.Sphere()).radius,
@@ -725,15 +898,22 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
           product.quaternion.copy(sceneMode !== 'studio' && animation.mode === 'showcase' ? rest : new THREE.Quaternion());
           pose.copy(product.quaternion); targetPose.copy(pose); lastInputAt = -Infinity; returnFrom = null;
         }
+        const previousYaw = candidate.root.rotation.y;
         candidate.asset = asset; candidate.root.rotation.y = desired!.frontYaw; candidate.committedAppearance = appearance;
         candidate.pool.setLiveOverrides?.(materialOverrides);
         candidate.bubbles?.set(materialOverrides);
         host.dataset.sparklingCount = String(candidate.bubbles?.mesh.count ?? 0);
         // Bounds belong to the upright model, not its currently animated parent.
-        // Otherwise a label switch would bake today's tilt/yaw into future lens fits.
-        candidate.root.removeFromParent(); candidate.root.updateMatrixWorld(true);
-        candidate.bounds = measureProductBounds(candidate.root);
-        product.add(candidate.root); product.updateMatrixWorld(true);
+        // Skip rescanning 200k+ vertices when frontYaw is unchanged and zero.
+        if (Math.abs(candidate.root.rotation.y - previousYaw) > 1e-7) {
+          candidate.root.removeFromParent(); candidate.root.updateMatrixWorld(true);
+          candidate.bounds = measureProductBounds(candidate.root);
+          product.add(candidate.root); product.updateMatrixWorld(true);
+        }
+        previewBackdrop.invalidate();
+        // A glass-300 selection changes the live target scale, so resize after
+        // committing the asset before the first preview draw.
+        resize();
         studioGround.setFloorY(candidate.bounds.min.y);
         studioGround.setRadius(candidate.radius);
         lights.forEach((light, index) => light.position.set(...settings.lights[index].position).multiplyScalar(candidate!.radius));
@@ -760,7 +940,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     outputUniforms.backgroundTop.value.set(base);
     outputUniforms.backgroundBottom.value.set(value.type === 'gradient' ? safeColor(value.colorEnd, '#bfd9ca') : base);
     outputUniforms.backgroundAlpha.value = value.type === 'transparent' ? 0 : 1;
-    host.dataset.background = value.type; requestRender();
+    host.dataset.background = value.type; previewBackdrop.invalidate(); requestRender();
   };
   const manualCamera = (preset: MockupCameraPreset) => {
     if (disposed || captureGate.busy) return;
@@ -1053,6 +1233,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       const previousScissorTest = renderer.getScissorTest();
       const previousClearColor = renderer.getClearColor(new THREE.Color()); const previousClearAlpha = renderer.getClearAlpha();
       const previousControls = controls.enabled;
+      const previousOpticalBounces = scene.userData.opticalMaxBounces;
       let linear: THREE.WebGLRenderTarget | null = null;
       let output: THREE.WebGLRenderTarget | null = null;
       let refraction: ReturnType<typeof createExportRefractionSession> | null = null;
@@ -1063,6 +1244,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       const tileCanvas = document.createElement('canvas');
       const abortExport = () => exportAbort?.abort();
       return captureGate.run(async () => {
+        scene.userData.opticalMaxBounces = 8;
         exportAbort = new AbortController(); const signal = exportAbort.signal;
         captureOptions.signal?.addEventListener('abort', abortExport, { once: true });
         if (captureOptions.signal?.aborted) exportAbort.abort();
@@ -1085,8 +1267,9 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         const frame = frameCamera(captureCamera, size.width, size.height, exportAspect);
         captureOptions.onProgress?.(0);
         let reservoirTiles = 0;
+        const exportSamples = Math.min(4, renderer.capabilities.maxSamples);
         const prepareTile = (width: number, height: number) => {
-          if (!linear) linear = createLinearTarget(width, height);
+          if (!linear) linear = createLinearTarget(width, height, exportSamples);
           else linear.setSize(width, height);
           if (!output) output = new THREE.WebGLRenderTarget(width, height, { type: THREE.UnsignedByteType, format: THREE.RGBAFormat, depthBuffer: false });
           else output.setSize(width, height);
@@ -1178,6 +1361,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         captureOptions.onProgress?.(1);
         return blob;
       }, () => {
+        scene.userData.opticalMaxBounces = previousOpticalBounces;
         captureOptions.signal?.removeEventListener('abort', abortExport); exportAbort = null;
         refraction?.dispose(); refractionAtlas?.dispose();
         refractionCulling.forEach(({ mesh, enabled }) => { mesh.frustumCulled = enabled; });
@@ -1231,6 +1415,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       previewBackdrop.dispose(); thumbnailBackdrop.dispose(); captureBackdrop.dispose();
       studioGround.dispose();
       neckExport.dispose(); outputQuad.dispose(); outputMaterial.dispose(); pmrem.dispose(); draco.dispose(); basis.dispose();
+      disposePaperBackingCapture(renderer);
       renderer.dispose(); canvas.remove();
     },
   };

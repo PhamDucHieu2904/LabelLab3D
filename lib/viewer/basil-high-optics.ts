@@ -272,17 +272,19 @@ vec4 basilHighShade(vec3 positionNative,vec3 normalNative,vec3 cameraNative) {
   vec3 entryGeometric=normalize(cross(dFdx(positionNative),dFdy(positionNative)));
   if(dot(entryGeometric,direction)>0.0)entryGeometric=-entryGeometric;
   vec3 entryNormal=normalize(normalNative);if(dot(entryNormal,direction)>=0.0)entryNormal=entryGeometric;
-  BasilHighPath result=basilHighIntegrate(positionNative,direction,entryNormal,entryGeometric,vec2(0));
-  if(basilHighSpread>.0001) {
-    BasilHighPath a=basilHighIntegrate(positionNative,direction,entryNormal,entryGeometric,vec2(.55,0));
-    BasilHighPath b=basilHighIntegrate(positionNative,direction,entryNormal,entryGeometric,vec2(-.55,0));
-    BasilHighPath c=basilHighIntegrate(positionNative,direction,entryNormal,entryGeometric,vec2(0,.55));
-    BasilHighPath d=basilHighIntegrate(positionNative,direction,entryNormal,entryGeometric,vec2(0,-.55));
-    result.color=.3125*result.color+.171875*(a.color+b.color+c.color+d.color);
-    result.transmission=.3125*result.transmission+.171875*(a.transmission+b.transmission+c.transmission+d.transmission);
+  int sampleCount=basilHighSpread>.0001?5:1;
+  vec3 totalColor=vec3(0),totalTransmission=vec3(0);
+  int s=0;
+  while(s<sampleCount) {
+    vec2 offset=s==1?vec2(.55,0):s==2?vec2(-.55,0):s==3?vec2(0,.55):s==4?vec2(0,-.55):vec2(0);
+    float w=sampleCount==1?1.0:(s==0?.3125:.171875);
+    BasilHighPath samplePath=basilHighIntegrate(positionNative,direction,entryNormal,entryGeometric,offset);
+    totalColor+=w*samplePath.color;
+    totalTransmission+=w*samplePath.transmission;
+    s++;
   }
-  float alpha=basilHighNativeAlpha>.5?clamp(1.0-dot(result.transmission,vec3(.2126,.7152,.0722)),0.0,1.0):1.0;
-  return vec4(max(result.color,vec3(0)),alpha);
+  float alpha=basilHighNativeAlpha>.5?clamp(1.0-dot(totalTransmission,vec3(.2126,.7152,.0722)),0.0,1.0):1.0;
+  return vec4(max(totalColor,vec3(0)),alpha);
 }
 `;
 

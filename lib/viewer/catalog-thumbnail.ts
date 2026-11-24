@@ -6,6 +6,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { createAppearanceHandle, disposeProduct } from './appearance';
 import { renderBottleScene } from './bottle-materials';
+import { disposePaperBackingCapture, renderPaperBackingCapture } from './paper-backing-capture';
 import type { ProductAppearance, ProductAsset } from '../viewer-config';
 import { publicUrl } from '../public-url';
 import { measureProductBounds } from './framing';
@@ -34,7 +35,7 @@ function createStudio() {
   const loader = new GLTFLoader().setDRACOLoader(draco).setKTX2Loader(basis).setMeshoptDecoder(MeshoptDecoder);
   const camera = new THREE.OrthographicCamera(-0.64, 0.64, 0.64, -0.64, 0.01, 30);
   camera.position.set(0, 0.35, 4); camera.lookAt(0, 0, 0);
-  return { renderer, scene, camera, loader, dispose() { draco.dispose(); basis.dispose(); environment.dispose(); renderer.dispose(); renderer.forceContextLoss(); } };
+  return { renderer, scene, camera, loader, dispose() { disposePaperBackingCapture(renderer); draco.dispose(); basis.dispose(); environment.dispose(); renderer.dispose(); renderer.forceContextLoss(); } };
 }
 
 async function renderThumbnail(asset: ProductAsset, appearance: ProductAppearance): Promise<string> {
@@ -62,7 +63,9 @@ async function renderThumbnail(asset: ProductAsset, appearance: ProductAppearanc
     handle = createAppearanceHandle(content, asset);
     await handle.apply(appearance);
     current.scene.add(root);
-    renderBottleScene(current.renderer, current.scene, current.camera);
+    renderPaperBackingCapture(current.renderer, current.scene, current.camera, () => {
+      renderBottleScene(current.renderer, current.scene, current.camera);
+    });
     return current.renderer.domElement.toDataURL('image/webp', 0.9);
   } finally {
     root?.removeFromParent(); handle?.dispose(); if (root) disposeProduct(root);

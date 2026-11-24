@@ -38,6 +38,7 @@ interface Props {
   settings: ScenePreferences;
   artwork?: string;
   artworkEditing?: boolean;
+  deferSelection?: boolean;
   onStatus: (status: MockupStatus) => void;
   renderCanvasRef?: RefObject<HTMLCanvasElement | null>;
   interaction?: "studio" | "drag-only";
@@ -57,7 +58,7 @@ function applyMotion(
 }
 
 const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
-  { model, settings, artwork, artworkEditing = false, onStatus, renderCanvasRef, interaction = "studio", displayScale = 1, paintBackground },
+  { model, settings, artwork, artworkEditing = false, deferSelection = false, onStatus, renderCanvasRef, interaction = "studio", displayScale = 1, paintBackground },
   ref,
 ) {
   const outerRef = useRef<HTMLDivElement>(null);
@@ -170,7 +171,7 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
 
   useEffect(() => {
     const runtime = runtimeRef.current;
-    if (!runtime) return;
+    if (!runtime || deferSelection) return;
     const appearance = artwork
       ? {
           ...model.appearance,
@@ -182,7 +183,7 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
         }
       : model.appearance;
     runtime.select(model.asset, appearance, model.frontYaw);
-  }, [model, artwork, readyVersion]);
+  }, [model, artwork, deferSelection, readyVersion]);
 
   useEffect(() => {
     const runtime = runtimeRef.current;

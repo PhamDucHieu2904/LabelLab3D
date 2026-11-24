@@ -5,6 +5,7 @@ uniform highp sampler2D glassNeckTriangles;
 uniform highp sampler2D glassNeckNodes;
 uniform highp sampler2D glassNeckUvs;
 uniform int glassNeckDataWidth;
+uniform int glassNeckMaxBounces;
 uniform float glassNeckEpsilon;
 uniform float glassNeckRoughness;
 uniform mat4 glassNeckToScene;
@@ -20,6 +21,7 @@ uniform vec3 glassNeckLabelColor;
 uniform sampler2D glassNeckLabelMap;
 uniform float glassNeckHasLabelMap;
 uniform mat3 glassNeckLabelUvMatrix;
+uniform vec3 glassNeckLabelBackColor;
 uniform vec3 glassNeckLiquidColor;
 uniform float glassNeckLiquidClarity;
 uniform float glassNeckLiquidDensity;
@@ -42,7 +44,9 @@ GlassNeckHit glassNeckTrace(vec3 origin, vec3 direction) {
     abs(direction.y)<1e-10?1e-10:direction.y,abs(direction.z)<1e-10?1e-10:direction.z);
   vec3 inverseDirection=1.0/safe;int node=0;
   int end=int(glassNeckFetch(glassNeckNodes,0).w),best=-1;vec2 bary=vec2(0);
-  while(node<end) {
+  int guard=0;
+  while(node<end&&guard<512) {
+    guard++;
     vec4 lo=glassNeckFetch(glassNeckNodes,node*3),hi=glassNeckFetch(glassNeckNodes,node*3+1);
     vec4 range=glassNeckFetch(glassNeckNodes,node*3+2);
     vec3 t0=(lo.xyz-origin)*inverseDirection,t1=(hi.xyz-origin)*inverseDirection;
@@ -128,43 +132,34 @@ vec3 glassNeckOpaque(GlassNeckHit hit,vec3 direction,vec3 point) {
     return rear*glassNeckLiquidBrightness;
   }
   if(hit.kind>3.5) {
-    vec3 pigment=glassNeckLabelColor;
-    if(glassNeckHasLabelMap>.5) {
+    // The near side shows the supplied print.  A ray that reaches the far
+    // side sees the unprinted, opaque paper backing.  The liquid and seeds
+    // are already in front of this hit in the captured water layer.
+    // The near/front label face has an outward geometric normal opposed to
+    // the camera ray. The wrapped far face has the normal aligned with it.
+    float rearLabel=step(0.0,dot(direction,hit.geometric));
+    vec3 pigment=rearLabel>.5?glassNeckLabelBackColor:glassNeckLabelColor;
+    // The back label remains unprinted opaque paper here. The tracer never
+    // samples the artwork map for a far-side hit.
+    if(rearLabel<.5&&glassNeckHasLabelMap>.5) {
       vec2 uv=(glassNeckLabelUvMatrix*vec3(hit.uv,1.0)).xy;
       pigment*=texture2D(glassNeckLabelMap,uv).rgb;
     }
-    return pigment*diffuse;
+    if(rearLabel>.5) {
+      // Softly shade the unprinted inner paper seen through the hollow glass
+      // neck so it reads as curved matte paper behind glass, not a flat cutout.
+      float ndotv=clamp(-dot(direction,n),0.0,1.0);
+      vec3 paperLight=mix(vec3(0.64),clamp(diffuse,vec3(0.45),vec3(1.15)),0.45);
+      return pigment*paperLight*mix(0.86,1.0,pow(ndotv,0.35));
+    }
+    // The near paper/artwork hit is opaque. Do not multiply it by the glass
+    // environment, which would make the front label read like tinted glass.
+    return pigment;
   }
   vec3 reflected=glassNeckEnvironment(reflect(direction,n),glassNeckCapRoughness);
   float f0=mix(.04,1.0,glassNeckCapMetalness);
   float f=f0+(1.0-f0)*pow(1.0-clamp(-dot(direction,n),0.0,1.0),5.0);
   return glassNeckCapColor*(diffuse*(1.0-glassNeckCapMetalness)+reflected*f);
-}
-// A reflected ray can see the cap/label through the cavity as well. Follow one
-// secondary path without a recursive branching tree; retain Fresnel energy at
-// each secondary interface and use the environment only when it really escapes.
-vec3 glassNeckReflection(vec3 origin,vec3 direction,float medium) {
-  vec3 color=vec3(0);float weight=1.0;
-  for(int bounce=0;bounce<8;bounce++) {
-    GlassNeckHit hit=glassNeckTrace(origin,direction);
-    if(hit.distance>=999.0)return color+weight*glassNeckEnvironment(direction,glassNeckRoughness);
-    if(hit.kind>2.5)return color+weight*glassNeckOpaque(hit,direction,origin+direction*hit.distance);
-    bool entering=dot(direction,hit.geometric)<0.0;
-    float target=entering?1.52:1.0;
-    vec3 n=entering?hit.normal:-hit.normal;
-    if(dot(n,direction)>=-.0001)n=entering?hit.geometric:-hit.geometric;
-    float cosine=clamp(-dot(n,direction),0.0,1.0),cosT;
-    float f=glassNeckFresnel(cosine,medium,target,cosT);
-    origin+=direction*hit.distance;
-    if(f>.999999) {
-      direction=reflect(direction,n);origin+=(entering?hit.geometric:-hit.geometric)*glassNeckEpsilon*2.0;continue;
-    }
-    color+=weight*f*glassNeckEnvironment(reflect(direction,n),glassNeckRoughness);
-    weight*=1.0-f;
-    direction=normalize((medium/target)*direction+((medium/target)*cosine-cosT)*n);
-    medium=target;origin+=(entering?-hit.geometric:hit.geometric)*glassNeckEpsilon*2.0;
-  }
-  return color+weight*glassNeckEnvironment(direction,glassNeckRoughness);
 }
 vec4 glassNeckEscape(vec3 origin,vec3 direction,vec3 color,float weight) {
   if(bottleBackdropEnabled>.5) {
@@ -187,40 +182,86 @@ vec4 glassNeckShade() {
   vec3 n=normalize(vGlassNeckNormal);if(dot(n,direction)>=0.0)n=geometric;
   float cosT,cosine=clamp(-dot(n,direction),0.0,1.0);
   float f=glassNeckFresnel(cosine,1.0,1.52,cosT);
-  // The app's authored Neck is transparent with preserved metallic specular:
-  // BaseColor=.3962264, smoothness=.85. Keep its stronger
-  // surface reflection while the hollow-volume directions use glass IOR.
+  // Keep the authored Neck's stronger surface reflection while the hollow
+  // volume directions use the glass IOR.
   float surfaceF=.3962264+(1.0-.3962264)*pow(1.0-cosine,5.0);
   f=max(f,surfaceF);
-  vec3 color=f*glassNeckReflection(origin+geometric*glassNeckEpsilon*2.0,reflect(direction,n),1.0);
-  float weight=1.0-f;
-  direction=normalize(direction/1.52+(cosine/1.52-cosT)*n);
-  origin-=geometric*glassNeckEpsilon*2.0;
-  float medium=1.52;
-  for(int bounce=0;bounce<12;bounce++) {
-    GlassNeckHit hit=glassNeckTrace(origin,direction);
-    if(hit.distance>=999.0)return glassNeckEscape(origin,direction,color,weight);
-    if(hit.kind>2.5) {color+=weight*glassNeckOpaque(hit,direction,origin+direction*hit.distance);return vec4(color,1.0);}
-    bool entering=dot(direction,hit.geometric)<0.0;
-    float target=entering?1.52:1.0;
-    n=entering?hit.normal:-hit.normal;
-    if(dot(n,direction)>=-.0001)n=entering?hit.geometric:-hit.geometric;
-    cosine=clamp(-dot(n,direction),0.0,1.0);
-    f=glassNeckFresnel(cosine,medium,target,cosT);
-    origin+=direction*hit.distance;
-    if(f>.999999) {
-      direction=reflect(direction,n);origin+=(entering?hit.geometric:-hit.geometric)*glassNeckEpsilon*2.0;continue;
+  // Single-loop 2-ray state machine (primary refracted ray, then entry reflection).
+  // Keeping one glassNeckTrace/glassNeckOpaque call site prevents exponential
+  // HLSL/FXC inlining and loop-unroll hangs on Windows D3D11 while preserving
+  // hollow-shell refraction, cap reflections, liquid capture and paper backing.
+  int primaryLimit=glassNeckMaxBounces>0?glassNeckMaxBounces:6;
+  int reflLimit=min(4,primaryLimit);
+  bool hasPending=f>.01;
+  vec3 pOrigin=origin+geometric*glassNeckEpsilon*2.0;
+  vec3 pDir=reflect(direction,n);
+  float pWeight=f;
+  vec3 rOrigin=origin-geometric*glassNeckEpsilon*2.0;
+  vec3 rDir=normalize(direction/1.52+(cosine/1.52-cosT)*n);
+  float rWeight=1.0-f;
+  float rMedium=1.52;
+  bool rPrimary=true;
+  int rLeft=primaryLimit;
+  vec3 color=vec3(0);
+  float alpha=1.0;
+  int totalSteps=primaryLimit+reflLimit+2;
+  int step=0;
+  while(step<totalSteps) {
+    step++;
+    GlassNeckHit hit=glassNeckTrace(rOrigin,rDir);
+    bool done=false;
+    if(hit.distance>=999.0) {
+      if(rPrimary) {
+        vec4 esc=glassNeckEscape(rOrigin,rDir,color,rWeight);
+        color=esc.rgb; alpha=esc.a;
+      } else {
+        color+=rWeight*glassNeckEnvironment(rDir,glassNeckRoughness);
+      }
+      done=true;
+    } else if(hit.kind>2.5) {
+      vec3 hitColor=glassNeckOpaque(hit,rDir,rOrigin+rDir*hit.distance);
+      // A front-facing paper label sits outside the glass neck, so drop the
+      // outer-glass Fresnel contribution only for near-side label hits. Rear
+      // label hits are viewed through the hollow glass wall and keep Fresnel.
+      if(rPrimary&&hit.kind>3.5&&hit.kind<4.5&&dot(rDir,hit.geometric)<=0.0) return vec4(hitColor,1.0);
+      color+=rWeight*hitColor;
+      if(rPrimary) alpha=1.0;
+      done=true;
+    } else {
+      bool entering=dot(rDir,hit.geometric)<0.0;
+      float target=entering?1.52:1.0;
+      vec3 hn=entering?hit.normal:-hit.normal;
+      if(dot(hn,rDir)>=-.0001)hn=entering?hit.geometric:-hit.geometric;
+      float hc=clamp(-dot(hn,rDir),0.0,1.0),hCosT;
+      float hf=glassNeckFresnel(hc,rMedium,target,hCosT);
+      rOrigin+=rDir*hit.distance;
+      rLeft--;
+      if(hf>.999999) {
+        rDir=reflect(rDir,hn);
+        rOrigin+=(entering?hit.geometric:-hit.geometric)*glassNeckEpsilon*2.0;
+      } else {
+        color+=rWeight*hf*glassNeckEnvironment(reflect(rDir,hn),glassNeckRoughness);
+        rWeight*=1.0-hf;
+        rDir=normalize((rMedium/target)*rDir+((rMedium/target)*hc-hCosT)*hn);
+        rMedium=target;
+        rOrigin+=(entering?-hit.geometric:hit.geometric)*glassNeckEpsilon*2.0;
+      }
+      if(rLeft<=0||rWeight<.005) {
+        if(rPrimary) {
+          vec4 esc=glassNeckEscape(rOrigin,rDir,color,rWeight);
+          color=esc.rgb; alpha=esc.a;
+        } else {
+          color+=rWeight*glassNeckEnvironment(rDir,glassNeckRoughness);
+        }
+        done=true;
+      }
     }
-    vec3 reflected=reflect(direction,n);
-    vec3 reflectedOrigin=origin+(entering?hit.geometric:-hit.geometric)*glassNeckEpsilon*2.0;
-    vec3 reflection=bounce<3&&weight*f>.06
-      ?glassNeckReflection(reflectedOrigin,reflected,medium)
-      :glassNeckEnvironment(reflected,glassNeckRoughness);
-    color+=weight*f*reflection;
-    weight*=1.0-f;
-    direction=normalize((medium/target)*direction+((medium/target)*cosine-cosT)*n);
-    medium=target;origin+=(entering?-hit.geometric:hit.geometric)*glassNeckEpsilon*2.0;
+    if(done) {
+      if(!hasPending) break;
+      hasPending=false;
+      rOrigin=pOrigin; rDir=pDir; rWeight=pWeight; rMedium=1.0; rPrimary=false; rLeft=reflLimit;
+    }
   }
-  return glassNeckEscape(origin,direction,color,weight);
+  return vec4(color,alpha);
 }
 `;

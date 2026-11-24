@@ -60,6 +60,7 @@
   background: #fff8fb;
   color: #a12e56;
 }
+.markets button:disabled { opacity: .55; cursor: not-allowed; }
 .marketLabel { font-size: 15px; font-weight: 650; line-height: 1.2; }
 .marketCurrency { font-size: 14px; line-height: 1.2; opacity: .8; }
 
@@ -104,9 +105,56 @@
 .markets button:hover, .pack:hover { background-color: rgba(255, 255, 255, .65); }
 .markets button:focus-visible, .pack:focus-visible { outline: 2px solid #9c2751; outline-offset: 3px; }
 
+.overlay { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 20px; background: rgba(55, 22, 42, .44); backdrop-filter: blur(5px); }
+.checkout { position: relative; width: min(806px, 100%); max-height: calc(100vh - 32px); overflow: hidden; padding: clamp(26px, 5.2vw, 39px); border: 1px solid rgba(255,255,255,.7); border-radius: 29px; color: #633047; background: linear-gradient(145deg, #fff7fa, #f8dfe8); box-shadow: 0 24px 80px rgba(78, 26, 50, .3); }
+.close { position: absolute; top: 16px; right: 18px; width: 44px; height: 44px; border: 0; border-radius: 50%; color: #71364f; background: rgba(255,255,255,.6); font-size: 32px; line-height: 1; cursor: pointer; }
+.checkoutHeader { display:flex; align-items:center; justify-content:space-between; gap:21px; padding-right:49px; }
+.checkoutHeader h3 { margin: 4px 0; font-size: clamp(31px, 6.5vw, 42px); }
+.checkoutHeader p { margin: 0; color:#8a5a6d; font-size:17px; }
+.eyebrow { color:#a12e56; font-size:14px; font-weight:750; letter-spacing:.08em; text-transform:uppercase; }
+.checkoutGrid { display:grid; grid-template-columns: 247px 1fr; gap:26px; align-items:center; margin:31px 0; }
+.qrWrap { display:flex; flex-direction:column; align-items:center; gap:9px; text-align:center; font-size:16px; }
+.qrWrap small { color:#8a5a6d; line-height:1.35; }
+.demoQr { display:grid; place-items:center; width:208px; height:208px; border:13px solid #fff; border-radius:10px; color:#fff; background: repeating-linear-gradient(45deg,#652f4a 0 8px,#f5c8d6 8px 13px), repeating-linear-gradient(-45deg,transparent 0 12px,#652f4a 12px 16px); box-shadow:0 7px 21px #7d3f5750; }
+.demoQr span { padding:4px 7px; background:#652f4a; font-size:16px; letter-spacing:.12em; }
+.demoQr b { font-size:34px; }
+.summary { display:grid; gap:13px; margin:0; }
+.summary div { display:flex; justify-content:space-between; gap:16px; padding-bottom:10px; border-bottom:1px solid rgba(128,57,84,.14); }
+.summary dt { color:#8a5a6d; font-size:17px; }
+.summary dd { margin:0; text-align:right; font-weight:700; }
+.demoStatus { color:#98621d; }
+.paymentAction { display:flex; justify-content:center; margin:0 0 18px; }
+.payButton { min-height:44px; padding:10px 22px; border:0; border-radius:12px; color:#fff; background:#a12e56; font:650 16px var(--font-ui); cursor:pointer; box-shadow:0 8px 18px rgba(161,46,86,.22); }
+.payButton:hover { background:#872546; }
+.payButton:disabled { opacity:.65; cursor:wait; }
+.paymentError { margin:0 0 16px; padding:10px 12px; border:1px solid #e5a9b9; border-radius:10px; color:#9c244d; background:#fff1f4; text-align:center; }
+.hiddenForm { display:none; }
+.notice { padding:17px 20px; border-radius:16px; background:rgba(255,255,255,.45); font-size:17px; line-height:1.45; }
+.notice p { margin:7px 0 10px; color:#805268; }
+.notice a { margin-right:18px; color:#9c2751; font-weight:650; text-decoration:underline; }
+.close:focus-visible, .notice a:focus-visible { outline:2px solid #9c2751; outline-offset:3px; }
+
 @container labellab-page (max-width: 860px) {
   .card { grid-template-rows: auto auto auto; gap: 14px; padding: 20px; }
   .markets button { min-height: 44px; }
   .packs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .pack { min-height: 86px; }
+}
+
+@media (max-width: 560px) {
+  .overlay { align-items:end; padding:0; }
+  .checkout { width:100%; max-height:100vh; padding:22px; border-radius:22px 22px 0 0; }
+  .checkoutHeader { gap:12px; padding-right:38px; }
+  .checkoutHeader h3 { font-size:30px; }
+  .checkoutHeader p { font-size:14px; }
+  .eyebrow { font-size:11px; }
+  .checkoutGrid { grid-template-columns:1fr; }
+  .demoQr { width:112px; height:112px; border-width:9px; }
+  .demoQr span { font-size:12px; }
+  .demoQr b { font-size:25px; }
+  .qrWrap { gap:6px; font-size:13px; }
+  .summary { gap:8px; }
+  .summary div { gap:10px; padding-bottom:6px; }
+  .summary dt { font-size:14px; }
+  .notice { padding:13px 15px; font-size:14px; }
 }

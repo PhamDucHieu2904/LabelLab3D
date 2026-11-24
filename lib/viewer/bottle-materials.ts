@@ -135,9 +135,17 @@ function configureAloeCaptureOnlyLayer(mesh: THREE.Mesh): void {
 export function configureBottleRenderOrder(root: THREE.Object3D, asset: ProductAsset): void {
   root.traverse(node => {
     if (!(node instanceof THREE.Mesh)) return;
+    if (node.userData.basilWebLabelBackBeauty === true) {
+      node.renderOrder = 29;
+      return;
+    }
     const role = (Array.isArray(node.material) ? node.material : [node.material])
       .map(material => bottleMaterialRole(asset, node, material)).find(value => value === 'body' || value === 'ring' || value === 'liquid' || value === 'label' || value === 'cap' || value === 'inclusions' || value === 'liquid-back');
     if (role) {
+      if (node.userData.basilWebSeedBeauty === true) {
+        node.renderOrder = 21;
+        return;
+      }
       const aloe = node.userData.bottleProfile === 'aloe-pet-v1' ||
         (Array.isArray(node.material) ? node.material : [node.material]).some(material => material.userData.bottleProfile === 'aloe-pet-v1');
       const webBasil = node.userData.basilProfile === 'basil-web-v1' || ['glass-290-v1', 'glass-300-v1'].includes(node.userData.bottleProfile) ||

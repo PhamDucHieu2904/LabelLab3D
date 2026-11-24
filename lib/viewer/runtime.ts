@@ -20,6 +20,7 @@ import { createBackdropTexture, type ProductViewerBackdropInput } from './backdr
 import { createWaterBackdropPass } from './water-backdrop-pass';
 import { createProductHitRegion, hitVisibleProduct, visibleProductGestureMeshes } from './product-hit-region';
 import { renderBottleScene } from './bottle-materials';
+import { disposePaperBackingCapture, renderPaperBackingCapture } from './paper-backing-capture';
 import { setBasilHighBackdrop } from './basil-bottle-materials';
 import { isBasilHighAsset, basilHighPresentation } from './basil-presentation';
 import type { GraphicsMode } from './graphics-mode';
@@ -886,7 +887,9 @@ export function createProductViewer(
     if (dirty && sinceDraw >= frameInterval) {
       hitRegion.update(active && !packageTransition ? active.root : null, camera, mount.clientWidth, mount.clientHeight, now, dragging);
       if (backdrop && waterBackdrop) waterBackdrop.render(backdrop.texture, camera);
-      renderBottleScene(renderer, scene, camera);
+      renderPaperBackingCapture(renderer, scene, camera, () => {
+        renderBottleScene(renderer, scene, camera);
+      });
       mount.dataset.viewerReady = active ? 'true' : 'false';
       sampleDraws++;
       if (previousDrawAt) sampleLongestGap = Math.max(sampleLongestGap, now - previousDrawAt);
@@ -980,6 +983,7 @@ export function createProductViewer(
       ownedEnvironmentTargets.forEach((target) => target.dispose());
       environmentTargets.clear();
       pmrem.dispose(); draco.dispose(); basis.dispose();
+      disposePaperBackingCapture(renderer);
       hitRegion.dispose(); renderer.dispose(); renderer.domElement.remove();
       mount.classList.remove('is-dragging');
     },

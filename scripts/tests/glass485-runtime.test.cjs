@@ -26,7 +26,7 @@ test('485 ml Glass Milk uses the clear Base and hollow Neck paths with a FrontSi
       assert.ok(role, mesh.name);
       context.configure(mesh.material, mesh, role, '#fff5e4');
     }
-    assert.equal(meshes.GlassBase.material.customProgramCacheKey(), 'glass-300-base-clear-v2');
+    assert.equal(meshes.GlassBase.material.customProgramCacheKey(), 'glass-300-base-clear-v4');
     assert.equal(meshes.Neck.material.customProgramCacheKey(), 'pullcap-hollow-glass-neck-v1');
     assert.equal(meshes.Water.material.customProgramCacheKey(), 'basil-web-milk-reservoir-v2');
     assert.equal(meshes.Water.material.side, THREE.FrontSide);

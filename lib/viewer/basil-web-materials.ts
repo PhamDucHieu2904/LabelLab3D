@@ -7,11 +7,27 @@ import { BASIL_WEB_OPTICS, BASIL_WEB_VOLUME_GLSL, basilWebAbsorption, configureB
 import { BASIL_WEB_SEED_MATERIAL, isBasilWebSeedMetadata } from './basil-web-seed-contract';
 import { createGlassNeckMaterialContext } from './glass-neck-material';
 import { configureGlass300Base } from './glass-300-base';
+import { configurePaperBackingSampler, createPaperBackingUniforms, updatePaperBackingUniforms } from './paper-backing-capture';
 
 type Role = 'body' | 'ring' | 'liquid' | 'liquid-back' | 'inclusions' | 'cap' | 'label';
 const PROFILE = 'basil-web-v1';
 const GLASS_PROFILES = new Set(['glass-290-v1', 'glass-300-v1']);
 const GOLD = [.9528302, .8926178, .3460751] as const;
+// Unprinted warm-white paper stock for the far side of wrapped 290 ml labels.
+// When viewed through the glass body and liquid, the shaded BackSide capture
+// feeds into Beer-Lambert water absorption instead of overwriting water pixels.
+const PAPER_BACK_COLOR = '#ebe9e4';
+// The clear 290 ml seed drinks use an explicit unprinted paper reverse. The
+// artwork remains opaque on the near side; the back-face pass supplies the
+// unprinted paper surface when viewed directly outside glass and feeds the
+// shaded rear-paper capture for liquid Beer-Lambert attenuation.
+const PAPER_BACKING_ASSETS = new Set([
+  'basil-strawberry',
+  'registry-glass-290-basil',
+  'glass-290-chia',
+  'glass-290-pullcap-basil',
+  'glass-290-pullcap-chia',
+]);
 
 function isProfiledGlassNeck(asset: ProductAsset, mesh: THREE.Mesh, material: THREE.Material): boolean {
   const role = basilWebMaterialRole(asset, mesh, material);
@@ -24,6 +40,7 @@ function isProfiledGlassNeck(asset: ProductAsset, mesh: THREE.Mesh, material: TH
 }
 
 export function basilWebMaterialRole(asset: ProductAsset, mesh: THREE.Mesh, material: THREE.Material): Role | undefined {
+  if (mesh.userData.basilWebSeedBeauty === true) return 'inclusions';
   if (asset.packaging !== 'glass' ||
     (mesh.userData.basilProfile !== PROFILE && material.userData.basilProfile !== PROFILE &&
       !GLASS_PROFILES.has(mesh.userData.bottleProfile) && !GLASS_PROFILES.has(material.userData.bottleProfile))) return;
@@ -34,14 +51,70 @@ export function basilWebMaterialRole(asset: ProductAsset, mesh: THREE.Mesh, mate
  * instance draw replaces 330 separate meshes; source geometry stays untouched. */
 export function prepareBasilWebLayers(root: THREE.Object3D, asset: ProductAsset): void {
   if (asset.packaging !== 'glass') return;
+  // Pooled GLTF roots can be cloned before their world matrices have been
+  // refreshed. Ensure the explicit opaque backing is attached to the current
+  // label geometry before appearance clones are made.
+  root.updateMatrixWorld(true);
   // The appearance pool commits materials from a prepared clone, not its mesh
   // callbacks. Attach capture hooks to the actual root before cloning as well.
   root.traverse(node => {
     if (!(node instanceof THREE.Mesh)) return;
+    if (node.userData.basilWebLabelBackBeauty === true) {
+      configureBottleBeautyOnly(node);
+      return;
+    }
+    if (node.userData.basilWebSeedBeauty === true) {
+      configureBottleBeautyOnly(node);
+      return;
+    }
     const role = (Array.isArray(node.material) ? node.material : [node.material]).map(material => basilWebMaterialRole(asset, node, material)).find(Boolean);
     if (role === 'liquid' || role === 'inclusions') configureCaptureOnly(node);
     else if (role === 'cap' || role === 'label') configureBottleBeautyOnly(node);
   });
+  if (PAPER_BACKING_ASSETS.has(asset.id)) {
+    const labels: THREE.Mesh[] = [];
+    root.traverse(node => {
+      if (!(node instanceof THREE.Mesh)) return;
+      const role = (Array.isArray(node.material) ? node.material : [node.material])
+        .map(material => basilWebMaterialRole(asset, node, material)).find(Boolean);
+      if (role === 'label' && !node.userData.basilWebLabelBack && !node.userData.basilWebLabelBackBeauty) labels.push(node);
+    });
+    for (const label of labels) {
+      const hasBeauty = label.children.some(child => child.userData.basilWebLabelBackBeauty === true);
+      if (!hasBeauty) {
+        // Keep the unprinted inner paper surface at the true 1:1 wrap radius.
+        // Do NOT place a shrunken un-attenuated mesh in the transmission capture
+        // pass: shrinking inside the water shoulder causes raw gray overwrites
+        // and vertical Z-fighting spikes. Instead, paperBackingCapture renders
+        // this mesh's shaded BackSide so Water and Seeds attenuate it through
+        // the full Beer-Lambert liquid chord.
+        const beautyMaterial = new THREE.MeshStandardMaterial({
+          // Unprinted matte paper stock. It never samples the label artwork map,
+          // so it cannot mirror front graphics onto the reverse side.
+          color: PAPER_BACK_COLOR, roughness: .9, metalness: 0,
+          side: THREE.BackSide, transparent: false, opacity: 1,
+          depthWrite: true, depthTest: true,
+          polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+        });
+        beautyMaterial.name = 'PaperLabelBackBeauty';
+        beautyMaterial.userData = { basilProfile: PROFILE, basilWebLabelBackBeauty: true };
+        beautyMaterial.customProgramCacheKey = () => 'basil-web-paper-label-back-beauty-v2';
+        const beautyBacking = new THREE.Mesh(label.geometry.clone(), beautyMaterial);
+        beautyBacking.name = 'PaperLabel back (beauty)';
+        beautyBacking.userData = { basilProfile: PROFILE, basilWebLabelBackBeauty: true };
+        beautyBacking.renderOrder = 29;
+        beautyBacking.visible = true;
+        label.add(beautyBacking);
+        configureBottleBeautyOnly(beautyBacking);
+      }
+      // Create the child before pooled appearance clones are made. The actual
+      // artwork map is attached later by configure(), but the render slot must
+      // already exist on every pooled root.
+      // Opaque labels must terminate the ray. Do not add rear artwork or
+      // liquid silhouettes: either pass makes the back of the label visible
+      // through the front face.
+    }
+  }
   let owner: THREE.Object3D | undefined;
   root.traverse(node => { if (node.userData.basilWebSeeds) owner = node; });
   if (!owner || owner.children.some(child => child.userData.basilWebGenerated)) return;
@@ -152,6 +225,7 @@ export function createBasilWebBottleMaterialContext(root: THREE.Object3D, asset:
   const color = new THREE.Color('#be2838');
   const shared: Record<string, THREE.IUniform> = {
     ...createBottleBackdropUniforms(),
+    ...createPaperBackingUniforms(),
     basilWebLiquidColor: { value: color }, basilWebAbsorption: { value: new THREE.Vector3() },
     basilWebSeedColor: { value: new THREE.Color().setRGB(...BASIL_WEB_OPTICS.seedColorSrgb, THREE.SRGBColorSpace) },
     basilWebSeedDepth: { value: BASIL_WEB_OPTICS.seedDepthPerMetre },
@@ -163,6 +237,15 @@ export function createBasilWebBottleMaterialContext(root: THREE.Object3D, asset:
   const applyColor = (value: string) => {
     color.set(value); srgb.copy(color).convertLinearToSRGB();
     shared.basilWebAbsorption.value.copy(basilWebAbsorption(srgb));
+    const paper = new THREE.Color(PAPER_BACK_COLOR);
+    root.traverse(node => {
+      if (!(node instanceof THREE.Mesh)) return;
+      if (node.userData.basilWebLabelBackBeauty !== true) return;
+      const materials = Array.isArray(node.material) ? node.material : [node.material];
+      materials.forEach(material => {
+        if (material.name === 'PaperLabelBackBeauty') material.color.copy(paper);
+      });
+    });
   };
   applyColor('#be2838');
   return {
@@ -178,14 +261,21 @@ export function createBasilWebBottleMaterialContext(root: THREE.Object3D, asset:
         material.side = THREE.DoubleSide; material.forceSinglePass = true;
         if (material instanceof THREE.MeshPhysicalMaterial) material.transmission = 0;
         if (role === 'cap') { material.metalness = 1; material.roughness = .388; material.color.setRGB(...GOLD, THREE.SRGBColorSpace); if (capColor) material.color.set(capColor); }
-        else { material.side = THREE.DoubleSide; material.metalness = 0; material.roughness = .5; }
+        else {
+          // The near printed face remains opaque.  For the clear 290 ml seed
+          // drinks, culling the far beauty face lets the transmission pass
+          // show water and seeds over the opaque paper backing underneath.
+          material.side = PAPER_BACKING_ASSETS.has(asset.id) ? THREE.FrontSide : THREE.DoubleSide;
+          material.metalness = 0; material.roughness = .5;
+        }
         return;
       }
       const meshToMetric = toMetric(mesh);
       if (role === 'liquid' || role === 'inclusions') {
         applyColor(juiceColor ?? '#be2838');
         liquidColorUpdates.set(material, applyColor);
-        configureCaptureOnly(mesh);
+        if (mesh.userData.basilWebSeedBeauty === true) configureBottleBeautyOnly(mesh);
+        else configureCaptureOnly(mesh);
         if (role === 'inclusions') {
           if (mesh instanceof THREE.InstancedMesh) {
             configureBasilWebInclusions(material, mesh, profile, meshToMetric, shared);
@@ -233,14 +323,16 @@ export function createBasilWebBottleMaterialContext(root: THREE.Object3D, asset:
         material.onBeforeCompile = shader => {
           Object.assign(shader.uniforms, uniforms);
           addBottleBackdropProjection(shader);
+          configurePaperBackingSampler(shader, uniforms as ReturnType<typeof createPaperBackingUniforms>);
           shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>\n${BASIL_WEB_VOLUME_GLSL}\nvarying float vBasilWebChord;`)
             .replace('#include <begin_vertex>', `#include <begin_vertex>\nvec3 basilPoint=(basilWebMeshToMetric*vec4(transformed,1.0)).xyz;\nvec3 basilRay=basilWebOrthographic>.5?-basilWebViewMetric:normalize(basilWebCameraMetric-basilPoint);\nvBasilWebChord=basilWebExit(basilPoint,basilRay);`);
           shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 basilWebAbsorption;\nvarying float vBasilWebChord;')
-            .replace('#include <opaque_fragment>', 'gl_FragColor=vec4(bottleBackdropAt(bottleBackdropUv())*exp(-basilWebAbsorption*max(0.0,vBasilWebChord)),1.0);');
+            .replace('#include <opaque_fragment>', 'vec2 basilWaterUv=bottleBackdropUv(); vec4 basilPaper=paperBackingSample(basilWaterUv); vec3 basilPaperColor=basilPaper.a>.001?basilPaper.rgb/basilPaper.a:paperBackingRadiance; vec3 basilWaterSource=mix(bottleBackdropAt(basilWaterUv),basilPaperColor,basilPaper.a); gl_FragColor=vec4(basilWaterSource*exp(-basilWebAbsorption*max(0.0,vBasilWebChord)),1.0);');
         };
         const inverseWorld = new THREE.Matrix4();
         material.onBeforeRender = (_renderer, scene, camera, _geometry, object) => {
           updateBottleBackdropUniforms(shared as ReturnType<typeof createBottleBackdropUniforms>, scene);
+          updatePaperBackingUniforms(shared as ReturnType<typeof createPaperBackingUniforms>, _renderer);
           inverseWorld.copy(object.matrixWorld).invert();
           camera.getWorldPosition(uniforms.basilWebCameraMetric.value).applyMatrix4(inverseWorld).applyMatrix4(meshToMetric);
           camera.getWorldDirection(uniforms.basilWebViewMetric.value).transformDirection(inverseWorld).transformDirection(meshToMetric);

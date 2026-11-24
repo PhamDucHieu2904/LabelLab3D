@@ -243,6 +243,8 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
   const [googleError, setGoogleError] = useState(initialGoogleError);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [submitBusy, setSubmitBusy] = useState(false);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [verificationSent, setVerificationSent] = useState(false);
   const googlePending = useRef(false);
   const formActive = useRef(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -307,8 +309,11 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
     setValues((current) => ({ ...current, [field]: value }));
     setSubmitError("");
     setGoogleError("");
+    if (field === "email") setVerificationSent(false);
     if (errors[field]) setErrors((current) => ({ ...current, [field]: undefined }));
   };
+
+  const emailIsValid = /^\S+@\S+\.\S+$/.test(values.email.trim());
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -366,7 +371,7 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
         <p id={descriptionId}>{content.description}</p>
       </div>}
       <form ref={formRef} className={`${styles.form} ${mode !== "forgot" ? styles.compactForm : ""}`} onSubmit={submit} noValidate>
-        {mode !== "forgot" && (
+        {mode === "login" && (
           <div className={styles.googleOption}>
             <button
               type="button"
@@ -428,6 +433,35 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
           />
           {errors.email && <p className={styles.fieldError} id={`${fieldId}-email-error`}>{errors.email}</p>}
         </div>
+        {mode === "register" && (
+          <div className={`${styles.field} ${styles.verificationField}`}>
+            <div className={styles.labelRow}>
+              <label htmlFor={`${fieldId}-verification`}>Email verification code</label>
+              <button
+                type="button"
+                className={styles.textButton}
+                disabled={!emailIsValid || verificationSent}
+                onClick={() => setVerificationSent(true)}
+              >
+                {verificationSent ? "Code sent" : "Send code"}
+              </button>
+            </div>
+            <input
+              id={`${fieldId}-verification`}
+              name="verificationCode"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              pattern="[0-9]{6}"
+              value={verificationCode}
+              placeholder="Enter 6-digit code"
+              onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+            />
+            <p className={styles.hint}>
+              {verificationSent ? `We sent a code to ${values.email || "your email"}.` : "We’ll send a 6-digit code to your email."}
+            </p>
+          </div>
+        )}
         {mode !== "forgot" && (
           <div className={styles.field}>
             <div className={styles.labelRow}>

@@ -16,6 +16,85 @@ export function energyBubbleCount(amount: number): number {
 type Particle = { position: THREE.Vector3; rise: number; diameter: number; ceiling: number };
 export type EnergyBubbleEffect = NonNullable<ReturnType<typeof createEnergyDrinkBubbles>>;
 
+/** 2D XZ spatial grid over water triangles for O(1) vertical (+Y) raycast queries. */
+function buildVerticalRayGrid(geometry: THREE.BufferGeometry, bounds: THREE.Box3, gridSize = 24) {
+  const pos = geometry.getAttribute('position');
+  const index = geometry.index;
+  const totalIndices = index ? index.count : pos.count;
+  const maxTris = Math.floor(totalIndices / 3);
+  const tris = new Float32Array(maxTris * 9);
+  const minX = bounds.min.x, minZ = bounds.min.z;
+  const spanX = Math.max(1e-9, bounds.max.x - minX);
+  const spanZ = Math.max(1e-9, bounds.max.z - minZ);
+  const invX = gridSize / spanX, invZ = gridSize / spanZ;
+  const cells: number[][] = Array.from({ length: gridSize * gridSize }, () => []);
+
+  let count = 0;
+  for (let offset = 0; offset + 2 < totalIndices; offset += 3) {
+    const i0 = index ? index.getX(offset) : offset;
+    const i1 = index ? index.getX(offset + 1) : offset + 1;
+    const i2 = index ? index.getX(offset + 2) : offset + 2;
+    const ax = pos.getX(i0), ay = pos.getY(i0), az = pos.getZ(i0);
+    const bx = pos.getX(i1), by = pos.getY(i1), bz = pos.getZ(i1);
+    const cx = pos.getX(i2), cy = pos.getY(i2), cz = pos.getZ(i2);
+    // Vertical (+Y) ray cannot intersect triangles degenerate in XZ.
+    const area2 = (bx - ax) * (cz - az) - (bz - az) * (cx - ax);
+    if (Math.abs(area2) < 1e-18) continue;
+    const id = count++;
+    const o = id * 9;
+    tris[o] = ax; tris[o + 1] = ay; tris[o + 2] = az;
+    tris[o + 3] = bx; tris[o + 4] = by; tris[o + 5] = bz;
+    tris[o + 6] = cx; tris[o + 7] = cy; tris[o + 8] = cz;
+    const x0 = Math.max(0, Math.min(gridSize - 1, Math.floor((Math.min(ax, bx, cx) - minX) * invX)));
+    const x1 = Math.max(0, Math.min(gridSize - 1, Math.floor((Math.max(ax, bx, cx) - minX) * invX)));
+    const z0 = Math.max(0, Math.min(gridSize - 1, Math.floor((Math.min(az, bz, cz) - minZ) * invZ)));
+    const z1 = Math.max(0, Math.min(gridSize - 1, Math.floor((Math.max(az, bz, cz) - minZ) * invZ)));
+    for (let gz = z0; gz <= z1; gz++) {
+      const row = gz * gridSize;
+      for (let gx = x0; gx <= x1; gx++) cells[row + gx].push(id);
+    }
+  }
+  const hitBuf: number[] = [];
+  return function raycastUp(ox: number, oy: number, oz: number, dedupEps: number): number {
+    const gx = Math.floor((ox - minX) * invX);
+    const gz = Math.floor((oz - minZ) * invZ);
+    if (gx < 0 || gx >= gridSize || gz < 0 || gz >= gridSize) return -Infinity;
+    const bucket = cells[gz * gridSize + gx];
+    if (!bucket.length) return -Infinity;
+    hitBuf.length = 0;
+    for (let i = 0; i < bucket.length; i++) {
+      const o = bucket[i] * 9;
+      const ax = tris[o], ay = tris[o + 1], az = tris[o + 2];
+      const bx = tris[o + 3], by = tris[o + 4], bz = tris[o + 5];
+      const cx = tris[o + 6], cy = tris[o + 7], cz = tris[o + 8];
+      const v0x = cx - ax, v0z = cz - az;
+      const v1x = bx - ax, v1z = bz - az;
+      const det = v1x * v0z - v1z * v0x;
+      if (Math.abs(det) < 1e-18) continue;
+      const v2x = ox - ax, v2z = oz - az;
+      const invDet = 1 / det;
+      const u = (v2x * v0z - v2z * v0x) * invDet;
+      if (u < -1e-7 || u > 1 + 1e-7) continue;
+      const v = (v1x * v2z - v1z * v2x) * invDet;
+      if (v < -1e-7 || u + v > 1 + 1e-7) continue;
+      const hitY = ay + u * (by - ay) + v * (cy - ay);
+      const dist = hitY - oy;
+      if (dist >= 0) hitBuf.push(dist);
+    }
+    if (!hitBuf.length) return -Infinity;
+    hitBuf.sort((a, b) => a - b);
+    let unique = 1;
+    let prev = hitBuf[0];
+    for (let i = 1; i < hitBuf.length; i++) {
+      if (Math.abs(hitBuf[i] - prev) > dedupEps) {
+        unique++;
+        prev = hitBuf[i];
+      }
+    }
+    return unique % 2 === 1 ? hitBuf[0] : -Infinity;
+  };
+}
+
 /**
  * An instanced sphere volume, kept beside the imported content so water's
  * nonuniform Blender scale cannot stretch bubbles. The source app also draws
@@ -38,20 +117,30 @@ export function createEnergyDrinkBubbles(content: THREE.Object3D, asset: Product
   queryGeometry.computeBoundingBox();
   const bounds = queryGeometry.boundingBox!.clone(), height = bounds.max.y - bounds.min.y;
   if (!Number.isFinite(height) || height <= 0) { queryGeometry.dispose(); return; }
-  // The app uses a convex MeshCollider. Cache its hull as half-spaces once;
-  // six triangle raycasts per particle per frame would dominate web CPU time.
+  // Deduplicate vertices before ConvexHull to keep hull construction fast.
   const positions = queryGeometry.getAttribute('position');
-  const hull = new ConvexHull().setFromPoints(Array.from({ length: positions.count }, (_, i) => new THREE.Vector3().fromBufferAttribute(positions, i)));
+  const uniquePoints: THREE.Vector3[] = [];
+  const seenVert = new Set<string>();
+  const quant = 1 / Math.max(1e-7, height * 1e-4);
+  for (let i = 0; i < positions.count; i++) {
+    const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i);
+    const key = `${Math.round(x * quant)},${Math.round(y * quant)},${Math.round(z * quant)}`;
+    if (!seenVert.has(key)) {
+      seenVert.add(key);
+      uniquePoints.push(new THREE.Vector3(x, y, z));
+    }
+  }
+  const hull = new ConvexHull().setFromPoints(uniquePoints);
   const planes: { normal: THREE.Vector3; constant: number }[] = [];
   for (const face of hull.faces) {
     if (!planes.some(p => p.normal.dot(face.normal) > .999999 && Math.abs(p.constant - face.constant) < height * 1e-6)) {
       planes.push({ normal: face.normal.clone(), constant: face.constant });
     }
   }
-  const queryMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
-  const query = new THREE.Mesh(queryGeometry, queryMaterial); query.updateMatrixWorld(true);
-  const ray = new THREE.Raycaster(), up = new THREE.Vector3(0, 1, 0), origin = new THREE.Vector3();
+  const raycastUp = buildVerticalRayGrid(queryGeometry, bounds);
+  queryGeometry.dispose();
   const labelBounds = label ? new THREE.Box3().setFromObject(label) : undefined;
+  const dedupEps = height * 1e-6;
   function ceiling(position: THREE.Vector3, diameter: number): number {
     const margin = diameter * .625 + height * ENERGY_BUBBLES.wallInset;
     if (!bounds.containsPoint(position)) return -Infinity;
@@ -60,13 +149,21 @@ export function createEnergyDrinkBubbles(content: THREE.Object3D, asset: Product
     let top = labelBounds && position.y < labelBounds.min.y ? labelBounds.min.y - margin : bounds.max.y;
     // Convex collision alone bridges the concave shoulder. Cache a safe rise
     // column from the actual water triangles so bubbles cannot escape there.
-    for (const [x, z] of [[0, 0], [margin, 0], [-margin, 0], [0, margin], [0, -margin]]) {
-      origin.copy(position); origin.x += x; origin.z += z; ray.set(origin, up);
-      const hits = ray.intersectObject(query, false);
-      const distances = hits.map(hit => hit.distance).filter((d, i, all) => i === 0 || Math.abs(d - all[i - 1]) > height * 1e-6);
-      if (distances.length % 2 !== 1) return -Infinity;
-      top = Math.min(top, position.y + distances[0] - margin);
-    }
+    const d0 = raycastUp(position.x, position.y, position.z, dedupEps);
+    if (!Number.isFinite(d0)) return -Infinity;
+    top = Math.min(top, position.y + d0 - margin);
+    const d1 = raycastUp(position.x + margin, position.y, position.z, dedupEps);
+    if (!Number.isFinite(d1)) return -Infinity;
+    top = Math.min(top, position.y + d1 - margin);
+    const d2 = raycastUp(position.x - margin, position.y, position.z, dedupEps);
+    if (!Number.isFinite(d2)) return -Infinity;
+    top = Math.min(top, position.y + d2 - margin);
+    const d3 = raycastUp(position.x, position.y, position.z + margin, dedupEps);
+    if (!Number.isFinite(d3)) return -Infinity;
+    top = Math.min(top, position.y + d3 - margin);
+    const d4 = raycastUp(position.x, position.y, position.z - margin, dedupEps);
+    if (!Number.isFinite(d4)) return -Infinity;
+    top = Math.min(top, position.y + d4 - margin);
     return top;
   }
   const contains = (position: THREE.Vector3, diameter: number) => ceiling(position, diameter) > position.y;
@@ -165,7 +262,7 @@ export function createEnergyDrinkBubbles(content: THREE.Object3D, asset: Product
       }
       writeMatrices();
     },
-    dispose() { mesh.removeFromParent(); geometry.dispose(); material.dispose(); mesh.dispose(); queryGeometry.dispose(); queryMaterial.dispose(); },
+    dispose() { mesh.removeFromParent(); geometry.dispose(); material.dispose(); mesh.dispose(); },
     // Read-only positions support containment and spherical-scale regression tests.
     snapshot: () => particles.map(p => ({ position: p.position.clone(), diameter: p.diameter })),
     contains,

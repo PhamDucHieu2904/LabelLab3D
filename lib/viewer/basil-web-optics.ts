@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { addBottleBackdropProjection, createBottleBackdropUniforms, updateBottleBackdropUniforms } from './bottle-backdrop';
+import { configurePaperBackingSampler, createPaperBackingUniforms, updatePaperBackingUniforms } from './paper-backing-capture';
 
 /** The source High kernel measures world distances at ten times glTF metres.
  * These controls preserve its extinction and seed/gel response without tracing
@@ -291,7 +292,11 @@ vec3 basilWebSeedResponse(vec3 lighting,vec3 hazeLighting) {
   float depth=max(0.0,vBasilSeedPath.x);
   float visibility=exp(-basilWebSeedDepth*depth);
   vec3 transmission=exp(-basilWebAbsorption*depth);
-  vec3 reservoir=bottleBackdropAt(bottleBackdropUv())*exp(-basilWebAbsorption*max(0.0,vBasilSeedPath.y));
+  vec2 basilReservoirUv=bottleBackdropUv();
+  vec4 basilPaper=paperBackingSample(basilReservoirUv);
+  vec3 basilPaperColor=basilPaper.a>.001?basilPaper.rgb/basilPaper.a:paperBackingRadiance;
+  vec3 basilReservoirSource=mix(bottleBackdropAt(basilReservoirUv),basilPaperColor,basilPaper.a);
+  vec3 reservoir=basilReservoirSource*exp(-basilWebAbsorption*max(0.0,vBasilSeedPath.y));
   vec3 core=mix(basilWebLiquidColor*.4,basilWebSeedColor*max(lighting,vec3(0.0))*transmission,visibility);
   vec3 haze=mix(vec3(1.0),basilWebLiquidColor,.5)*max(hazeLighting,vec3(0.0))*transmission*basilWebGelHaze*visibility;
   vec3 gel=reservoir*(1.0-basilWebGelTransmissionReduction*visibility)+haze;
@@ -346,6 +351,7 @@ varying vec2 vBasilSeedPath;
       vBasilSeedPath=vec2(basilNear,basilNear+basilFar);
     `);
     shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>\n${BASIL_WEB_SEED_GLSL}`);
+    configurePaperBackingSampler(shader, uniforms as ReturnType<typeof createPaperBackingUniforms>);
     shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', /* glsl */`
       #include <opaque_fragment>
       vec3 basilLighting=reflectedLight.directDiffuse+reflectedLight.indirectDiffuse;
@@ -362,6 +368,7 @@ varying vec2 vBasilSeedPath;
   material.onBeforeRender = function(renderer, scene, camera, geometry, object, group) {
     previousRender.call(this, renderer, scene, camera, geometry, object, group);
     updateBottleBackdropUniforms(uniforms as ReturnType<typeof createBottleBackdropUniforms>, scene);
+    updatePaperBackingUniforms(uniforms as ReturnType<typeof createPaperBackingUniforms>, renderer);
     worldToLocal.copy(object.matrixWorld).invert();
     camera.getWorldPosition(cameraPosition).applyMatrix4(worldToLocal);
     uniforms.basilWebCameraLocal.value.copy(cameraPosition);

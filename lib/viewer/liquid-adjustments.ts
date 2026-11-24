@@ -49,6 +49,7 @@ export function configureLiveLiquidOptics(material: THREE.MeshStandardMaterial, 
       addBottleBackdropProjection(shader);
       Object.assign(shader.uniforms, backdrop);
     }
+    const hasPaperBacking = shader.fragmentShader.includes('vec4 paperBackingSample(');
     Object.assign(shader.uniforms, uniforms);
     shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
       uniform float labLiquidEnabled;
@@ -70,6 +71,9 @@ export function configureLiveLiquidOptics(material: THREE.MeshStandardMaterial, 
           + bottleBackdropAt(labUv - vec2(labBlur.x, 0.0)) * .15
           + bottleBackdropAt(labUv + vec2(0.0, labBlur.y)) * .15
           + bottleBackdropAt(labUv - vec2(0.0, labBlur.y)) * .15;
+        ${hasPaperBacking ? `vec4 labPaper = paperBackingSample(bottleBackdropUv());
+        vec3 labPaperColor = labPaper.a > .001 ? labPaper.rgb / labPaper.a : paperBackingRadiance;
+        labRear = mix(labRear, labPaperColor, labPaper.a);` : ''}
         vec3 labAbsorption = pow(max(labLiquidPigment, vec3(.003)), vec3(.12 + 1.65 * labDensity));
         vec3 labHaze = mix(labLiquidPigment, sqrt(max(labLiquidPigment, vec3(0.0))), labScatter * .55);
         // Keep authored highlights/seed silhouettes, progressively veiling
