@@ -31,7 +31,7 @@ export default function PaymentResult({ status, orderId }: { status: "success" |
 
   const paid = order?.status === "paid";
   return <main style={{ maxWidth: 640, margin: "80px auto", padding: 24, fontFamily: "system-ui, sans-serif" }}>
-    <p style={{ color: "#a12e56", fontWeight: 700, letterSpacing: ".08em" }}>LABELLAB3D · SEPAY</p>
+    <p style={{ color: "#a12e56", fontWeight: 700, letterSpacing: ".08em" }}>HYPERMOCKUP · SEPAY</p>
     <h1>{status === "success" ? (paid ? "Nạp coin thành công" : "Đang xác nhận thanh toán") : status === "cancel" ? "Bạn đã hủy thanh toán" : "Thanh toán chưa hoàn tất"}</h1>
     {order?.orderCode && <p>Mã đơn: <code>{order.orderCode}</code></p>}
     {status === "success" && checking && <p>SePay đang gửi xác nhận. Coin chỉ được cộng sau khi server nhận webhook hợp lệ.</p>}

@@ -27,12 +27,12 @@ type SecurityPayload = {
 };
 
 const defaults = {
-  name: "Labellab",
-  domain: "www.labellab3d.workers.dev",
+  name: "HyperMockup",
+  domain: "hypermockup.com",
   timezone: "Asia/Ho_Chi_Minh",
   locale: "vi",
   contact: "labellab3d@gmail.com",
-  maintenance: false,
+  maintenance: true,
   resolutions: [1024, 2048, 4096, 8129],
   tileThreshold: 4096,
   freeDownloads: 1,
@@ -70,7 +70,7 @@ function downloadCSV(entries: AuditEntry[]) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = "labellab-nhat-ky.csv";
+  anchor.download = "hypermockup-nhat-ky.csv";
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -340,7 +340,7 @@ export default function OperationsPanel({ section }: { section: "activity" | "se
                       <option value="en">English</option>
                     </select>
                   </label>
-                  {check("maintenance", "Chế độ bảo trì")}
+                  {check("maintenance", "Chế độ Coming Soon / Bảo trì (ẩn sản phẩm với khách truy cập)")}
                 </>
               )}
               {settingsTab === "render" && (

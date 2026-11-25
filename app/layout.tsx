@@ -28,15 +28,24 @@ const accentFont = Luckiest_Guy({
 });
 
 export const metadata: Metadata = {
-  title: "Labellab — Bring your packaging to life",
+  metadataBase: new URL("https://hypermockup.com"),
+  title: "HyperMockup",
   description:
-    "Create realistic 3D packaging mockups. Explore materials, liquids and lighting, and bring your designs to life.",
+    "HyperMockup — Create realistic 3D packaging and product mockups with real-time materials, lighting, and high-resolution renders.",
+  alternates: {
+    canonical: "/",
+  },
   icons: {
-    icon: "/branding/LLIcon.svg",
-    apple: "/branding/LLIcon.svg",
+    icon: "/branding/hypermockup-icon.svg",
+    apple: "/branding/hypermockup-icon.svg",
   },
   openGraph: {
-    images: [{ url: "/branding/LLIcon.svg", width: 125, height: 125, alt: "Labellab 3D" }],
+    title: "HyperMockup",
+    description:
+      "Create realistic 3D packaging and product mockups in your browser.",
+    url: "https://hypermockup.com",
+    siteName: "HyperMockup",
+    type: "website",
   },
 };
 

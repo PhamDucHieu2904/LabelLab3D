@@ -1,38 +1,86 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import styles from "../legal.module.css";
 
 const pages = {
   terms: {
-    title: "Điều khoản sử dụng credit",
-    intro: "Trang này mô tả nguyên tắc dự kiến cho credit nội bộ của LabelLab3D. Nội dung sẽ được rà soát và cập nhật trước khi có thanh toán thật.",
+    title: "Terms of Service · Điều khoản sử dụng",
+    intro:
+      "These Terms govern your access to HyperMockup (hypermockup.com), our 3D packaging and product mockup studio, and internal rendering credits (Coins).",
     sections: [
-      ["Credit nội bộ", "Coin chỉ là credit dùng trong LabelLab3D để sử dụng các tính năng được công bố. Coin không phải tiền điện tử, không phải tài sản đầu tư, không được quy đổi tiền mặt, chuyển nhượng hoặc mua bán giữa người dùng."],
-      ["Giá và cung cấp dịch vụ", "Giá, loại tiền và số coin được hiển thị trước khi tạo đơn. Trong bản xem trước hiện tại chưa có giao dịch và chưa có coin nào được cộng."],
-      ["Sử dụng hợp lệ", "Không sử dụng credit để thực hiện hành vi gian lận, rửa tiền, né tránh giới hạn dịch vụ hoặc vi phạm pháp luật. Chúng tôi có thể tạm khóa giao dịch bất thường để kiểm tra."],
+      [
+        "1. Service & Internal Credits (Coins)",
+        "HyperMockup provides browser-based 3D mockup rendering and packaging studio tools. Coins are prepaid internal studio credits used exclusively to unlock exports and platform features on hypermockup.com. Coins are not legal tender, cryptocurrency, or an investment asset, have no cash value, and cannot be redeemed for cash, resold, or transferred between accounts.",
+      ],
+      [
+        "2. Pricing, Billing & Delivery",
+        "Coin pack prices, currencies (VND or USD), and credit quantities are clearly displayed before purchase. Coins are credited automatically to your account wallet only after server-verified payment confirmation via signed webhooks from our payment providers (SePay VietQR for Vietnam domestic transfers, or Polar.sh as Merchant of Record for international USD transactions).",
+      ],
+      [
+        "3. Acceptable Use & Intellectual Property",
+        "You retain full ownership of artwork and designs you upload to HyperMockup. You agree not to abuse automated endpoints, attempt payment fraud, reverse-engineer or bypass credit accounting, or upload unlawful content. We may suspend accounts involved in fraudulent or abusive activity.",
+      ],
+      [
+        "4. Contact",
+        "Questions regarding these Terms can be sent to labellab3d@gmail.com with your account email and order reference.",
+      ],
     ],
   },
   privacy: {
-    title: "Chính sách bảo mật",
-    intro: "Bản xem trước này chưa kết nối payment provider. Khi bật thanh toán, chính sách sẽ được hoàn thiện theo dữ liệu thực tế và nhà cung cấp được chọn.",
+    title: "Privacy Policy · Chính sách bảo mật",
+    intro:
+      "This Privacy Policy explains how HyperMockup (hypermockup.com) collects, uses, and protects your information when you sign in, render 3D mockups, or purchase Coin packs.",
     sections: [
-      ["Dữ liệu tối thiểu", "Hệ thống chỉ nên xử lý dữ liệu cần cho tài khoản, đơn hàng, hỗ trợ và đối soát. Không lưu số thẻ hoặc CVV trên LabelLab3D."],
-      ["Nhà cung cấp thanh toán", "Thông tin cần thiết có thể được truyền tới payment provider để tạo và xác nhận giao dịch. Thông tin chi tiết, thời hạn lưu trữ và quyền của người dùng sẽ được công bố trước production."],
-      ["Liên hệ và yêu cầu dữ liệu", "Người dùng có thể yêu cầu kiểm tra, chỉnh sửa hoặc xóa dữ liệu theo quy trình được công bố khi tính năng tài khoản và thanh toán hoàn thiện."],
+      [
+        "1. Data We Collect",
+        "We collect only the minimum data needed to operate your account and orders: your name, email address, authentication metadata (Google OpenID Connect subject and profile image if using Google Sign-In, or salted password hash for email accounts), wallet ledger history, and payment order references. HyperMockup never stores raw credit card numbers or CVV codes.",
+      ],
+      [
+        "2. Payment Processors & Email Delivery",
+        "Domestic VND VietQR payments are verified through SePay; international USD card, Apple Pay, and Google Pay purchases are processed by Polar.sh as Merchant of Record (including applicable VAT/sales tax compliance). One-time verification codes (OTP) for registration and password reset are delivered via our transactional email provider.",
+      ],
+      [
+        "3. Artwork Privacy & Data Storage",
+        "Uploaded label textures are processed in your browser WebGL studio for 3D rendering. Account, wallet, and order records are stored securely on Cloudflare D1 with HttpOnly, Secure, SameSite session cookies.",
+      ],
+      [
+        "4. Your Rights & Contact",
+        "You may request access, correction, or deletion of your account data at any time by emailing labellab3d@gmail.com from your registered email address.",
+      ],
     ],
   },
   refund: {
-    title: "Chính sách thanh toán và hoàn tiền",
-    intro: "Chưa có thanh toán thật trong bản hiện tại. Chính sách dưới đây là khung dự kiến, không tạo quyền yêu cầu hoàn tiền cho một giao dịch chưa phát sinh.",
+    title: "Payment & Refund Policy · Chính sách thanh toán và hoàn tiền",
+    intro:
+      "This policy covers Coin pack purchases made on HyperMockup (hypermockup.com) via Vietnam VietQR (SePay) and International USD checkout (Polar.sh).",
     sections: [
-      ["Thanh toán", "QR demo và mã đơn trong panel chỉ phục vụ xem giao diện. Không chuyển tiền theo QR demo và không gửi ảnh biên lai để yêu cầu cộng credit."],
-      ["Khi nào xử lý hoàn tiền", "Khi production được bật, các trường hợp thanh toán thất bại, thu trùng hoặc giao dịch được provider xác nhận hoàn sẽ được xử lý theo trạng thái order và chứng từ đối soát."],
-      ["Hỗ trợ tranh chấp", "Người dùng cần cung cấp mã đơn và thông tin liên hệ phù hợp. Credit đã sử dụng có thể cần kiểm tra thủ công theo điều khoản công bố trước giao dịch."],
+      [
+        "1. Verified Order Processing",
+        "All orders are confirmed automatically by signed server-to-server webhooks. For Vietnam VietQR transfers, please keep the exact amount and transfer description so SePay credits your account automatically. For international USD payments, Polar.sh acts as Merchant of Record and handles payment processing, receipts, and sales tax/VAT.",
+      ],
+      [
+        "2. Eligible Refund Cases",
+        "We issue refunds for verified duplicate charges, technical failures where payment was captured but Coins were not credited, or unused Coin packs requested within 7 days of purchase where no Coins from that pack have been spent. Once Coins have been consumed for 3D exports or studio services, used credits are non-refundable except where required by applicable law.",
+      ],
+      [
+        "3. How to Request Support or a Refund",
+        "Email labellab3d@gmail.com with your registered account email, Order ID (e.g., LL...), payment date, and payment provider (SePay or Polar). Verified refunds are processed back to the original payment method, and the corresponding unspent Coins are deducted from your wallet ledger.",
+      ],
     ],
   },
 } as const;
 
 export function generateStaticParams() {
   return Object.keys(pages).map((slug) => ({ slug }));
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const page = pages[slug as keyof typeof pages] ?? pages.terms;
+  return {
+    title: `${page.title} | HyperMockup`,
+    description: page.intro,
+  };
 }
 
 export default async function LegalPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -42,8 +90,8 @@ export default async function LegalPage({ params }: { params: Promise<{ slug: st
   return (
     <main className={styles.page}>
       <article className={styles.card}>
-        <Link className={styles.back} href="/">← Quay lại LabelLab3D</Link>
-        <p className={styles.eyebrow}>LABEL LAB · BẢN XEM TRƯỚC</p>
+        <Link className={styles.back} href="/">← Back to HyperMockup</Link>
+        <p className={styles.eyebrow}>HYPERMOCKUP · HYPERMOCKUP.COM</p>
         <h1>{page.title}</h1>
         <p className={styles.intro}>{page.intro}</p>
         {page.sections.map(([heading, body]) => (
@@ -52,7 +100,7 @@ export default async function LegalPage({ params }: { params: Promise<{ slug: st
             <p>{body}</p>
           </section>
         ))}
-        <p className={styles.note}>Khi thanh toán thật được bật, nội dung pháp lý sẽ được cập nhật theo chủ thể bán, provider, thuế và quy định áp dụng.</p>
+        <p className={styles.note}>Effective November 2026 · Support: labellab3d@gmail.com · Website: https://hypermockup.com</p>
       </article>
     </main>
   );

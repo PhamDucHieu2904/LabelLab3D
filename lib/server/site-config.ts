@@ -54,12 +54,12 @@ export type LiveSiteSettings = {
 export const DEFAULT_CHECKIN_SCHEDULE = [20, 30, 45, 45, 60, 70, 100];
 
 export const DEFAULT_SITE_SETTINGS: LiveSiteSettings = {
-  name: "Labellab",
-  domain: "www.labellab3d.workers.dev",
+  name: "HyperMockup",
+  domain: "hypermockup.com",
   timezone: "Asia/Ho_Chi_Minh",
   locale: "vi",
   contact: "labellab3d@gmail.com",
-  maintenance: false,
+  maintenance: true,
   resolutions: [1024, 2048, 4096, 8129],
   tileThreshold: 4096,
   freeDownloads: 1,

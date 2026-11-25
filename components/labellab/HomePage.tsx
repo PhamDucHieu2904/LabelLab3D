@@ -170,7 +170,7 @@ export default function HomePage() {
         <SiteHeader activePage="home" />
 
         <div className="home-dashboard">
-          <h1 className="sr-only">Labellab 3D packaging mockup dashboard</h1>
+          <h1 className="sr-only">HyperMockup 3D packaging mockup dashboard</h1>
           <section className="home-card home-showcase" aria-label="Featured 3D mockup">
             <div className="home-showcase-visual">
               <div className="home-showcase-topline">

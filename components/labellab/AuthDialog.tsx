@@ -238,7 +238,7 @@ function AuthDialog({ initialMode, initialGoogleError, onDismiss }: {
       }}
     >
       <div className={styles.brandRow}>
-        <Image src="/branding/LLLogo.svg" alt="Labellab" width={156} height={33} />
+        <Image src="/branding/LLLogo.svg" alt="HyperMockup" width={156} height={33} />
         <button
           type="button"
           className={styles.close}
@@ -626,7 +626,7 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
           </button>
         ) : (
           <>
-            <span>{mode === "login" ? "New to Labellab?" : "Already have an account?"}</span>
+            <span>{mode === "login" ? "New to HyperMockup?" : "Already have an account?"}</span>
             <button type="button" className={styles.textButton} onClick={() => onSwitchMode(mode === "login" ? "register" : "login", values.email)}>
               {mode === "login" ? "Create an account" : "Login"}
             </button>

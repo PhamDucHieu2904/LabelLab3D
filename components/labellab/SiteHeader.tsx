@@ -44,8 +44,8 @@ export default function SiteHeader({ activePage, disabled = false, onOpenProject
   }, [activePage]);
   return (
     <header className={styles.header} inert={disabled}>
-      <Link className={styles.wordmark} href="/" aria-label="Labellab home">
-        <Image src="/branding/LLLogo.svg" alt="Labellab 3D" width={208} height={44} priority />
+      <Link className={styles.wordmark} href="/" aria-label="HyperMockup home">
+        <Image src="/branding/LLLogo.svg" alt="HyperMockup" width={208} height={44} priority />
       </Link>
       <nav className={styles.nav} aria-label="Main navigation">
         <Link href="/" aria-current={activePage === "home" ? "page" : undefined}>Home</Link>

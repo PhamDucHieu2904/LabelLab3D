@@ -17,7 +17,7 @@ export async function upsertGoogleUser(env: AppEnv, identity: GoogleIdentity): P
   const db = requireDb(env);
   const sub = identity.sub.trim();
   const email = identity.email.trim().toLowerCase();
-  const displayName = (identity.name?.trim() || email.split("@")[0] || "LabelLab user").slice(0, 120);
+  const displayName = (identity.name?.trim() || email.split("@")[0] || "HyperMockup user").slice(0, 120);
   const avatarUrl = identity.avatarUrl?.trim() || null;
   if (!sub || !email) throw new Error("INVALID_INPUT");
   const now = nowIso();

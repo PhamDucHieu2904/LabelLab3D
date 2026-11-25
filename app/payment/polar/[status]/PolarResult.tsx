@@ -35,7 +35,7 @@ export default function PolarResult({ status, orderId }: { status: "success" | "
   const paid = order?.status === "paid";
   return (
     <main style={{ maxWidth: 560, margin: "80px auto", padding: 28, borderRadius: 24, border: "1px solid #f0d7e1", background: "#fff9fb", color: "#3d1e2e", fontFamily: "system-ui, sans-serif" }}>
-      <p style={{ margin: "0 0 8px", color: "#a12e56", fontSize: 12, fontWeight: 700, letterSpacing: ".08em" }}>LABELLAB3D · POLAR INTERNATIONAL</p>
+      <p style={{ margin: "0 0 8px", color: "#a12e56", fontSize: 12, fontWeight: 700, letterSpacing: ".08em" }}>HYPERMOCKUP · POLAR INTERNATIONAL</p>
       <h1 style={{ margin: "0 0 12px", fontSize: 28 }}>
         {status === "success" ? (paid ? "Payment successful!" : "Confirming your payment…") : "Checkout cancelled"}
       </h1>

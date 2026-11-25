@@ -50,7 +50,7 @@ export default function AdminWorkspace({ section }: { section: AdminSection }) {
     router.push("/admin/login");
   }
 
-  const initials = (adminUser?.name || "LL").split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase() || "LL";
+  const initials = (adminUser?.name || "HM").split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase() || "HM";
 
   return (
     <div className={s.workspace} lang="vi">
@@ -58,8 +58,8 @@ export default function AdminWorkspace({ section }: { section: AdminSection }) {
       {menuOpen && <button className={s.scrim} aria-label="Đóng điều hướng" onClick={() => setMenuOpen(false)} />}
       <aside className={`${s.sidebar} ${menuOpen ? s.sidebarOpen : ""}`} aria-label="Điều hướng quản trị">
         <div className={s.brand}>
-          <Link href="/admin" aria-label="Labellab Admin">
-            <img src="/branding/LLLogo.svg" width="146" height="39" alt="Labellab" />
+          <Link href="/admin" aria-label="HyperMockup Admin">
+            <img src="/branding/LLLogo.svg" width="146" height="39" alt="HyperMockup" />
           </Link>
           <button className={s.mobileOnly} aria-label="Đóng menu" onClick={() => setMenuOpen(false)}><X size={20} /></button>
         </div>

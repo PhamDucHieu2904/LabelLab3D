@@ -20,7 +20,7 @@ export default function AdminLoginPage() {
   }
   return <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#f6f4f5", padding: 24 }}>
     <form onSubmit={submit} style={{ width: "min(100%, 420px)", background: "#fff", border: "1px solid #e4dfe2", borderRadius: 20, padding: 32, boxShadow: "0 18px 50px #35132312" }}>
-      <p style={{ margin: 0, color: "#b31354", fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", fontSize: 12 }}>Labellab Admin</p>
+      <p style={{ margin: 0, color: "#b31354", fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", fontSize: 12 }}>HyperMockup Admin</p>
       <h1 style={{ margin: "10px 0 8px", fontSize: 30 }}>Đăng nhập quản trị</h1>
       <p style={{ margin: "0 0 24px", color: "#70686d" }}>Khu vực này chỉ dành cho tài khoản admin đang hoạt động.</p>
       <label style={{ display: "grid", gap: 7, marginBottom: 16 }}>Email<input required type="email" autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} style={{ padding: "12px 14px", border: "1px solid #d8d0d5", borderRadius: 10 }} /></label>

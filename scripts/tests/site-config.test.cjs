@@ -89,3 +89,17 @@ test('live coin packages and announcements sanitize admin edits safely', () => {
   assert.equal(active.length, 1);
   assert.equal(active[0].title, 'Live update');
 });
+
+test('site settings default to HyperMockup Coming Soon mode and sanitize toggles', () => {
+  const load = createLoader();
+  const siteConfig = load(path.resolve(ROOT, 'lib/server/site-config.ts'));
+
+  assert.equal(siteConfig.DEFAULT_SITE_SETTINGS.name, 'HyperMockup');
+  assert.equal(siteConfig.DEFAULT_SITE_SETTINGS.domain, 'hypermockup.com');
+  assert.equal(siteConfig.DEFAULT_SITE_SETTINGS.maintenance, true);
+
+  const launched = siteConfig.sanitizeSiteSettings({ maintenance: false, domain: 'hypermockup.com' });
+  assert.equal(launched.maintenance, false);
+  assert.equal(launched.domain, 'hypermockup.com');
+  assert.equal(launched.name, 'HyperMockup');
+});

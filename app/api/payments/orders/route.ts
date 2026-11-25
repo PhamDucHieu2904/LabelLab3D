@@ -102,7 +102,7 @@ export async function POST(request: Request) {
     const checkout = provider.createCheckout({
       amount: selected.vnd,
       orderCode: code,
-      description: `Labellab3D nap ${selected.coins} coins`,
+      description: `HyperMockup nap ${selected.coins} coins`,
       customerId: user.id,
       successUrl: `${base}/success?order=${encodeURIComponent(code)}&id=${encodeURIComponent(id)}`,
       errorUrl: `${base}/error?order=${encodeURIComponent(code)}&id=${encodeURIComponent(id)}`,

@@ -16,6 +16,12 @@
       "migrations_dir": "db/migrations"
     }
   ],
+  "routes": [
+    {
+      "pattern": "hypermockup.com",
+      "custom_domain": true
+    }
+  ],
   "workers_dev": true,
   "preview_urls": true
 }
