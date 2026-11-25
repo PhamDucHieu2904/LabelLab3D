@@ -118,8 +118,23 @@ export function buildPanelSolidGeometry(options: PanelSolidBuildOptions): THREE.
   }
   const insideCount = indices.length - insideStart;
 
-  // --- Group 2: Cut Edges (outer contour + hole walls) ---
+  // --- Group 2: Micro-Beveled Cut Edges (outer contour + hole walls) ---
+  // Each cut edge uses a 3-band beveled profile:
+  //   Band 0: Outside paper liner bevel lip  (v: 0.00 -> 0.16, color.g = 1, color.b = 0)
+  //   Band 1: Corrugated / paperboard core   (v: 0.16 -> 0.84, color.g = 0, color.b = 0.5)
+  //   Band 2: Inside paper liner bevel lip   (v: 0.84 -> 1.00, color.g = 1, color.b = 1)
+  // Rolled corner normals catch crisp studio rim highlights along every die-cut edge
+  // while keeping zero self-intersection on arbitrary concave polygons and holes.
+  // Keep Band 0/1/2 flush on exact CAD contour vertices (`bevelOutM = 0`) so every
+  // 90° corner and concave notch is 100% watertight with zero background-colored slit,
+  // while the 3-band rolled normals still catch crisp studio rim highlights along cut edges.
   const edgeStart = indices.length;
+  const bevelY = Math.min(halfT * 0.28, 0.24);
+  const y0 = -halfT;
+  const y1 = -halfT + bevelY;
+  const y2 = halfT - bevelY;
+  const y3 = halfT;
+
   const addEdgeLoop = (loop: readonly Point2D[]) => {
     let arcMm = 0;
     for (let i = 0; i < loop.length; i++) {
@@ -142,20 +157,48 @@ export function buildPanelSolidGeometry(options: PanelSolidBuildOptions): THREE.
       const uy = dy / len;
       const fluteExposure = fluteDirection === 'along-L' ? Math.abs(uy) : Math.abs(ux);
 
-      const [x1, yBot, z1] = cad2DToLocal3D(p1, originX, originY, -halfT);
-      const [x2, yTop, z2] = cad2DToLocal3D(p2, originX, originY, +halfT);
+      const [x1, yBot0, z1] = cad2DToLocal3D(p1, originX, originY, y0);
+      const [x2, yBot1, z2] = cad2DToLocal3D(p2, originX, originY, y1);
+      const yTop2 = y2 * MM_TO_METRE;
+      const yTop3 = y3 * MM_TO_METRE;
       const u1 = arcMm;
       const u2 = arcMm + len;
       arcMm += len;
 
-      const v0 = pushVertex(x1, yBot, z1, nx, 0, nz, u1, 0, fluteExposure, 1, 1);
-      const v1 = pushVertex(x2, yBot, z2, nx, 0, nz, u2, 0, fluteExposure, 1, 1);
-      const v2 = pushVertex(x2, yTop, z2, nx, 0, nz, u2, 1, fluteExposure, 1, 1);
-      const v3 = pushVertex(x1, yTop, z1, nx, 0, nz, u1, 1, fluteExposure, 1, 1);
+      // Outer bevel lip normal (tilted toward -Y outside face) & shoulder normal.
+      const nOutLipX = nx * 0.58;
+      const nOutLipY = -0.8146;
+      const nOutLipZ = nz * 0.58;
+      const nOutShX = nx * 0.968;
+      const nOutShY = -0.251;
+      const nOutShZ = nz * 0.968;
+      const nInShX = nx * 0.968;
+      const nInShY = 0.251;
+      const nInShZ = nz * 0.968;
+      const nInLipX = nx * 0.58;
+      const nInLipY = 0.8146;
+      const nInLipZ = nz * 0.58;
 
-      // Verify winding: (v1 - v0) = (dx, 0, -dy), (v3 - v0) = (0, +t, 0).
-      // (dx, 0, -dy) x (0, t, 0) = (t*dy, 0, t*dx) => matches (nx, 0, nz)!
-      indices.push(v0, v1, v2, v0, v2, v3);
+      // Band 0: Outside paper liner bevel (flush with outside face -> outer shoulder)
+      const a0 = pushVertex(x1, yBot0, z1, nOutLipX, nOutLipY, nOutLipZ, u1, 0.0, fluteExposure, 1, 0);
+      const a1 = pushVertex(x2, yBot0, z2, nOutLipX, nOutLipY, nOutLipZ, u2, 0.0, fluteExposure, 1, 0);
+      const a2 = pushVertex(x2, yBot1, z2, nOutShX, nOutShY, nOutShZ, u2, 0.16, fluteExposure, 0.65, 0);
+      const a3 = pushVertex(x1, yBot1, z1, nOutShX, nOutShY, nOutShZ, u1, 0.16, fluteExposure, 0.65, 0);
+      indices.push(a0, a1, a2, a0, a2, a3);
+
+      // Band 1: Recessed corrugated flute / paperboard core wall
+      const b0 = pushVertex(x1, yBot1, z1, nx, 0, nz, u1, 0.16, fluteExposure, 0, 0.5);
+      const b1 = pushVertex(x2, yBot1, z2, nx, 0, nz, u2, 0.16, fluteExposure, 0, 0.5);
+      const b2 = pushVertex(x2, yTop2, z2, nx, 0, nz, u2, 0.84, fluteExposure, 0, 0.5);
+      const b3 = pushVertex(x1, yTop2, z1, nx, 0, nz, u1, 0.84, fluteExposure, 0, 0.5);
+      indices.push(b0, b1, b2, b0, b2, b3);
+
+      // Band 2: Inside paper liner bevel (inner shoulder -> flush with inside face)
+      const c0 = pushVertex(x1, yTop2, z1, nInShX, nInShY, nInShZ, u1, 0.84, fluteExposure, 0.65, 1);
+      const c1 = pushVertex(x2, yTop2, z2, nInShX, nInShY, nInShZ, u2, 0.84, fluteExposure, 0.65, 1);
+      const c2 = pushVertex(x2, yTop3, z2, nInLipX, nInLipY, nInLipZ, u2, 1.0, fluteExposure, 1, 1);
+      const c3 = pushVertex(x1, yTop3, z1, nInLipX, nInLipY, nInLipZ, u1, 1.0, fluteExposure, 1, 1);
+      indices.push(c0, c1, c2, c0, c2, c3);
     }
   };
 

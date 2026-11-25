@@ -5,6 +5,7 @@ import type { CSSProperties, RefObject } from "react";
 import { ArrowDownToLine, LoaderCircle, SlidersHorizontal } from "lucide-react";
 import type { ScenePreferences } from "@/lib/labellab/preferences";
 import { MOCKUP_ASPECTS } from "@/lib/mockup/camera";
+import { DEFAULT_RENDER_COIN_COST, resolveRenderCoinCost } from "@/lib/payments/packages";
 
 export interface RenderPanelProps {
   settings: ScenePreferences;
@@ -17,12 +18,27 @@ export interface RenderPanelProps {
   result?: { url: string; name: string };
   onOpenMaterials: () => void;
   materialsOpen: boolean;
+  baseRenderCost?: number;
 }
 
 const frameRatios = { square: "1 / 1", portrait: "4 / 5", landscape: "16 / 9", story: "9 / 16" };
+const RESOLUTIONS: ReadonlyArray<ScenePreferences["resolution"]> = [1024, 2048, 4096, 8129];
 
-export default function RenderPanel({ settings, onChange, canvasRef, ready, busy, progress, onRender, result, onOpenMaterials, materialsOpen }: RenderPanelProps) {
+export default function RenderPanel({
+  settings,
+  onChange,
+  canvasRef,
+  ready,
+  busy,
+  progress,
+  onRender,
+  result,
+  onOpenMaterials,
+  materialsOpen,
+  baseRenderCost = DEFAULT_RENDER_COIN_COST,
+}: RenderPanelProps) {
   const percentage = progress === null ? null : Math.round(Math.min(1, Math.max(0, progress)) * 100);
+  const renderCost = resolveRenderCoinCost(settings.resolution, baseRenderCost);
   return (
     <div className="render-sidebar">
     <aside className="render-panel" aria-label="Render image" aria-busy={busy}>
@@ -44,10 +60,11 @@ export default function RenderPanel({ settings, onChange, canvasRef, ready, busy
         </label>
         <label>Resolution
           <select value={settings.resolution} disabled={busy} onChange={(event) => onChange("resolution", Number(event.target.value) as ScenePreferences["resolution"])}>
-            <option value={1024}>1024 px</option>
-            <option value={2048}>2048 px</option>
-            <option value={4096}>4096 px</option>
-            <option value={8129}>8129 px</option>
+            {RESOLUTIONS.map((res) => (
+              <option key={res} value={res}>
+                {res} px
+              </option>
+            ))}
           </select>
         </label>
       </div>
@@ -60,8 +77,8 @@ export default function RenderPanel({ settings, onChange, canvasRef, ready, busy
           {busy && <LoaderCircle size={20} className="render-panel-spinner" aria-hidden="true" />}
           {busy ? "Rendering…" : "Render Image"}
         </span>
-        <span className="render-panel-cost" aria-label="Cost: 1 token">
-          <strong>1</strong>
+        <span className="render-panel-cost" aria-label={renderCost === 0 ? "Free render" : `Cost: ${renderCost} coins`}>
+          <strong>{renderCost}</strong>
           <Image src="/branding/LLCoin.svg" alt="" width={17} height={17} aria-hidden="true" />
         </span>
       </button>
@@ -84,4 +101,3 @@ export default function RenderPanel({ settings, onChange, canvasRef, ready, busy
     </div>
   );
 }
-

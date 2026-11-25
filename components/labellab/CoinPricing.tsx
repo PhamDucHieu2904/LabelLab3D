@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Check, CheckCircle2, Copy, CreditCard, Download, ExternalLink, Globe, Landmark, RefreshCw, ShieldCheck, Smartphone } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { COIN_PACKAGES, type CoinPackage } from "@/lib/payments/packages";
+import { COIN_PACKAGES, getCoinPackagesByRegion, type CoinPackage, type CoinRegion } from "@/lib/payments/packages";
 import { useAccount, useAuthDialog } from "./AuthDialog";
 import styles from "./CoinPricing.module.css";
 
@@ -14,7 +14,7 @@ const regions = [
   { id: "international", label: "International", currency: "USD", locale: "en-US" },
 ] as const;
 
-type RegionId = typeof regions[number]["id"];
+type RegionId = CoinRegion;
 type Checkout = { action: string; method: "POST"; fields: Record<string, string> };
 type DirectQr = {
   imageUrl: string;
@@ -54,7 +54,7 @@ export default function CoinPricing() {
   const [packages, setPackages] = useState<readonly CoinPackage[]>(COIN_PACKAGES);
   const [intlReady, setIntlReady] = useState(false);
   const [intlSandbox, setIntlSandbox] = useState(false);
-  const [selectedCoins, setSelectedCoins] = useState<number>(20);
+  const [selectedPackId, setSelectedPackId] = useState<string>("vn-pro");
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [paymentState, setPaymentState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [paymentError, setPaymentError] = useState("");
@@ -149,7 +149,6 @@ export default function CoinPricing() {
         if (!active || !payload) return;
         if (Array.isArray(payload.coinPackages) && payload.coinPackages.length > 0) {
           setPackages(payload.coinPackages);
-          setSelectedCoins((curr) => payload.coinPackages!.some((p) => p.coins === curr) ? curr : payload.coinPackages![0].coins);
         }
         if (payload.payments) {
           setIntlReady(Boolean(payload.payments.internationalEnabled));
@@ -160,10 +159,17 @@ export default function CoinPricing() {
     return () => { active = false; };
   }, []);
 
-  const selectedPackage = packages.find((item) => item.coins === selectedCoins) ?? packages[0] ?? COIN_PACKAGES[0];
+  const regionalPackages = getCoinPackagesByRegion(packages, regionId);
+  const fallbackRegionPackages = getCoinPackagesByRegion(COIN_PACKAGES, regionId);
+  const visiblePackages = regionalPackages.length > 0 ? regionalPackages : fallbackRegionPackages;
+  const selectedPackage =
+    visiblePackages.find((item) => item.id === selectedPackId)
+    ?? visiblePackages.find((item) => item.badge === "popular")
+    ?? visiblePackages[0]
+    ?? fallbackRegionPackages[0];
   const selectedPrice = prices.format(regionId === "vietnam" ? selectedPackage.vnd : selectedPackage.usd);
 
-  const createPaymentOrder = useCallback(async (coinsToBuy: number, targetRegion: RegionId) => {
+  const createPaymentOrder = useCallback(async (pkg: CoinPackage, targetRegion: RegionId) => {
     if (!user) {
       setCheckoutOpen(false);
       openAuth("login");
@@ -184,7 +190,7 @@ export default function CoinPricing() {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coins: coinsToBuy, region: targetRegion }),
+        body: JSON.stringify({ packageId: pkg.id, coins: pkg.coins, region: targetRegion }),
       });
       const payload = await response.json().catch(() => ({})) as {
         mode?: "direct_qr" | "gateway" | "polar_checkout";
@@ -372,7 +378,7 @@ export default function CoinPricing() {
           <div className={styles.checkoutHeader}>
             <div>
               <span className={styles.eyebrow}>{isPolar ? "International Top-Up · USD" : "Nạp coin nội địa"}</span>
-              <h3 id="coin-checkout-title">{isPolar ? `Top up ${selectedPackage.coins} coins` : `Nạp ${selectedPackage.coins} coins`}</h3>
+              <h3 id="coin-checkout-title">{isPolar ? `Top up ${selectedPackage.coins.toLocaleString("en-US")} coins` : `Nạp ${selectedPackage.coins.toLocaleString("en-US")} coins`}</h3>
               <p id="coin-checkout-description">
                 {isPolar
                   ? `Pay securely with Visa, Mastercard, Apple Pay, or Google Pay via Polar${isSandbox ? " (Sandbox)" : ""}`
@@ -488,7 +494,13 @@ export default function CoinPricing() {
             </div>
 
             <dl className={styles.summary}>
-              <div><dt>{isPolar ? "Coin pack" : "Gói coin"}</dt><dd>{selectedPackage.coins} coins</dd></div>
+              <div>
+                <dt>{isPolar ? "Coin pack" : "Gói coin"}</dt>
+                <dd>
+                  {selectedPackage.coins.toLocaleString("en-US")} coins
+                  {selectedPackage.bonusPct ? ` (+${selectedPackage.bonusPct}%)` : ""}
+                </dd>
+              </div>
               <div><dt>{isPolar ? "Price" : "Số tiền"}</dt><dd>{selectedPrice}</dd></div>
               {isPolar ? (
                 <>
@@ -556,7 +568,7 @@ export default function CoinPricing() {
                 onClick={() => setCheckoutOpen(false)}
               >
                 <CheckCircle2 size={18} aria-hidden="true" />
-                <span>{isPolar ? `Added ${selectedPackage.coins} coins · Close` : `Đã cộng ${selectedPackage.coins} coins · Đóng`}</span>
+                <span>{isPolar ? `Added ${selectedPackage.coins.toLocaleString("en-US")} coins · Close` : `Đã cộng ${selectedPackage.coins.toLocaleString("en-US")} coins · Đóng`}</span>
               </button>
             ) : isPolar && polarCheckout && paymentState === "ready" && !isExpired ? (
               <>
@@ -612,7 +624,7 @@ export default function CoinPricing() {
               <button
                 type="button"
                 className={styles.payButton}
-                onClick={checkout && paymentState === "ready" && !isExpired ? submitCheckout : () => void createPaymentOrder(selectedPackage.coins, regionId)}
+                onClick={checkout && paymentState === "ready" && !isExpired ? submitCheckout : () => void createPaymentOrder(selectedPackage, regionId)}
                 disabled={paymentState === "loading"}
               >
                 {paymentState === "loading"
@@ -666,7 +678,7 @@ export default function CoinPricing() {
       <div className={styles.headingRow}>
         <div className={styles.titleBlock}>
           <h2 id="coin-pricing-title">Coin packages</h2>
-          <p>Choose your region to view local prices.</p>
+          <p>10 coins = 1 standard 2K render · Choose your region.</p>
         </div>
         <Image className={styles.coinArt} src="/branding/LLCoin.svg" alt="" width={56} height={56} />
       </div>
@@ -677,7 +689,12 @@ export default function CoinPricing() {
             key={item.id}
             type="button"
             aria-pressed={regionId === item.id}
-            onClick={() => setRegionId(item.id)}
+            onClick={() => {
+              setRegionId(item.id);
+              const nextPacks = getCoinPackagesByRegion(packages, item.id);
+              const preferred = nextPacks.find((p) => p.badge === "popular") ?? nextPacks[0];
+              if (preferred) setSelectedPackId(preferred.id);
+            }}
           >
             <span className={styles.marketLabel}>{item.label}</span>
             <small className={styles.marketCurrency}>
@@ -688,20 +705,35 @@ export default function CoinPricing() {
       </div>
 
       <div className={styles.packs} role="group" aria-label={`${region.label} coin packages`}>
-        {packages.map((item) => {
+        {visiblePackages.map((item) => {
           const price = prices.format(regionId === "vietnam" ? item.vnd : item.usd);
+          const isSelected = selectedPackage.id === item.id;
+          const badgeLabel = item.badge === "popular"
+            ? `Popular · +${item.bonusPct ?? 10}%`
+            : item.badge === "best"
+              ? `Best · +${item.bonusPct ?? 20}%`
+              : item.bonusPct
+                ? `+${item.bonusPct}% bonus`
+                : item.tier ?? "Starter";
+          const badgeTone = item.badge === "popular"
+            ? styles.badgePopular
+            : item.badge === "best"
+              ? styles.badgeBest
+              : item.bonusPct
+                ? styles.badgeBonus
+                : styles.badgeStarter;
           return (
             <button
-              key={item.coins}
-              className={styles.pack}
+              key={item.id}
+              className={`${styles.pack} ${item.badge === "popular" ? styles.packPopular : ""}`}
               type="button"
-              aria-pressed={selectedCoins === item.coins}
-              aria-label={`${item.coins} coins, ${price}`}
+              aria-pressed={isSelected}
+              aria-label={`${item.coins.toLocaleString("en-US")} coins${item.bonusPct ? `, +${item.bonusPct}% bonus` : ""}, ${price}`}
               onClick={() => {
-                setSelectedCoins(item.coins);
+                setSelectedPackId(item.id);
                 setCheckoutOpen(true);
                 if (user) {
-                  void createPaymentOrder(item.coins, regionId);
+                  void createPaymentOrder(item, regionId);
                 } else {
                   orderRequestSeq.current += 1;
                   setPaymentState("idle");
@@ -714,10 +746,10 @@ export default function CoinPricing() {
                 }
               }}
             >
+              <span className={`${styles.packBadge} ${badgeTone}`}>{badgeLabel}</span>
               <span className={styles.coinRow}>
-                <Image src="/branding/LLCoin.svg" alt="" width={20} height={20} />
-                <strong>{item.coins}</strong>
-                <span>coins</span>
+                <Image src="/branding/LLCoin.svg" alt="" width={18} height={18} />
+                <strong>{item.coins.toLocaleString("en-US")}</strong>
               </span>
               <strong className={styles.price}>{price}</strong>
             </button>

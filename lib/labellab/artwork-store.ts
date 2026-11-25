@@ -10,9 +10,27 @@ export type StoredArtwork = {
   height: number;
   transform: ArtworkTransform;
   dieline: ArtworkDieline;
+  /** Optional isolation namespace so bottle labels and each box face keep independent histories. */
+  scope?: string;
   createdAt: number;
   updatedAt: number;
 };
+
+export function bottleArtworkScope(modelId: string): string {
+  return `bottle:${modelId}`;
+}
+
+export function packagingFaceArtworkScope(
+  templateId: string,
+  surface: 'outside' | 'inside',
+  panelId: string,
+): string {
+  return `packaging:${templateId}:${surface}:${panelId}`;
+}
+
+export function packagingTemplateScopePrefix(templateId: string): string {
+  return `packaging:${templateId}:`;
+}
 
 type SelectionRecord = { modelId: string; artworkId: string };
 
@@ -51,6 +69,7 @@ function validRecord(value: unknown): value is StoredArtwork {
     && isObject(value.dieline) && typeof value.dieline.width === 'number' && Number.isFinite(value.dieline.width) && value.dieline.width > 0
     && typeof value.dieline.height === 'number' && Number.isFinite(value.dieline.height) && value.dieline.height > 0
     && (value.dieline.unit === undefined || value.dieline.unit === 'mm')
+    && (value.scope === undefined || (typeof value.scope === 'string' && value.scope.length > 0 && value.scope.length <= 160))
     && typeof value.createdAt === 'number' && typeof value.updatedAt === 'number' && Number.isFinite(value.createdAt) && Number.isFinite(value.updatedAt);
 }
 
@@ -96,7 +115,10 @@ function openDatabase(): Promise<IDBDatabase> {
   return opening;
 }
 
-export async function listArtworks(): Promise<StoredArtwork[]> {
+export async function listArtworks(scope?: string): Promise<StoredArtwork[]> {
+  if (scope !== undefined && (typeof scope !== 'string' || !scope)) {
+    throw new Error('Invalid artwork scope.');
+  }
   const db = await openDatabase();
   return new Promise<StoredArtwork[]>((resolve, reject) => {
     try {
@@ -105,10 +127,82 @@ export async function listArtworks(): Promise<StoredArtwork[]> {
       let records: unknown[] = [];
       request.onsuccess = () => { records = Array.isArray(request.result) ? request.result : []; };
       request.onerror = () => reject(storageError(request.error, 'read'));
-      tx.oncomplete = () => resolve(records.filter(validRecord).sort((a, b) => b.updatedAt - a.updatedAt));
+      tx.oncomplete = () => {
+        const valid = records.filter(validRecord);
+        const filtered = scope === undefined
+          ? valid
+          : valid.filter(record => record.scope === scope);
+        resolve(filtered.sort((a, b) => b.updatedAt - a.updatedAt));
+      };
       tx.onerror = () => reject(storageError(tx.error, 'read'));
       tx.onabort = () => reject(storageError(tx.error, 'read'));
     } catch (error) { reject(storageError(error, 'read')); }
+  });
+}
+
+export async function getArtworkById(id: string): Promise<StoredArtwork | undefined> {
+  if (typeof id !== 'string' || !id) return undefined;
+  const db = await openDatabase();
+  return new Promise<StoredArtwork | undefined>((resolve, reject) => {
+    try {
+      const tx = db.transaction([ARTWORKS_STORE], 'readonly');
+      const req = tx.objectStore(ARTWORKS_STORE).get(id);
+      let result: StoredArtwork | undefined;
+      req.onsuccess = () => {
+        result = validRecord(req.result) ? req.result : undefined;
+      };
+      req.onerror = () => reject(storageError(req.error, 'read'));
+      tx.oncomplete = () => resolve(result);
+      tx.onerror = () => reject(storageError(tx.error, 'read'));
+      tx.onabort = () => reject(storageError(tx.error, 'read'));
+    } catch (error) { reject(storageError(error, 'read')); }
+  });
+}
+
+export async function getArtworkSelectionsByPrefix(prefix: string): Promise<Record<string, string>> {
+  if (typeof prefix !== 'string' || !prefix) return {};
+  const db = await openDatabase();
+  return new Promise<Record<string, string>>((resolve, reject) => {
+    try {
+      const tx = db.transaction([SELECTIONS_STORE], 'readonly');
+      const req = tx.objectStore(SELECTIONS_STORE).getAll();
+      let rows: unknown[] = [];
+      req.onsuccess = () => { rows = Array.isArray(req.result) ? req.result : []; };
+      req.onerror = () => reject(storageError(req.error, 'read'));
+      tx.oncomplete = () => {
+        const result: Record<string, string> = {};
+        for (const row of rows) {
+          if (validSelection(row) && row.modelId.startsWith(prefix)) {
+            result[row.modelId] = row.artworkId;
+          }
+        }
+        resolve(result);
+      };
+      tx.onerror = () => reject(storageError(tx.error, 'read'));
+      tx.onabort = () => reject(storageError(tx.error, 'read'));
+    } catch (error) { reject(storageError(error, 'read')); }
+  });
+}
+
+export async function clearArtworkSelectionsByPrefix(prefix: string): Promise<void> {
+  if (typeof prefix !== 'string' || !prefix) return;
+  const db = await openDatabase();
+  await new Promise<void>((resolve, reject) => {
+    try {
+      const tx = db.transaction([SELECTIONS_STORE], 'readwrite');
+      const cursorReq = tx.objectStore(SELECTIONS_STORE).openCursor();
+      cursorReq.onsuccess = () => {
+        const cursor = cursorReq.result;
+        if (!cursor) return;
+        if (validSelection(cursor.value) && cursor.value.modelId.startsWith(prefix)) {
+          cursor.delete();
+        }
+        cursor.continue();
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(storageError(tx.error, 'delete'));
+      tx.onabort = () => reject(storageError(tx.error, 'delete'));
+    } catch (error) { reject(storageError(error, 'delete')); }
   });
 }
 export async function saveArtwork(record: StoredArtwork): Promise<void> {

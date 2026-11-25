@@ -1,5 +1,12 @@
 import { createManagementData, migrateManagementData, persistentManagementData, type ManagementRecord } from "@/lib/admin/management-data";
-import { COIN_PACKAGES, type CoinPackage } from "@/lib/payments/packages";
+import {
+  COIN_PACKAGES,
+  DEFAULT_DIELINE_COIN_COST,
+  DEFAULT_RENDER_COIN_COST,
+  type CoinPackage,
+  type CoinPackageBadge,
+  type CoinRegion,
+} from "@/lib/payments/packages";
 import { LABELLAB_UPDATES } from "@/lib/labellab/updates";
 import { nowIso, requireDb, type AppEnv } from "./db";
 
@@ -37,6 +44,7 @@ export type LiveSiteSettings = {
   tileThreshold: number;
   freeDownloads: number;
   renderCost: number;
+  dielineCost: number;
   emailVerified: boolean;
   sessionHours: number;
   loginLimit: number;
@@ -51,7 +59,7 @@ export type LiveSiteSettings = {
   analyticsPublicId: string;
 };
 
-export const DEFAULT_CHECKIN_SCHEDULE = [20, 30, 45, 45, 60, 70, 100];
+export const DEFAULT_CHECKIN_SCHEDULE = [10, 10, 10, 20, 10, 10, 30];
 
 export const DEFAULT_SITE_SETTINGS: LiveSiteSettings = {
   name: "HyperMockup",
@@ -63,7 +71,8 @@ export const DEFAULT_SITE_SETTINGS: LiveSiteSettings = {
   resolutions: [1024, 2048, 4096, 8129],
   tileThreshold: 4096,
   freeDownloads: 1,
-  renderCost: 1,
+  renderCost: DEFAULT_RENDER_COIN_COST,
+  dielineCost: DEFAULT_DIELINE_COIN_COST,
   emailVerified: true,
   sessionHours: 720,
   loginLimit: 5,
@@ -125,7 +134,7 @@ export function createInitialProductionManagement(): Record<string, ManagementRe
             reward: String(DEFAULT_CHECKIN_SCHEDULE[0]),
             limit: "1",
             schedule: DEFAULT_CHECKIN_SCHEDULE.join(", "),
-            condition: "Đăng nhập; nhận thưởng mỗi ngày theo lịch 7 ngày.",
+            condition: "Điểm danh liên tiếp 7 ngày (10/10/10/20/10/10/30 xu). Bỏ lỡ 1 ngày sẽ đặt lại về Ngày 1.",
           },
         }
       : row,
@@ -231,11 +240,8 @@ export function extractLiveAnnouncements(management: Record<string, ManagementRe
 }
 
 export function defaultLiveCoinPackages(): LiveCoinPackage[] {
-  return COIN_PACKAGES.map((pkg, idx) => ({
-    id: `pack-${idx + 1}`,
-    coins: pkg.coins,
-    vnd: pkg.vnd,
-    usd: pkg.usd,
+  return COIN_PACKAGES.map((pkg) => ({
+    ...pkg,
     enabled: true,
   }));
 }
@@ -243,21 +249,49 @@ export function defaultLiveCoinPackages(): LiveCoinPackage[] {
 export function sanitizeCoinPackages(input: unknown): LiveCoinPackage[] {
   if (!Array.isArray(input) || input.length === 0) return defaultLiveCoinPackages();
   const cleaned: LiveCoinPackage[] = [];
-  const seenCoins = new Set<number>();
+  const seenKeys = new Set<string>();
   for (let i = 0; i < input.length; i += 1) {
     const item = input[i] as Record<string, unknown>;
+    const rawRegion = item?.region;
+    const region: CoinRegion | undefined =
+      rawRegion === "vietnam" || rawRegion === "international" ? rawRegion : undefined;
     const coins = Number(item?.coins);
-    const vnd = Number(item?.vnd);
-    const usd = Number(item?.usd);
-    if (!Number.isSafeInteger(coins) || coins < 1 || coins > 1_000_000 || seenCoins.has(coins)) continue;
-    if (!Number.isSafeInteger(vnd) || vnd < 1000 || vnd > 500_000_000) continue;
-    if (!Number.isFinite(usd) || usd < 0.5 || usd > 10_000) continue;
-    seenCoins.add(coins);
+    const vnd = Number(item?.vnd ?? 0);
+    const usd = Number(item?.usd ?? 0);
+    const dedupKey = `${region ?? "all"}:${coins}`;
+    if (!Number.isSafeInteger(coins) || coins < 1 || coins > 1_000_000 || seenKeys.has(dedupKey)) continue;
+    if (region === "vietnam") {
+      if (!Number.isSafeInteger(vnd) || vnd < 1000 || vnd > 500_000_000) continue;
+      if (!Number.isFinite(usd) || usd < 0 || usd > 10_000) continue;
+    } else if (region === "international") {
+      if (!Number.isFinite(usd) || usd < 0.5 || usd > 10_000) continue;
+      if (!Number.isSafeInteger(vnd) || vnd < 0 || vnd > 500_000_000) continue;
+    } else {
+      if (!Number.isSafeInteger(vnd) || vnd < 1000 || vnd > 500_000_000) continue;
+      if (!Number.isFinite(usd) || usd < 0.5 || usd > 10_000) continue;
+    }
+    const rawBaseCoins = item?.baseCoins !== undefined ? Number(item.baseCoins) : undefined;
+    const baseCoins = rawBaseCoins !== undefined && Number.isSafeInteger(rawBaseCoins) && rawBaseCoins >= 1 && rawBaseCoins <= coins
+      ? rawBaseCoins
+      : undefined;
+    const rawBonusPct = item?.bonusPct !== undefined ? Number(item.bonusPct) : undefined;
+    const bonusPct = rawBonusPct !== undefined && Number.isSafeInteger(rawBonusPct) && rawBonusPct >= 0 && rawBonusPct <= 100
+      ? rawBonusPct
+      : undefined;
+    const tier = typeof item?.tier === "string" && item.tier.trim() ? item.tier.trim().slice(0, 40) : undefined;
+    const badge: CoinPackageBadge | undefined =
+      item?.badge === "popular" || item?.badge === "best" ? item.badge : undefined;
+    seenKeys.add(dedupKey);
     cleaned.push({
       id: typeof item?.id === "string" && item.id.trim() ? item.id.trim() : `pack-${i + 1}`,
+      ...(region ? { region } : {}),
+      ...(tier ? { tier } : {}),
       coins,
-      vnd,
-      usd: Math.round(usd * 100) / 100,
+      ...(baseCoins !== undefined ? { baseCoins } : {}),
+      ...(bonusPct !== undefined ? { bonusPct } : {}),
+      ...(badge ? { badge } : {}),
+      vnd: region === "international" ? 0 : vnd,
+      usd: region === "vietnam" ? 0 : Math.round(usd * 100) / 100,
       enabled: item?.enabled !== false,
     });
   }
@@ -276,6 +310,7 @@ export function sanitizeSiteSettings(input: unknown): LiveSiteSettings {
   const numericBounds: Partial<Record<keyof LiveSiteSettings, [number, number]>> = {
     freeDownloads: [0, 100],
     renderCost: [0, 10000],
+    dielineCost: [0, 10000],
     sessionHours: [1, 720],
     loginLimit: [1, 100],
     retention: [7, 730],

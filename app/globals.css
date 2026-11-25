@@ -869,21 +869,24 @@ input[type="search"]::-webkit-search-cancel-button {
   right: 17px;
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  z-index: 3;
+  align-items: center;
+  gap: 8px;
+  z-index: 6;
 }
-.vertical-tools button {
-  width: 33px;
-  height: 34px;
+.vertical-tools > button {
+  width: 50px;
+  height: 42px;
   border: 1px solid #ffffff54;
-  background: #ffffff18;
-  border-radius: 7px;
+  background: rgba(93, 23, 57, 0.24);
+  border-radius: 13px;
   display: grid;
   place-items: center;
   color: #fff;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
-.vertical-tools button:hover {
-  background: #ffffff30 !important;
+.vertical-tools > button:hover {
+  background: rgba(93, 23, 57, 0.42) !important;
 }
 .camera-dpad {
   display: flex;
@@ -1029,10 +1032,15 @@ input[type="search"]::-webkit-search-cancel-button {
   background: white;
   color: #7b3e53;
 }
-.creative-space[data-style="white"] .preview-stage .vertical-tools button {
-  color: #8c7b83;
-  background: #ffffffcc;
+.creative-space[data-style="white"] .preview-stage .vertical-tools > button {
+  color: #6b5863;
+  background: rgba(255, 255, 255, 0.92);
   border-color: #e4dcdf;
+  box-shadow: 0 4px 14px rgba(82, 32, 54, 0.07);
+}
+.creative-space[data-style="white"] .preview-stage .vertical-tools > button:hover {
+  background: #f5eef1 !important;
+  color: #4a2a38;
 }
 .creative-space[data-style="white"] .preview-stage .stage-model-tag {
   color: #765d69;
@@ -2917,9 +2925,9 @@ select {
     top: 87px;
     gap: 8px;
   }
-  .vertical-tools button {
-    width: 34px;
-    height: 36px;
+  .vertical-tools > button {
+    width: 50px;
+    height: 42px;
   }
   .workbench-footer {
     font-size: 7px;
@@ -3496,7 +3504,7 @@ select {
   .header-cta,
   .project-link,
   .text-guide,
-  .vertical-tools button,
+  .vertical-tools > button,
   .zoom-tools button,
   .close-dialog,
   .saved-project button,
@@ -3671,7 +3679,7 @@ select {
   .library-tabs button,
   .category-filters button,
   .mode-switch button,
-  .vertical-tools button,
+  .vertical-tools > button,
   .zoom-tools button,
   .document-actions > button,
   .close-dialog,
@@ -4176,7 +4184,7 @@ select {
   }
 
   .vertical-tools {
-    top: 72px;
+    top: 86px;
   }
 }
 
@@ -4188,7 +4196,7 @@ select {
   }
 
   .vertical-tools {
-    top: 72px;
+    top: 86px;
     right: 310px;
   }
 }
@@ -4200,7 +4208,7 @@ select {
 
 
   .vertical-tools {
-    top: 72px;
+    top: 86px;
   }
 }
 
@@ -4964,7 +4972,7 @@ select {
   }
 }
 .studio-project-actions { display: flex; align-items: center; gap: 8px; pointer-events: auto; }
-.studio-project-actions button { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 12px; border: 1px solid #ffffff66; border-radius: 9px; background: #5d173933; color: #fff; backdrop-filter: blur(14px); font: 500 13px/1.3 var(--font-ui); }
+.studio-project-actions button { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 13px; border: 1px solid #ffffff66; border-radius: 10px; background: #5d173933; color: #fff; backdrop-filter: blur(14px); font: 500 13px/1.3 var(--font-ui); white-space: nowrap; }
 .studio-project-actions button:hover { background: #5d17395c; }
 .creative-space[data-style="white"] .studio-project-actions button { color: #503c48; border-color: #816a7a44; background: #ffffffaa; }
 .studio-style-switch { display: inline-flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 10px 0 14px; border: 1px solid #ffffff66; border-radius: 10px; background: #5d173933; color: #fff; backdrop-filter: blur(14px); font: 500 13px/1.3 var(--font-ui); }

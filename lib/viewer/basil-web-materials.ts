@@ -163,6 +163,9 @@ export function endBasilWebRender(renderer: THREE.WebGLRenderer) {
   restorations.get(renderer)?.forEach(restore => restore());
   beautyTargets.delete(renderer);
 }
+export function configureBottleCaptureOnly(mesh: THREE.Mesh) {
+  configureCaptureOnly(mesh);
+}
 function configureCaptureOnly(mesh: THREE.Mesh) {
   if (captureOnly.has(mesh)) return;
   captureOnly.add(mesh);

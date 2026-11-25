@@ -47,6 +47,24 @@ export interface ArtworkEditorResult {
 export interface ArtworkEditorProps {
   initial?: StoredArtwork;
   dieline: ArtworkDieline;
+  title?: string;
+  subtitle?: string;
+  badge?: string;
+  savedHeading?: string;
+  savedSubheading?: string;
+  savedEmptyText?: string;
+  /** 'white' for opaque bottle labels; 'transparent' for cardboard box faces so transparent PNGs show board texture. */
+  backgroundColor?: string | "transparent";
+  /** Optional board/surface preview tint shown behind the frame when backgroundColor is 'transparent'. */
+  previewTintColor?: string;
+  /** Optional per-face background tint color controls right inside the editor. */
+  faceTint?: string;
+  defaultFaceTint?: string;
+  onFaceTintChange?: (color: string | undefined) => void;
+  /** Optional button to remove currently assigned artwork from this target only. */
+  canRemove?: boolean;
+  removeLabel?: string;
+  onRemoveCurrent?: () => void;
   savedArtworks?: readonly StoredArtwork[];
   savedThumbnails?: Record<string, string>;
   selectedArtworkId?: string;
@@ -90,9 +108,36 @@ function cloneTransform(t: ArtworkTransform): ArtworkTransform {
   return { x: t.x, y: t.y, width: t.width, height: t.height };
 }
 
-export default function ArtworkEditor({ initial, dieline, savedArtworks = [], savedThumbnails = {},
-  selectedArtworkId, editorRevision = 0, savedLoading = false, savedBusy = false, savedError, onSelectSaved, onEditSaved,
-  onDeleteSaved, onConfirm, onClose }: ArtworkEditorProps) {
+export default function ArtworkEditor({
+  initial,
+  dieline,
+  title = "Choose artwork",
+  subtitle = "Position your design inside the label frame.",
+  badge,
+  savedHeading = "Saved artworks",
+  savedSubheading = "Reuse a label you have already mocked up.",
+  savedEmptyText = "Artworks you confirm here will appear in this independent history.",
+  backgroundColor = "white",
+  previewTintColor,
+  faceTint,
+  defaultFaceTint,
+  onFaceTintChange,
+  canRemove = false,
+  removeLabel = "Remove artwork",
+  onRemoveCurrent,
+  savedArtworks = [],
+  savedThumbnails = {},
+  selectedArtworkId,
+  editorRevision = 0,
+  savedLoading = false,
+  savedBusy = false,
+  savedError,
+  onSelectSaved,
+  onEditSaved,
+  onDeleteSaved,
+  onConfirm,
+  onClose,
+}: ArtworkEditorProps) {
   const frameWidth = dieline.width;
   const frameHeight = dieline.height;
   const [source, setSource] = useState<Blob | null>(initial?.source ?? null);
@@ -257,20 +302,36 @@ export default function ArtworkEditor({ initial, dieline, savedArtworks = [], sa
     if (!source || source !== decodedSource || !image || decoding || pending || savedBusy) return;
     setPending(true); setError("");
     try {
-      const preview = await renderArtworkCrop(image, transform, dieline);
+      const preview = await renderArtworkCrop(image, transform, dieline, 4096, backgroundColor);
       await onConfirm({ name: name.trim() || "Artwork", source, preview, width: dimensions.width, height: dimensions.height, transform: normalizeArtworkTransform(transform), dieline });
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to save artwork."); setPending(false); }
+  };
+
+  const frameDynamicStyle: CSSProperties = {
+    ...frameStyle,
+    ...(backgroundColor === "transparent"
+      ? { backgroundColor: faceTint ?? previewTintColor ?? "#ffffff" }
+      : {}),
   };
 
   if (!mounted) return null;
   return createPortal(
     <div className={styles.backdrop} role="presentation" style={editorStyle}>
       <dialog className={styles.dialog} aria-labelledby="artwork-editor-title" ref={dialogRef} onCancel={event => { event.preventDefault(); if (!blocked) onClose(); }}>
-        <header className={styles.header}><div><h2 id="artwork-editor-title">Choose artwork</h2><p>Position your design inside the label frame.</p></div><button type="button" className={styles.close} aria-label="Close" onClick={onClose} disabled={blocked}>×</button></header>
+        <header className={styles.header}>
+          <div className={styles.headerMeta}>
+            <div className={styles.titleRow}>
+              <h2 id="artwork-editor-title">{title}</h2>
+              {badge && <span className={styles.scopeBadge}>{badge}</span>}
+            </div>
+            <p>{subtitle}</p>
+          </div>
+          <button type="button" className={styles.close} aria-label="Close" onClick={onClose} disabled={blocked}>×</button>
+        </header>
         <div className={styles.editorBody}>
           <section className={styles.previewPane} aria-label="Artwork preview">
             <div className={styles.workspace} onDragOver={e => e.preventDefault()} onDrop={onDrop} aria-disabled={blocked}><div className={styles.hint}>Drag to move · Shift + resize to keep proportions <span>{dieline.unit === "mm" ? `${dieline.width} × ${dieline.height} mm` : "Provisional frame · 3:2"}</span></div>
-              <div className={styles.frame} ref={frameRef} style={frameStyle}>
+              <div className={`${styles.frame} ${backgroundColor === "transparent" ? styles.frameTransparent : ""}`} ref={frameRef} style={frameDynamicStyle}>
             {dieline.guideSrc && <img className={styles.dielineGuide} src={dieline.guideSrc} alt="" aria-hidden="true" />}
             {image && sourceUrl ? <>
               <img className={styles.image} src={sourceUrl} alt="Artwork being positioned" draggable={false} style={{ left: `${transform.x * 100}%`, top: `${transform.y * 100}%`, width: `${transform.width * 100}%`, height: `${transform.height * 100}%` }} onPointerDown={e => beginDrag(e)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} onKeyDown={onKeyMove} tabIndex={0} />
@@ -283,7 +344,7 @@ export default function ArtworkEditor({ initial, dieline, savedArtworks = [], sa
             </div>
           </section>
           <aside className={styles.savedPane} aria-label="Saved artworks" aria-busy={savedLoading}>
-            <div className={styles.savedHeading}><div><h3>Saved artworks</h3><p>Reuse a label you have already mocked up.</p></div><span>{savedArtworks.length}</span></div>
+            <div className={styles.savedHeading}><div><h3>{savedHeading}</h3><p>{savedSubheading}</p></div><span>{savedArtworks.length}</span></div>
             {savedLoading ? <p className={styles.savedEmpty}>Loading artworks…</p> : savedArtworks.length ?
               <ul className={styles.savedList}>{savedArtworks.map(record => <li key={record.id} className={styles.savedItem}>
                 <button type="button" className={styles.savedSelect} aria-label={`Preview ${record.name}`} aria-pressed={selectedArtworkId === record.id}
@@ -295,14 +356,43 @@ export default function ArtworkEditor({ initial, dieline, savedArtworks = [], sa
                   <button type="button" aria-label={`Edit ${record.name}`} title="Edit crop" disabled={pending || savedBusy} onClick={() => onEditSaved?.(record)}><Pencil size={16} aria-hidden="true" /></button>
                   <button type="button" aria-label={`Delete ${record.name}`} title="Delete saved artwork" disabled={pending || savedBusy} onClick={() => onDeleteSaved?.(record)}><Trash2 size={16} aria-hidden="true" /></button>
                 </div>
-              </li>)}</ul> : <div className={styles.savedEmpty}><FileImage size={36} strokeWidth={1.25} aria-hidden="true" /><strong>No saved artworks yet</strong><p>Labels you confirm will appear here, ready for your next mockup.</p></div>}
+              </li>)}</ul> : <div className={styles.savedEmpty}><FileImage size={36} strokeWidth={1.25} aria-hidden="true" /><strong>No saved artworks yet</strong><p>{savedEmptyText}</p></div>}
             {savedError && <p className={styles.error} role="alert">{savedError}</p>}
             <p className={styles.savedNote}>Stored in this browser only.</p>
           </aside>
         </div>
         {decoding && <div className={styles.status}>Decoding artwork…</div>}{error && <div className={styles.error} role="alert">{error}</div>}
-        <div className={styles.controls}>{image && <><label>Name<input value={name} disabled={blocked} onChange={e => setName(e.target.value)} /></label>{(["x", "y", "width", "height"] as const).map(key => <label key={key}>{key.toUpperCase()} %<input type="number" min={key === "width" || key === "height" ? 0.01 : -100} max={key === "width" || key === "height" ? 10000 : 100} step={0.1} value={(transform[key] * 100).toFixed(1)} disabled={blocked} onChange={e => updateNumber(key, e.target.value)} /></label>)}<button type="button" disabled={blocked} onClick={() => resetFit("contain")}>Fit</button><button type="button" disabled={blocked} onClick={() => resetFit("cover")}>Fill</button></>}</div>
-        <footer className={styles.footer}><label className={styles.chooseButton}>Choose artwork<input type="file" aria-label="Choose artwork file" accept="image/png,image/jpeg,image/webp" onChange={onFileChange} disabled={blocked} /></label><button className={styles.confirm} type="button" onClick={confirm} disabled={!image || source !== decodedSource || decoding || blocked}>{pending ? "Saving…" : "Confirm"}</button></footer>
+        <div className={styles.controls}>
+          {image && <><label>Name<input value={name} disabled={blocked} onChange={e => setName(e.target.value)} /></label>{(["x", "y", "width", "height"] as const).map(key => <label key={key}>{key.toUpperCase()} %<input type="number" min={key === "width" || key === "height" ? 0.01 : -100} max={key === "width" || key === "height" ? 10000 : 100} step={0.1} value={(transform[key] * 100).toFixed(1)} disabled={blocked} onChange={e => updateNumber(key, e.target.value)} /></label>)}<button type="button" disabled={blocked} onClick={() => resetFit("contain")}>Fit</button><button type="button" disabled={blocked} onClick={() => resetFit("cover")}>Fill</button></>}
+          {onFaceTintChange && (
+            <div className={styles.faceTintGroup}>
+              <label className={styles.faceTintControl}>
+                <span>Face tint</span>
+                <input
+                  type="color"
+                  aria-label="Face background tint"
+                  disabled={blocked}
+                  value={faceTint ?? defaultFaceTint ?? "#c49a6c"}
+                  onChange={(e) => onFaceTintChange(e.target.value)}
+                />
+              </label>
+              {faceTint && (
+                <button type="button" disabled={blocked} onClick={() => onFaceTintChange(undefined)}>
+                  Reset tint
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+        <footer className={styles.footer}>
+          {canRemove && onRemoveCurrent && (
+            <button type="button" className={styles.removeButton} disabled={blocked} onClick={onRemoveCurrent}>
+              <Trash2 size={15} aria-hidden="true" /> {removeLabel}
+            </button>
+          )}
+          <label className={styles.chooseButton}>Choose artwork<input type="file" aria-label="Choose artwork file" accept="image/png,image/jpeg,image/webp" onChange={onFileChange} disabled={blocked} /></label>
+          <button className={styles.confirm} type="button" onClick={confirm} disabled={!image || source !== decodedSource || decoding || blocked}>{pending ? "Saving…" : "Confirm"}</button>
+        </footer>
       </dialog>
     </div>, document.body,
   );

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {
   MM_TO_METRE,
+  type AssemblyMotionSpec,
   type PackagingPartGroup,
   type PanelNode2D,
   type SolvedDieline,
@@ -22,14 +23,32 @@ export interface RigJoint {
   readonly fillet: CreaseFilletHandle | null;
 }
 
+export interface RigAssemblyTrack {
+  readonly panelId: string;
+  readonly group: THREE.Group;
+  readonly basePosition: THREE.Vector3;
+  readonly motion: AssemblyMotionSpec;
+}
+
+export interface RigPanelFrame {
+  readonly group: THREE.Group;
+  readonly originX: number;
+  readonly originY: number;
+  readonly pivotYmm: number;
+}
+
 export interface BuiltPackagingRig {
   readonly root: THREE.Group;
   readonly joints: readonly RigJoint[];
+  readonly assemblyTracks: readonly RigAssemblyTrack[];
   readonly panelMeshes: ReadonlyMap<string, { mesh: THREE.Mesh; partGroup: PackagingPartGroup }>;
+  readonly panelFrames: ReadonlyMap<string, RigPanelFrame>;
   /** Apply staged folding progress t ∈ [0, 1] smoothly in < 0.1 ms with zero allocations. */
   setFoldProgress(progress: number): void;
   /** Highlight a specific parameter group (e.g. when hovering a numeric field in Inspector). */
   setHighlightGroup(group: PackagingPartGroup | null): void;
+  /** Highlight a single panel face (outside or inside only) when hovered directly in 3D. */
+  setHoverFace(hover: { panelId: string; surface: 'outside' | 'inside' } | null): void;
   /** Toggle subtle technical crease guidelines on the flat/folding model. */
   setCreaseLinesVisible(visible: boolean): void;
   /** Measure upright world bounding box of the assembled/unfolding box in metres. */
@@ -70,26 +89,21 @@ export function buildPackagingRig(
   root.name = `packaging-rig:${solved.templateId}`;
 
   const joints: RigJoint[] = [];
+  const assemblyTracks: RigAssemblyTrack[] = [];
   const ownedGeometries: THREE.BufferGeometry[] = [];
   const ownedLineMaterials: THREE.Material[] = [];
   const panelMeshes = new Map<string, { mesh: THREE.Mesh; partGroup: PackagingPartGroup }>();
+  const panelFrames = new Map<string, RigPanelFrame>();
   const creaseLinesGroup: THREE.LineSegments[] = [];
 
   const thicknessMm = solved.params.thicknessMm;
   const halfT = thicknessMm * 0.5;
   const baseMaterials: THREE.Material[] = [materials.outside, materials.inside, materials.edge];
+  const hoverOutsideMaterials: THREE.Material[] = [materials.hoverOutside, materials.inside, materials.edge];
+  const hoverInsideMaterials: THREE.Material[] = [materials.outside, materials.hoverInside, materials.edge];
 
   // Shared highlight overlay material (subtle electric blue sheen when hovering a parameter).
-  const highlightOutside = materials.outside.clone();
-  highlightOutside.emissive.set('#2563eb');
-  highlightOutside.emissiveIntensity = 0.28;
-  const highlightInside = materials.inside.clone();
-  highlightInside.emissive.set('#2563eb');
-  highlightInside.emissiveIntensity = 0.24;
-  const highlightEdge = materials.edge.clone();
-  highlightEdge.emissive.set('#3b82f6');
-  highlightEdge.emissiveIntensity = 0.35;
-  const highlightMaterials: THREE.Material[] = [highlightOutside, highlightInside, highlightEdge];
+  const highlightMaterials: THREE.Material[] = [materials.hoverOutside, materials.hoverInside, materials.edge];
 
   const creaseLineMat = new THREE.LineBasicMaterial({
     color: '#0f766e',
@@ -177,7 +191,9 @@ export function buildPackagingRig(
           thicknessMm,
           blankBounds: solved.blankBounds,
           outsideMaterial: materials.outside,
-          segments: options?.creaseSegments ?? 4,
+          edgeMaterial: materials.edge,
+          fluteDirection: solved.params.fluteDirection,
+          segments: options?.creaseSegments ?? 8,
         });
         fillet.mesh.position.set(px, py, pz);
         parentGroup.add(fillet.mesh);
@@ -199,7 +215,38 @@ export function buildPackagingRig(
       localOriginY = midY;
       localPivotYmm = pivotYmm;
       hostGroup = pivotGroup;
+    } else if (node.assemblyMotion) {
+      const motion = node.assemblyMotion;
+      const motionGroup = new THREE.Group();
+      motionGroup.name = `assembly:${node.id}`;
+      const [mx, my, mz] = cad2DToLocal3D(
+        motion.pivot2D,
+        parentOriginX,
+        parentOriginY,
+        -parentPivotYmm,
+      );
+      motionGroup.position.set(mx, my, mz);
+      parentGroup.add(motionGroup);
+
+      assemblyTracks.push({
+        panelId: node.id,
+        group: motionGroup,
+        basePosition: new THREE.Vector3(mx, my, mz),
+        motion,
+      });
+
+      localOriginX = motion.pivot2D[0];
+      localOriginY = motion.pivot2D[1];
+      localPivotYmm = 0;
+      hostGroup = motionGroup;
     }
+
+    panelFrames.set(node.id, {
+      group: hostGroup,
+      originX: localOriginX,
+      originY: localOriginY,
+      pivotYmm: localPivotYmm,
+    });
 
     // Build panel solid mesh shifted vertically by `-localPivotYmm` so its midplane stays aligned with parent sheet when flat.
     const solidGeo = buildPanelSolidGeometry({
@@ -217,6 +264,8 @@ export function buildPackagingRig(
 
     const mesh = new THREE.Mesh(solidGeo, baseMaterials);
     mesh.name = `panel:${node.id}`;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     mesh.userData.panelId = node.id;
     mesh.userData.partGroup = node.partGroup;
     hostGroup.add(mesh);
@@ -249,6 +298,41 @@ export function buildPackagingRig(
       joint.pivotGroup.quaternion.setFromAxisAngle(joint.axis, signed);
       joint.fillet?.updateAngle(angle);
     }
+    for (const track of assemblyTracks) {
+      const { motion, basePosition, group } = track;
+      const stageSpan = Math.max(1e-4, motion.stageEnd - motion.stageStart);
+      const stageT = easeInOutCubic((clamped - motion.stageStart) / stageSpan);
+      const hasClose =
+        motion.closeStageStart !== undefined && motion.closeStageEnd !== undefined;
+      const closeT = hasClose
+        ? easeInOutCubic(
+            (clamped - motion.closeStageStart!) /
+              Math.max(1e-4, motion.closeStageEnd! - motion.closeStageStart!),
+          )
+        : 1;
+      const openFactor = stageT * (1 - closeT);
+      const arcLift = (motion.arcLiftMm ?? 0) * Math.sin(stageT * Math.PI);
+
+      const tx = motion.translateMm[0] * stageT + (motion.openOffsetMm?.[0] ?? 0) * openFactor;
+      const ty = motion.translateMm[1] * stageT + (motion.openOffsetMm?.[1] ?? 0) * openFactor + arcLift;
+      const tz = motion.translateMm[2] * stageT + (motion.openOffsetMm?.[2] ?? 0) * openFactor;
+
+      group.position.set(
+        basePosition.x + tx * MM_TO_METRE,
+        basePosition.y + ty * MM_TO_METRE,
+        basePosition.z + tz * MM_TO_METRE,
+      );
+      if (motion.rotateDeg) {
+        group.rotation.set(
+          THREE.MathUtils.degToRad(motion.rotateDeg[0] * stageT),
+          THREE.MathUtils.degToRad(motion.rotateDeg[1] * stageT),
+          THREE.MathUtils.degToRad(motion.rotateDeg[2] * stageT),
+          'XYZ',
+        );
+      } else {
+        group.rotation.set(0, 0, 0);
+      }
+    }
     // Hide 3D crease helper lines once folded cleanly (> 45%) so finished box corners stay pristine.
     const showLines = creaseLinesEnabled && clamped < 0.45;
     for (const line of creaseLinesGroup) line.visible = showLines;
@@ -256,31 +340,42 @@ export function buildPackagingRig(
   };
 
   let activeHighlight: PackagingPartGroup | null = null;
+  let activeHoverFace: { panelId: string; surface: 'outside' | 'inside' } | null = null;
+
+  const syncPanelMaterials = () => {
+    for (const [panelId, entry] of panelMeshes.entries()) {
+      if (activeHoverFace && activeHoverFace.panelId === panelId) {
+        entry.mesh.material =
+          activeHoverFace.surface === 'outside' ? hoverOutsideMaterials : hoverInsideMaterials;
+        continue;
+      }
+      const match =
+        activeHighlight !== null &&
+        (entry.partGroup === activeHighlight ||
+          (activeHighlight === 'length' &&
+            (entry.partGroup === 'length' || entry.mesh.userData.panelId === 'base')) ||
+          (activeHighlight === 'width' &&
+            (entry.partGroup === 'width' || entry.mesh.userData.panelId === 'base')) ||
+          activeHighlight === 'material');
+      entry.mesh.material = match ? highlightMaterials : baseMaterials;
+    }
+  };
+
   const setHighlightGroup = (group: PackagingPartGroup | null) => {
     if (group === activeHighlight) return;
     activeHighlight = group;
-    // Sync highlight clones with latest live outside/inside maps & colors.
-    if (group) {
-      highlightOutside.color.copy(materials.outside.color);
-      highlightOutside.map = materials.outside.map;
-      highlightOutside.roughness = materials.outside.roughness;
-      highlightOutside.metalness = materials.outside.metalness;
-      highlightOutside.needsUpdate = true;
-      highlightInside.color.copy(materials.inside.color);
-      highlightInside.map = materials.inside.map;
-      highlightInside.roughness = materials.inside.roughness;
-      highlightInside.needsUpdate = true;
-      highlightEdge.color.copy(materials.edge.color);
+    syncPanelMaterials();
+  };
+
+  const setHoverFace = (hover: { panelId: string; surface: 'outside' | 'inside' } | null) => {
+    if (
+      activeHoverFace?.panelId === hover?.panelId &&
+      activeHoverFace?.surface === hover?.surface
+    ) {
+      return;
     }
-    for (const entry of panelMeshes.values()) {
-      const match = group !== null && (
-        entry.partGroup === group ||
-        (group === 'length' && (entry.partGroup === 'length' || entry.mesh.userData.panelId === 'base')) ||
-        (group === 'width' && (entry.partGroup === 'width' || entry.mesh.userData.panelId === 'base')) ||
-        (group === 'material')
-      );
-      entry.mesh.material = match ? highlightMaterials : baseMaterials;
-    }
+    activeHoverFace = hover ? { panelId: hover.panelId, surface: hover.surface } : null;
+    syncPanelMaterials();
   };
 
   const setCreaseLinesVisible = (visible: boolean) => {
@@ -309,18 +404,18 @@ export function buildPackagingRig(
   return {
     root,
     joints,
+    assemblyTracks,
     panelMeshes,
+    panelFrames,
     setFoldProgress,
     setHighlightGroup,
+    setHoverFace,
     setCreaseLinesVisible,
     measureBounds,
     dispose() {
       for (const joint of joints) joint.fillet?.dispose();
       for (const geo of ownedGeometries) geo.dispose();
       for (const mat of ownedLineMaterials) mat.dispose();
-      highlightOutside.dispose();
-      highlightInside.dispose();
-      highlightEdge.dispose();
     },
   };
 }

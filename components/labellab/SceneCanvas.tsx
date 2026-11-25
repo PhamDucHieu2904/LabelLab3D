@@ -14,6 +14,7 @@ import {
   type LabModel,
 } from "@/lib/labellab/catalog";
 import type {
+  InteractivePickTarget,
   MockupRuntime,
   MockupStatus,
   MockupCameraPreset,
@@ -58,6 +59,8 @@ interface Props {
   interaction?: "studio" | "drag-only";
   displayScale?: number;
   paintBackground?: MockupBackdropPainter;
+  onHoverTarget?: (target: InteractivePickTarget | null) => void;
+  onPickTarget?: (target: InteractivePickTarget) => void;
 }
 function applyMotion(
   runtime: MockupRuntime,
@@ -72,19 +75,19 @@ function applyMotion(
 }
 
 const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
-  { model, proceduralSubject = null, subjectName, qualityPreference = "auto", onQualityChange, settings, artwork, artworkEditing = false, deferSelection = false, onStatus, renderCanvasRef, interaction = "studio", displayScale = 1, paintBackground },
+  { model, proceduralSubject = null, subjectName, qualityPreference = "auto", onQualityChange, settings, artwork, artworkEditing = false, deferSelection = false, onStatus, renderCanvasRef, interaction = "studio", displayScale = 1, paintBackground, onHoverTarget, onPickTarget },
   ref,
 ) {
   const outerRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<MockupRuntime | null>(null);
-  const propsRef = useRef({ model, settings, artwork, artworkEditing, onStatus, onQualityChange, qualityPreference, paintBackground });
+  const propsRef = useRef({ model, settings, artwork, artworkEditing, onStatus, onQualityChange, qualityPreference, paintBackground, onHoverTarget, onPickTarget });
   const [readyVersion, setReadyVersion] = useState(0);
   const [status, setStatus] = useState("loading-model");
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   useEffect(() => {
-    propsRef.current = { model, settings, artwork, artworkEditing, onStatus, onQualityChange, qualityPreference, paintBackground };
+    propsRef.current = { model, settings, artwork, artworkEditing, onStatus, onQualityChange, qualityPreference, paintBackground, onHoverTarget, onPickTarget };
   });
 
   useImperativeHandle(
@@ -148,6 +151,16 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
             onQualityChange: (report) => {
               if (alive) propsRef.current.onQualityChange?.(report);
             },
+            ...(interaction !== "drag-only"
+              ? {
+                  onHoverTarget: (target) => {
+                    if (alive) propsRef.current.onHoverTarget?.(target);
+                  },
+                  onPickTarget: (target) => {
+                    if (alive) propsRef.current.onPickTarget?.(target);
+                  },
+                }
+              : {}),
             paintBackground: (context, width, height) => {
               if (propsRef.current.paintBackground) {
                 propsRef.current.paintBackground(context, width, height);

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo } from "react";
 import { Download } from "lucide-react";
 import type { PackagingPartGroup, SolvedDieline } from "@/lib/packaging-cad/types";
@@ -11,6 +12,8 @@ interface Props {
   side: "outside" | "inside";
   fullWidth?: boolean;
   highlightPartGroup?: PackagingPartGroup | null;
+  dielineCost?: number;
+  disabled?: boolean;
   onChangeSide: (side: "outside" | "inside") => void;
   onSelectPanel?: (panelId: string) => void;
   onDownloadDieline: (format: "svg" | "pdf" | "dxf") => void;
@@ -21,6 +24,8 @@ export default function PackagingDielineViewport({
   side,
   fullWidth = false,
   highlightPartGroup,
+  dielineCost = 20,
+  disabled = false,
   onChangeSide,
   onSelectPanel,
   onDownloadDieline,
@@ -66,19 +71,27 @@ export default function PackagingDielineViewport({
           <button
             type="button"
             className={styles.dockIconBtn}
+            disabled={disabled}
             onClick={() => onDownloadDieline("svg")}
-            title="Download 1:1 mm SVG Dieline"
+            title={`Download 1:1 mm SVG Dieline (${dielineCost === 0 ? "Free" : `${dielineCost} coins`})`}
           >
             <Download size={13} /> SVG
           </button>
           <button
             type="button"
             className={styles.dockIconBtn}
+            disabled={disabled}
             onClick={() => onDownloadDieline("pdf")}
-            title="Download 1:1 mm Vector PDF Dieline"
+            title={`Download 1:1 mm Vector PDF Dieline (${dielineCost === 0 ? "Free" : `${dielineCost} coins`})`}
           >
             <Download size={13} /> PDF
           </button>
+          {dielineCost > 0 && (
+            <span className={styles.dielineCostBadge} aria-label={`${dielineCost} coins per dieline export`}>
+              <Image src="/branding/LLCoin.svg" alt="" width={12} height={12} aria-hidden="true" />
+              <span>{dielineCost}</span>
+            </span>
+          )}
         </div>
       </div>
 

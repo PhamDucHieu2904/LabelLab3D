@@ -44,7 +44,12 @@ import {
   type QualityPreference,
   type QualityTier,
 } from './quality-tier';
-import type { MockupAnimation, MockupBackdropPainter, MockupBackground, MockupCameraPreset, MockupFocalPreset, MockupRuntime, MockupRuntimeOptions, MockupRenderPreviewOptions, MockupStatus, ProceduralSubject } from './contracts';
+import {
+  computeHaltonJitterPx,
+  computeSoftboxKeyLightPosition,
+  resolveSoftboxSampleCount,
+} from './progressive-softbox';
+import type { InteractivePickTarget, MockupAnimation, MockupBackdropPainter, MockupBackground, MockupCameraPreset, MockupFocalPreset, MockupRuntime, MockupRuntimeOptions, MockupRenderPreviewOptions, MockupStatus, ProceduralSubject } from './contracts';
 
 type LoadedModel = {
   root: THREE.Group; content: THREE.Group; asset: ProductAsset; key: string;
@@ -166,9 +171,14 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   renderer.toneMappingExposure = settings.exposure;
   renderer.setClearColor('#000000', 0);
   renderer.autoClear = true;
+  // Soft shadow maps are enabled selectively for procedural Packaging CAD subjects
+  // with manual dirty-flag caching (0 ms GPU shadow cost while orbiting camera).
+  renderer.shadowMap.enabled = false;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = false;
   const canvas = renderer.domElement;
   canvas.setAttribute('aria-hidden', 'true');
-  Object.assign(canvas.style, { width: '100%', height: '100%', display: 'block' });
+  Object.assign(canvas.style, { width: '100%', height: '100%', display: 'block', cursor: 'grab' });
   host.appendChild(canvas);
   const scene = new THREE.Scene();
   scene.userData.opticalMaxBounces = resolveQualityBudget(detectedTier, 'medium', renderer.capabilities.maxSamples).opticalBounces;
@@ -198,8 +208,15 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   const yawAxis = new THREE.Vector3(0, 1, 0), dragAxis = new THREE.Vector3(), up = new THREE.Vector3();
   const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
   const pointers = new Map<number, { x: number; y: number }>();
-  let dragging = false, motionTime = 0, lastInputAt = -Infinity, returnElapsed = 0;
+  let dragging = false, orbitDragging = false, motionTime = 0, lastInputAt = -Infinity, returnElapsed = 0;
   let returnFrom: THREE.Quaternion | null = null;
+  let activeHoverTarget: InteractivePickTarget | null = null;
+  let clickCandidate: { pointerId: number; startX: number; startY: number; startTime: number; moved: boolean } | null = null;
+  let hoverRaf = 0;
+  let hoverPendingCoords: { x: number; y: number } | null = null;
+  const singleLabelHoverTint = new THREE.Color('#2563eb');
+  const savedSingleLabelMaterials = new Map<THREE.MeshStandardMaterial, { color: THREE.Color; emissive: THREE.Color; emissiveIntensity: number }>();
+  const interactivePickingEnabled = Boolean(options.onHoverTarget || options.onPickTarget);
   const controls = new OrbitControls(camera, canvas);
   controls.enablePan = false;
   controls.enableDamping = true;
@@ -211,8 +228,25 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   const lights = settings.lights.map(light => {
     const result = light.type === 'hemisphere' ? new THREE.HemisphereLight(light.color, light.groundColor, light.intensity)
       : new THREE.DirectionalLight(light.color, light.intensity);
-    scene.add(result); return result;
+    scene.add(result);
+    if (result instanceof THREE.DirectionalLight) scene.add(result.target);
+    return result;
   });
+  const shadowKeyLight = lights[0] instanceof THREE.DirectionalLight ? lights[0] : null;
+  const shadowFillLight = lights[1] instanceof THREE.DirectionalLight ? lights[1] : null;
+  const shadowHemiLight = lights[2] instanceof THREE.HemisphereLight ? lights[2] : null;
+  let shadowMapDirty = false;
+  let currentShadowMapSize = 0;
+  const shadowKeyBasePosition = new THREE.Vector3();
+  const shadowKeyBaseTarget = new THREE.Vector3();
+  let shadowKeyBaseRadius = 0.1;
+  let softboxLightDisplaced = false;
+  let softboxRaf = 0;
+  let softboxActive = false;
+  let softboxSampleIndex = 0;
+  let softboxTargetSamples = 0;
+  let softboxAccumLinear: THREE.WebGLRenderTarget | null = null;
+  let softboxAccumMatte: THREE.WebGLRenderTarget | null = null;
   const pmrem = new THREE.PMREMGenerator(renderer);
   const draco = new DRACOLoader().setDecoderPath(publicUrl(settings.decoders.dracoPath)).setWorkerLimit(gpuTier === 'software' ? 1 : 2);
   const basis = new KTX2Loader().setTranscoderPath(publicUrl(settings.decoders.basisPath)).setWorkerLimit(1).detectSupport(renderer);
@@ -244,6 +278,104 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     } else {
       studioGround.setRadius(currentSubjectRadius());
     }
+  };
+  const resolvePackagingShadowSize = (forceSize?: number) => {
+    const cap = Math.min(2048, renderer.capabilities.maxTextureSize || 1024);
+    if (forceSize) return Math.min(cap, forceSize);
+    const tier = effectiveQualityTier();
+    if (tier === 'low') return Math.min(cap, 512);
+    if (tier === 'medium') return Math.min(cap, 1024);
+    return Math.min(cap, 2048);
+  };
+  const syncProceduralStudioLighting = (forceShadowSize?: number) => {
+    const isPackaging = Boolean(procedural && !active);
+    if (!isPackaging) {
+      renderer.shadowMap.enabled = false;
+      if (shadowKeyLight) shadowKeyLight.castShadow = false;
+      studioGround.setDynamicShadowActive(false);
+      lights.forEach((light, index) => {
+        const cfg = settings.lights[index];
+        if (!cfg) return;
+        light.color.set(cfg.color);
+        light.intensity = cfg.intensity;
+        if (light instanceof THREE.HemisphereLight && cfg.groundColor) {
+          light.groundColor.set(cfg.groundColor);
+        }
+        if (light instanceof THREE.DirectionalLight) light.target.position.set(0, 0, 0);
+      });
+      scene.environmentIntensity = settings.environment.intensity;
+      shadowMapDirty = false;
+      return;
+    }
+
+    const bounds = procedural!.bounds;
+    const radius = Math.max(0.02, procedural!.radius);
+    const center = bounds.getCenter(new THREE.Vector3());
+
+    renderer.shadowMap.enabled = true;
+    studioGround.setDynamicShadowActive(true);
+    scene.environmentIntensity = 0.68;
+
+    if (shadowKeyLight) {
+      shadowKeyLight.color.set('#fffdf8');
+      shadowKeyLight.intensity = 1.42;
+      shadowKeyLight.castShadow = true;
+      shadowKeyLight.position.set(
+        center.x + radius * 2.15,
+        center.y + radius * 3.55,
+        center.z + radius * 2.45,
+      );
+      shadowKeyLight.target.position.copy(center);
+      shadowKeyLight.target.updateMatrixWorld();
+      shadowKeyBasePosition.copy(shadowKeyLight.position);
+      shadowKeyBaseTarget.copy(center);
+      shadowKeyBaseRadius = radius;
+      softboxLightDisplaced = false;
+
+      const nextSize = resolvePackagingShadowSize(forceShadowSize);
+      if (nextSize !== currentShadowMapSize) {
+        currentShadowMapSize = nextSize;
+        shadowKeyLight.shadow.mapSize.set(nextSize, nextSize);
+        shadowKeyLight.shadow.map?.dispose();
+        shadowKeyLight.shadow.map = null;
+      }
+
+      const extent = Math.max(radius * 1.68, 0.08);
+      const dist = shadowKeyLight.position.distanceTo(center);
+      const cam = shadowKeyLight.shadow.camera;
+      cam.left = -extent;
+      cam.right = extent;
+      cam.top = extent;
+      cam.bottom = -extent;
+      cam.near = Math.max(0.01, dist - radius * 2.4);
+      cam.far = dist + radius * 3.6;
+      cam.updateProjectionMatrix();
+
+      shadowKeyLight.shadow.bias = -0.00018;
+      shadowKeyLight.shadow.normalBias = Math.max(0.00035, radius * 0.0022);
+      shadowKeyLight.shadow.radius = 4.2;
+    }
+
+    if (shadowFillLight) {
+      shadowFillLight.color.set('#ecf3ff');
+      shadowFillLight.intensity = 0.44;
+      shadowFillLight.position.set(
+        center.x - radius * 3.0,
+        center.y + radius * 2.0,
+        center.z + radius * 2.1,
+      );
+      shadowFillLight.target.position.copy(center);
+      shadowFillLight.target.updateMatrixWorld();
+    }
+
+    if (shadowHemiLight) {
+      shadowHemiLight.color.set('#ffffff');
+      shadowHemiLight.groundColor.set('#d4cfc7');
+      shadowHemiLight.intensity = 0.34;
+      shadowHemiLight.position.set(center.x, center.y + radius * 3, center.z);
+    }
+
+    shadowMapDirty = true;
   };
   const candidates = new Set<LoadedModel>();
   const discarded = new WeakSet<LoadedModel>();
@@ -300,6 +432,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     backgroundTop: { value: new THREE.Color('#ffffff') },
     backgroundBottom: { value: new THREE.Color('#ffffff') },
     backgroundAlpha: { value: 1 },
+    accumInvCount: { value: 1 },
     outputRegion: { value: new THREE.Vector4(0, 0, 1, 1) },
     studioMatte: { value: null as THREE.Texture | null },
     studioMatteEnabled: { value: 0 },
@@ -311,8 +444,8 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     name: 'Mockup PNG output', uniforms: outputUniforms,
     vertexShader: OutputShader.vertexShader,
     fragmentShader: OutputShader.fragmentShader
-      .replace('uniform sampler2D tDiffuse;', 'uniform sampler2D tDiffuse;\nuniform sampler2D studioMatte;\nuniform float studioMatteEnabled;\nuniform vec3 backgroundTop;\nuniform vec3 backgroundBottom;\nuniform float backgroundAlpha;\nuniform vec4 outputRegion;\nuniform float basilNeckEnabled;\nuniform sampler2D basilNeckRadiance;\nuniform sampler2D basilNeckCoverage;')
-      .replace('gl_FragColor = texture2D( tDiffuse, vUv );', 'gl_FragColor = texture2D( tDiffuse, vUv );\nif (gl_FragColor.a > 0.00001) gl_FragColor.rgb /= gl_FragColor.a; else gl_FragColor.rgb = vec3(0.0);')
+      .replace('uniform sampler2D tDiffuse;', 'uniform sampler2D tDiffuse;\nuniform sampler2D studioMatte;\nuniform float studioMatteEnabled;\nuniform float accumInvCount;\nuniform vec3 backgroundTop;\nuniform vec3 backgroundBottom;\nuniform float backgroundAlpha;\nuniform vec4 outputRegion;\nuniform float basilNeckEnabled;\nuniform sampler2D basilNeckRadiance;\nuniform sampler2D basilNeckCoverage;')
+      .replace('gl_FragColor = texture2D( tDiffuse, vUv );', 'gl_FragColor = texture2D( tDiffuse, vUv ) * accumInvCount;\nif (gl_FragColor.a > 0.00001) gl_FragColor.rgb /= gl_FragColor.a; else gl_FragColor.rgb = vec3(0.0);')
       .replace('// color space', `
         // GlassNeckExportScope: tone radiance first, then reserve its alpha
         // carrier and replace only the visible neck mask in premultiplied space.
@@ -329,11 +462,36 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
           }
         }
         // color space`)
-      .replace(/\}\s*$/, '\nvec3 backdrop = studioMatteEnabled > .5 ? texture2D(studioMatte, vUv).rgb : mix(backgroundBottom, backgroundTop, outputRegion.y + vUv.y * outputRegion.w);\n#ifdef SRGB_TRANSFER\nbackdrop = sRGBTransferOETF(vec4(backdrop, 1.0)).rgb;\n#endif\nif (backgroundAlpha > 0.5) { gl_FragColor.rgb = mix(backdrop, gl_FragColor.rgb, gl_FragColor.a); gl_FragColor.a = 1.0; }\n}'),
+      .replace(/\}\s*$/, '\nvec3 backdrop = studioMatteEnabled > .5 ? texture2D(studioMatte, vUv).rgb * accumInvCount : mix(backgroundBottom, backgroundTop, outputRegion.y + vUv.y * outputRegion.w);\n#ifdef SRGB_TRANSFER\nbackdrop = sRGBTransferOETF(vec4(backdrop, 1.0)).rgb;\n#endif\nif (backgroundAlpha > 0.5) { gl_FragColor.rgb = mix(backdrop, gl_FragColor.rgb, gl_FragColor.a); gl_FragColor.a = 1.0; }\n}'),
     defines: { NEUTRAL_TONE_MAPPING: '', SRGB_TRANSFER: '' },
     depthTest: false, depthWrite: false, blending: THREE.NoBlending,
   });
   const outputQuad = new FullScreenQuad(outputMaterial);
+  const accumUniforms = { tSrc: { value: null as THREE.Texture | null } };
+  const accumMaterial = new THREE.RawShaderMaterial({
+    name: 'Progressive Softbox Accumulator',
+    uniforms: accumUniforms,
+    vertexShader: OutputShader.vertexShader,
+    fragmentShader: `
+      precision highp float;
+      uniform sampler2D tSrc;
+      varying vec2 vUv;
+      void main() {
+        gl_FragColor = texture2D(tSrc, vUv);
+      }
+    `,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.CustomBlending,
+    blendEquation: THREE.AddEquation,
+    blendSrc: THREE.OneFactor,
+    blendDst: THREE.OneFactor,
+    blendEquationAlpha: THREE.AddEquation,
+    blendSrcAlpha: THREE.OneFactor,
+    blendDstAlpha: THREE.OneFactor,
+  });
+  const accumQuad = new FullScreenQuad(accumMaterial);
   const neckExport = createBasilNeckExport(renderer);
   // Live refraction backdrop is blurred behind curved glass/liquid: 384px at ~8Hz
   // avoids 60Hz DOM reflows + 2.3MB/frame texture uploads while exports stay 1536px.
@@ -361,10 +519,63 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   const moving = () => hasSubject() && !captureGate.busy && (Boolean(cameraTransition)
     || animation.playing && animation.mode !== 'off'
     || animation.mode === 'showcase' && (dragging || Boolean(returnFrom) || pose.angleTo(targetPose) > 0.00001 && Number.isFinite(lastInputAt)));
+  const restoreSoftboxKeyLight = () => {
+    if (!softboxLightDisplaced) return;
+    softboxLightDisplaced = false;
+    if (shadowKeyLight) {
+      shadowKeyLight.position.copy(shadowKeyBasePosition);
+      shadowKeyLight.target.position.copy(shadowKeyBaseTarget);
+      shadowKeyLight.target.updateMatrixWorld();
+      shadowMapDirty = true;
+    }
+  };
   const cancelIdleRefine = () => {
     if (idleRefineTimer !== null) {
       clearTimeout(idleRefineTimer);
       idleRefineTimer = null;
+    }
+    if (softboxRaf) {
+      cancelAnimationFrame(softboxRaf);
+      softboxRaf = 0;
+    }
+    if (softboxActive) {
+      softboxActive = false;
+      softboxSampleIndex = 0;
+      softboxTargetSamples = 0;
+      camera.clearViewOffset();
+      host.dataset.softboxMode = 'interactive';
+    }
+    restoreSoftboxKeyLight();
+  };
+  const createAccumTarget = (width: number, height: number) =>
+    new THREE.WebGLRenderTarget(width, height, {
+      type: linearType,
+      format: THREE.RGBAFormat,
+      depthBuffer: false,
+      stencilBuffer: false,
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      generateMipmaps: false,
+    });
+  const ensureSoftboxAccumTargets = (width: number, height: number) => {
+    if (!softboxAccumLinear) softboxAccumLinear = createAccumTarget(width, height);
+    else if (softboxAccumLinear.width !== width || softboxAccumLinear.height !== height) {
+      softboxAccumLinear.setSize(width, height);
+    }
+    if (!softboxAccumMatte) softboxAccumMatte = createAccumTarget(width, height);
+    else if (softboxAccumMatte.width !== width || softboxAccumMatte.height !== height) {
+      softboxAccumMatte.setSize(width, height);
+    }
+  };
+  const addTargetIntoAccum = (src: THREE.Texture, dst: THREE.WebGLRenderTarget) => {
+    const prevAutoClear = renderer.autoClear;
+    renderer.autoClear = false;
+    try {
+      accumUniforms.tSrc.value = src;
+      renderer.setRenderTarget(dst);
+      accumQuad.render(renderer);
+    } finally {
+      renderer.autoClear = prevAutoClear;
     }
   };
   const requestRender = () => {
@@ -415,7 +626,9 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     return adaptiveScale < 1 ? Math.min(30, budget.maxFps) : budget.maxFps;
   };
   const renderTo = (linear: THREE.WebGLRenderTarget, output: THREE.WebGLRenderTarget | null, view: THREE.PerspectiveCamera, transparent = false,
-    backdropSurface = previewBackdrop, paintBackground: MockupBackdropPainter | undefined = options.paintBackground, backdropRegion?: RefractiveBackdropRegion) => {
+    backdropSurface = previewBackdrop, paintBackground: MockupBackdropPainter | undefined = options.paintBackground, backdropRegion?: RefractiveBackdropRegion,
+    skipOutputPass = false) => {
+    outputUniforms.accumInvCount.value = 1;
     const region = outputUniforms.outputRegion.value;
     if (backdropRegion) region.set(backdropRegion.x / backdropRegion.fullWidth,
       (backdropRegion.fullHeight - backdropRegion.y - backdropRegion.height) / backdropRegion.fullHeight,
@@ -438,13 +651,15 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     const background = scene.background;
     const fog = scene.fog;
     if (transparent) { scene.background = null; scene.fog = null; }
-    if (studio) {
+    const renderStudioMatte = () => {
       if (!studioMatteTarget) studioMatteTarget = createLinearTarget(linear.width, linear.height);
       else studioMatteTarget.setSize(linear.width, linear.height);
       const previousToneMapping = renderer.toneMapping;
       const productVisible = product.visible;
       const productNear = view.near;
       try {
+        studioGround.setVisible(true);
+        scene.background = background;
         product.visible = false;
         // The floor extends towards the eye. Give only this separate matte pass
         // its close near plane; the print/glass pass keeps its precise product
@@ -452,6 +667,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         view.near = Math.min(productNear, Math.max(0.00001, (currentSubjectRadius() || 0.02) * 0.005));
         if (view.near !== productNear) view.updateProjectionMatrix();
         renderer.toneMapping = THREE.NoToneMapping;
+        renderer.shadowMap.needsUpdate = false;
         renderer.setRenderTarget(studioMatteTarget); renderer.clear(); renderer.render(scene, view);
         outputUniforms.studioMatte.value = studioMatteTarget.texture;
         outputUniforms.studioMatteEnabled.value = 1;
@@ -460,6 +676,17 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         product.visible = productVisible;
         renderer.toneMapping = previousToneMapping;
       }
+      studioGround.setVisible(false);
+      scene.background = null;
+    };
+    const isPackagingShadowPass = Boolean(procedural && !active && renderer.shadowMap.enabled);
+    // For refractive bottles/cans, render the studio matte BEFORE the product pass so
+    // glass refraction sees the floor. For Packaging CAD, render the product pass FIRST so
+    // Three.js natively updates the cached shadow map inside renderer.render(), then render
+    // the studio matte so the floor ShadowMaterial immediately reflects the fresh shadow map!
+    if (studio && !isPackagingShadowPass) {
+      renderStudioMatte();
+    } else if (studio) {
       studioGround.setVisible(false);
       scene.background = null;
     }
@@ -490,13 +717,23 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     outputUniforms.basilNeckCoverage.value = null;
     if (!nativeNeck) neckExport.release();
     renderer.setRenderTarget(linear); renderer.setClearColor('#000000', 0); renderer.clear();
+    if (isPackagingShadowPass && shadowMapDirty) {
+      renderer.shadowMap.needsUpdate = true;
+    }
     try {
       neckMeshes.forEach(mesh => { mesh.visible = false; });
       renderPaperBackingCapture(renderer, scene, view, () => {
         renderBottleScene(renderer, scene, view);
       });
     } finally {
+      if (isPackagingShadowPass && shadowMapDirty) {
+        renderer.shadowMap.needsUpdate = false;
+        shadowMapDirty = false;
+      }
       neckMeshes.forEach(mesh => { mesh.visible = true; });
+    }
+    if (studio && isPackagingShadowPass) {
+      renderStudioMatte();
     }
     if (nativeNeck) {
       const native = neckExport.render(scene, view, linear.width, linear.height);
@@ -506,9 +743,12 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         outputUniforms.basilNeckCoverage.value = native.coverage;
       }
     }
-    outputUniforms.tDiffuse.value = linear.texture;
-    outputUniforms.toneMappingExposure.value = renderer.toneMappingExposure;
-    renderer.setRenderTarget(output); renderer.clear(); outputQuad.render(renderer);
+    if (!skipOutputPass) {
+      outputUniforms.tDiffuse.value = linear.texture;
+      outputUniforms.toneMappingExposure.value = renderer.toneMappingExposure;
+      outputUniforms.accumInvCount.value = 1;
+      renderer.setRenderTarget(output); renderer.clear(); outputQuad.render(renderer);
+    }
     } finally {
       if (studio) { studioGround.setVisible(true); scene.background = background; }
       if (transparent) {
@@ -594,9 +834,119 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       .catch(() => {})
       .finally(() => { thumbnailBusy = false; });
   };
+  const stepProgressiveSoftbox = () => {
+    softboxRaf = 0;
+    if (
+      !softboxActive ||
+      disposed ||
+      !isVisible() ||
+      captureGate.busy ||
+      !procedural ||
+      active ||
+      dragging ||
+      moving() ||
+      !shadowKeyLight
+    ) {
+      cancelIdleRefine();
+      return;
+    }
+    const budget = currentQualityBudget();
+    const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+    const targetW = Math.max(1, Math.round(size.x * budget.idleScale));
+    const targetH = Math.max(1, Math.round(size.y * budget.idleScale));
+    if (!idlePreviewTarget || idlePreviewTargetSamples !== budget.idleMsaa) {
+      idlePreviewTarget?.dispose();
+      idlePreviewTarget = createLinearTarget(targetW, targetH, budget.idleMsaa);
+      idlePreviewTargetSamples = budget.idleMsaa;
+    } else if (idlePreviewTarget.width !== targetW || idlePreviewTarget.height !== targetH) {
+      idlePreviewTarget.setSize(targetW, targetH);
+    }
+    ensureSoftboxAccumTargets(targetW, targetH);
+
+    const k = softboxSampleIndex;
+    const total = softboxTargetSamples;
+    const studio = sceneMode === 'studio';
+    if (k === 0) {
+      const prevClearCol = renderer.getClearColor(new THREE.Color());
+      const prevClearAlpha = renderer.getClearAlpha();
+      renderer.setClearColor('#000000', 0);
+      renderer.setRenderTarget(softboxAccumLinear!);
+      renderer.clear(true, false, false);
+      if (studio) {
+        renderer.setRenderTarget(softboxAccumMatte!);
+        renderer.clear(true, false, false);
+      }
+      renderer.setClearColor(prevClearCol, prevClearAlpha);
+    }
+
+    computeSoftboxKeyLightPosition(
+      shadowKeyBasePosition,
+      shadowKeyBaseTarget,
+      shadowKeyBaseRadius,
+      k,
+      total,
+      shadowKeyLight.position,
+    );
+    shadowKeyLight.target.position.copy(shadowKeyBaseTarget);
+    shadowKeyLight.target.updateMatrixWorld();
+    shadowMapDirty = true;
+    softboxLightDisplaced = k > 0;
+
+    const [jx, jy] = computeHaltonJitterPx(k, 0.34);
+    if (k > 0) {
+      camera.setViewOffset(targetW, targetH, jx, jy, targetW, targetH);
+    }
+    try {
+      renderTo(idlePreviewTarget, null, camera, false, previewBackdrop, options.paintBackground, undefined, true);
+      addTargetIntoAccum(idlePreviewTarget.texture, softboxAccumLinear!);
+      if (studio && studioMatteTarget) {
+        addTargetIntoAccum(studioMatteTarget.texture, softboxAccumMatte!);
+        outputUniforms.studioMatte.value = softboxAccumMatte!.texture;
+        outputUniforms.studioMatteEnabled.value = 1;
+      } else {
+        outputUniforms.studioMatteEnabled.value = 0;
+      }
+      outputUniforms.tDiffuse.value = softboxAccumLinear!.texture;
+      outputUniforms.toneMappingExposure.value = renderer.toneMappingExposure;
+      outputUniforms.accumInvCount.value = 1 / (k + 1);
+      renderer.setRenderTarget(null);
+      renderer.clear();
+      outputQuad.render(renderer);
+    } finally {
+      camera.clearViewOffset();
+      outputUniforms.accumInvCount.value = 1;
+    }
+
+    softboxSampleIndex = k + 1;
+    renderFrames++;
+    const finished = softboxSampleIndex >= total;
+    host.dataset.previewMode = finished ? 'softbox-refined' : 'softbox-refining';
+    host.dataset.softboxMode = finished ? 'idle-complete' : 'idle-refining';
+    host.dataset.softboxSamples = `${softboxSampleIndex}/${total}`;
+    host.dataset.previewMsaa = String(budget.idleMsaa);
+    host.dataset.previewScale = String(budget.idleScale);
+
+    if (finished) {
+      softboxActive = false;
+      paintThumbnail(performance.now(), true);
+      sampleDiagnostics();
+    } else {
+      softboxRaf = requestAnimationFrame(stepProgressiveSoftbox);
+    }
+  };
   const paintIdleSharpFrame = () => {
     idleRefineTimer = null;
     if (disposed || !isVisible() || captureGate.busy || !hasSubject() || dragging || moving()) return;
+    if (procedural && !active && shadowKeyLight && renderer.shadowMap.enabled) {
+      const sampleCount = resolveSoftboxSampleCount(effectiveQualityTier(), 'idle');
+      if (sampleCount > 1) {
+        softboxActive = true;
+        softboxSampleIndex = 0;
+        softboxTargetSamples = sampleCount;
+        stepProgressiveSoftbox();
+        return;
+      }
+    }
     const budget = currentQualityBudget();
     if (budget.idleRefineMs <= 0) return;
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -621,12 +971,17 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     cancelIdleRefine();
     if (disposed || !isVisible() || captureGate.busy || !hasSubject() || dragging) return;
     const budget = currentQualityBudget();
+    const isPackagingSoftbox =
+      Boolean(procedural && !active && shadowKeyLight && renderer.shadowMap.enabled) &&
+      resolveSoftboxSampleCount(effectiveQualityTier(), 'idle') > 1;
     const effectiveInteractiveScale = Math.max(0.5, budget.interactiveScale * adaptiveScale);
     const needsRefine =
-      budget.idleRefineMs > 0 &&
-      (budget.idleScale > effectiveInteractiveScale + 0.01 || budget.idleMsaa > budget.interactiveMsaa);
+      isPackagingSoftbox ||
+      (budget.idleRefineMs > 0 &&
+        (budget.idleScale > effectiveInteractiveScale + 0.01 || budget.idleMsaa > budget.interactiveMsaa));
     if (!needsRefine) return;
-    idleRefineTimer = window.setTimeout(paintIdleSharpFrame, budget.idleRefineMs);
+    const delayMs = isPackagingSoftbox ? Math.max(220, budget.idleRefineMs) : budget.idleRefineMs;
+    idleRefineTimer = window.setTimeout(paintIdleSharpFrame, delayMs);
   };
   function frame(now: number) {
     raf = 0;
@@ -693,6 +1048,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         } else pose.slerp(targetPose, 1 - Math.exp(-dt * 10));
         product.quaternion.copy(pose);
       } else if (animation.mode === 'turntable' && animation.playing) product.rotation.y = (product.rotation.y + dt * animation.speed * 0.65) % (Math.PI * 2);
+      if (procedural && !active) shadowMapDirty = true;
       dirty = true;
     }
     const bubbling = Boolean(active?.bubbles?.animated) && !matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -703,6 +1059,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       procedural!.bounds = nextBounds;
       procedural!.radius = Math.max(0.01, nextBounds.getBoundingSphere(new THREE.Sphere()).radius);
       syncGroundToSubject();
+      syncProceduralStudioLighting();
       dirty = true;
     }
     if (dirty && previewTarget && now - lastDraw >= 1000 / liveMaxFps()) {
@@ -918,7 +1275,8 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       try {
         const target = pmrem.fromEquirectangular(uploadTexture);
         environmentTarget?.dispose(); environmentTarget = target;
-        scene.environment = target.texture; scene.environmentIntensity = settings.environment.intensity;
+        scene.environment = target.texture;
+        scene.environmentIntensity = procedural && !active ? 0.68 : settings.environment.intensity;
         scene.environmentRotation.set(...settings.environment.rotation);
         host.dataset.environment = 'ready'; requestRender();
       } finally {
@@ -929,8 +1287,166 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     }
   };
   let environmentReady = loadEnvironment();
+  const restoreSingleLabelHover = () => {
+    if (!savedSingleLabelMaterials.size) return false;
+    for (const [mat, orig] of savedSingleLabelMaterials) {
+      mat.color.copy(orig.color);
+      mat.emissive.copy(orig.emissive);
+      mat.emissiveIntensity = orig.emissiveIntensity;
+    }
+    savedSingleLabelMaterials.clear();
+    return true;
+  };
+  const isSingleBottleLabelSlot = (mesh: THREE.Mesh, mat: THREE.Material | undefined, asset: ProductAsset): boolean => {
+    if (!mat || !mat.visible || mat.opacity <= 0 || mat.side === THREE.BackSide) return false;
+    const labelNames = asset.materialSlots?.label ?? [];
+    if (labelNames.includes(mat.name) || labelNames.includes(mesh.name)) return true;
+    const lower = `${mat.name} ${mesh.name}`.toLowerCase();
+    if (lower.includes('back')) return false;
+    return lower.includes('label') || lower.includes('lable');
+  };
+  const applySingleLabelHover = (hovered: boolean): boolean => {
+    if (!hovered || !active) return restoreSingleLabelHover();
+    let changed = false;
+    const asset = active.asset;
+    active.root.traverseVisible((node) => {
+      if (!(node instanceof THREE.Mesh)) return;
+      const mats = Array.isArray(node.material) ? node.material : [node.material];
+      for (const mat of mats) {
+        if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
+        if (!isSingleBottleLabelSlot(node, mat, asset)) continue;
+        if (!savedSingleLabelMaterials.has(mat)) {
+          savedSingleLabelMaterials.set(mat, {
+            color: mat.color.clone(),
+            emissive: mat.emissive.clone(),
+            emissiveIntensity: mat.emissiveIntensity,
+          });
+          mat.color.lerp(singleLabelHoverTint, 0.34);
+          mat.emissive.set('#2563eb');
+          mat.emissiveIntensity = Math.max(mat.emissiveIntensity, 0.24);
+          changed = true;
+        }
+      }
+    });
+    return changed;
+  };
+  const samePickTarget = (a: InteractivePickTarget | null, b: InteractivePickTarget | null): boolean => {
+    if (a === b) return true;
+    if (!a || !b || a.kind !== b.kind) return false;
+    if (a.kind === 'packaging-face' && b.kind === 'packaging-face') {
+      return a.templateId === b.templateId && a.panelId === b.panelId && a.surface === b.surface;
+    }
+    if (a.kind === 'bottle-label' && b.kind === 'bottle-label') {
+      return a.modelId === b.modelId && a.instanceId === b.instanceId;
+    }
+    return false;
+  };
+  const applyInteractiveCursor = () => {
+    const nextCursor = dragging || orbitDragging
+      ? 'grabbing'
+      : activeHoverTarget
+        ? 'pointer'
+        : 'grab';
+    canvas.style.cursor = nextCursor;
+    hitRegion.element.style.cursor = nextCursor;
+  };
+  const setActiveHover = (next: InteractivePickTarget | null) => {
+    if (samePickTarget(activeHoverTarget, next)) {
+      applyInteractiveCursor();
+      return;
+    }
+    activeHoverTarget = next;
+    if (procedural && !active) {
+      restoreSingleLabelHover();
+      procedural.subject.setHoverTarget?.(next);
+    } else if (active) {
+      const changed = applySingleLabelHover(next?.kind === 'bottle-label');
+      if (changed) requestRender();
+    } else {
+      restoreSingleLabelHover();
+    }
+    applyInteractiveCursor();
+    options.onHoverTarget?.(next);
+  };
+  const pickInteractiveAt = (clientX: number, clientY: number): InteractivePickTarget | null => {
+    if (!interactivePickingEnabled || disposed || contextLost || captureGate.busy || pausedAt !== null || !hasSubject()) {
+      return null;
+    }
+    const rect = canvas.getBoundingClientRect();
+    if (!(rect.width > 0 && rect.height > 0)) return null;
+    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+      return null;
+    }
+    pointer.set(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      1 - ((clientY - rect.top) / rect.height) * 2,
+    );
+    product.updateWorldMatrix(true, true);
+    camera.updateMatrixWorld();
+    raycaster.setFromCamera(pointer, camera);
+
+    if (procedural && !active) {
+      return procedural.subject.pickTarget?.(raycaster) ?? null;
+    }
+
+    if (active) {
+      const meshes = visibleProductGestureMeshes(active.root);
+      if (!meshes.length) return null;
+      const hits = raycaster.intersectObjects(meshes, false);
+      const asset = active.asset;
+      const hitMat = (hit: THREE.Intersection): THREE.Material | undefined => {
+        const mesh = hit.object as THREE.Mesh;
+        return Array.isArray(mesh.material) ? mesh.material[hit.face?.materialIndex ?? 0] : mesh.material;
+      };
+      for (let i = 0; i < hits.length; i++) {
+        const hit = hits[i];
+        const mesh = hit.object as THREE.Mesh;
+        const mat = hitMat(hit);
+        if (!mat || !mat.visible || mat.opacity <= 0 || mat.side === THREE.BackSide) continue;
+        if (isSingleBottleLabelSlot(mesh, mat, asset)) {
+          return {
+            kind: 'bottle-label',
+            modelId: asset.id,
+            instanceId: 0,
+            label: 'Bottle Label',
+            packCount: 1,
+          };
+        }
+        const isTransparentShell =
+          mat.transparent ||
+          (mat instanceof THREE.MeshPhysicalMaterial && mat.transmission > 0.15);
+        if (isTransparentShell) {
+          for (let j = i + 1; j < hits.length; j++) {
+            const nextHit = hits[j];
+            if (nextHit.distance - hit.distance > 0.005) break;
+            const nextMesh = nextHit.object as THREE.Mesh;
+            const nextMat = hitMat(nextHit);
+            if (isSingleBottleLabelSlot(nextMesh, nextMat, asset)) {
+              return {
+                kind: 'bottle-label',
+                modelId: asset.id,
+                instanceId: 0,
+                label: 'Bottle Label',
+                packCount: 1,
+              };
+            }
+          }
+        }
+        return null;
+      }
+    }
+    return null;
+  };
+  const cancelHoverRaf = () => {
+    if (hoverRaf) {
+      cancelAnimationFrame(hoverRaf);
+      hoverRaf = 0;
+    }
+    hoverPendingCoords = null;
+  };
   const detachProcedural = () => {
     if (!procedural) return;
+    procedural.subject.setHoverTarget?.(null);
     procedural.subject.root.removeFromParent();
     procedural.subject.dispose();
     procedural = null;
@@ -938,6 +1454,8 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   const select = (asset: ProductAsset, appearance?: ProductAppearance, frontYaw = 0) => {
     if (disposed) return;
     if (contextLost || captureGate.busy) { queuedSelection = { asset, appearance, frontYaw }; return; }
+    cancelHoverRaf();
+    setActiveHover(null);
     detachProcedural();
     const nextKey = mockupSelectionKey(asset, appearance, frontYaw);
     if (nextKey === desiredKey && readyRevision === revision && statusPhase === 'ready') { emit('ready'); return; }
@@ -1054,6 +1572,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         resize();
         studioGround.setFloorY(candidate.bounds.min.y);
         studioGround.setRadius(candidate.radius);
+        syncProceduralStudioLighting();
         lights.forEach((light, index) => light.position.set(...settings.lights[index].position).multiplyScalar(candidate!.radius));
         if (changingModel) fit(sceneMode === 'studio' ? 'view-4' : animation.mode === 'showcase' ? 'front' : 'view-1'); else requestRender();
         // The shared pool prepared textures and shaders against the ready studio
@@ -1109,6 +1628,19 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     lastInputAt = motionTime; returnFrom = null; requestRender();
   };
   const pointerDown = (event: PointerEvent) => {
+    if (interactivePickingEnabled && !captureGate.busy && !contextLost && event.button === 0 && !clickCandidate) {
+      clickCandidate = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        startTime: performance.now(),
+        moved: false,
+      };
+      if (animation.mode !== 'showcase' && !activeHoverTarget) {
+        orbitDragging = true;
+        applyInteractiveCursor();
+      }
+    }
     const rootObj = procedural?.subject.root ?? active?.root;
     if (animation.mode !== 'showcase' || !rootObj || captureGate.busy || contextLost || event.button !== 0 || pointers.has(event.pointerId)) return;
     if ((event.pointerType === 'touch' || event.pointerType === 'pen') && event.target !== hitRegion.element) return;
@@ -1120,35 +1652,105 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     targetPose.copy(pose); returnFrom = null;
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     try { canvas.setPointerCapture(event.pointerId); } catch { pointers.delete(event.pointerId); return; }
-    dragging = true; hitRegion.beginDrag(); hitRegion.element.style.cursor = canvas.style.cursor = 'grabbing';
+    dragging = true; hitRegion.beginDrag(); applyInteractiveCursor();
     lastInputAt = motionTime; requestRender();
   };
   const pointerMove = (event: PointerEvent) => {
+    if (clickCandidate && clickCandidate.pointerId === event.pointerId) {
+      const travel = Math.hypot(event.clientX - clickCandidate.startX, event.clientY - clickCandidate.startY);
+      if (travel > 5 && !clickCandidate.moved) {
+        clickCandidate.moved = true;
+        if (animation.mode !== 'showcase') orbitDragging = true;
+        cancelHoverRaf();
+        setActiveHover(null);
+        applyInteractiveCursor();
+      }
+    }
     const previous = pointers.get(event.pointerId);
-    if (!previous) return;
-    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    if (pointers.size > 1) return;
-    const bounds = canvas.getBoundingClientRect();
-    const dx = (event.clientX - previous.x) * (bounds.width > 0 ? host.clientWidth / bounds.width : 1);
-    const dy = (event.clientY - previous.y) * (bounds.height > 0 ? host.clientHeight / bounds.height : 1);
-    const distance = Math.hypot(dx, dy);
-    if (distance < 0.1) return;
-    rotateProduct(dragAxis.set(dy, dx, 0).normalize(), Math.min(distance * 0.008, 0.24));
+    if (previous) {
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pointers.size > 1) return;
+      const bounds = canvas.getBoundingClientRect();
+      const dx = (event.clientX - previous.x) * (bounds.width > 0 ? host.clientWidth / bounds.width : 1);
+      const dy = (event.clientY - previous.y) * (bounds.height > 0 ? host.clientHeight / bounds.height : 1);
+      const distance = Math.hypot(dx, dy);
+      if (distance < 0.1) return;
+      rotateProduct(dragAxis.set(dy, dx, 0).normalize(), Math.min(distance * 0.008, 0.24));
+      return;
+    }
+    if (
+      interactivePickingEnabled &&
+      event.pointerType === 'mouse' &&
+      event.buttons === 0 &&
+      !dragging &&
+      !orbitDragging &&
+      !clickCandidate
+    ) {
+      hoverPendingCoords = { x: event.clientX, y: event.clientY };
+      if (!hoverRaf) {
+        hoverRaf = requestAnimationFrame(() => {
+          hoverRaf = 0;
+          const coords = hoverPendingCoords;
+          hoverPendingCoords = null;
+          if (!coords || dragging || orbitDragging || clickCandidate) return;
+          setActiveHover(pickInteractiveAt(coords.x, coords.y));
+        });
+      }
+    }
   };
   const pointerUp = (event: PointerEvent) => {
-    if (!pointers.delete(event.pointerId)) return;
-    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-    dragging = pointers.size > 0;
-    if (!dragging) { hitRegion.endDrag(); hitRegion.element.style.cursor = canvas.style.cursor = 'grab'; lastInputAt = motionTime; }
-    requestRender();
+    const isLostCapture = event.type === 'lostpointercapture';
+    const isCancel = event.type === 'pointercancel';
+    let triggerClickPick = false;
+    // Note: OrbitControls calls releasePointerCapture() during pointerup, firing
+    // `lostpointercapture` synchronously before `pointerup` bubbles to `host`.
+    // Never let `lostpointercapture` cancel an unmoved click candidate!
+    if (!isLostCapture && clickCandidate && clickCandidate.pointerId === event.pointerId) {
+      const elapsed = performance.now() - clickCandidate.startTime;
+      triggerClickPick = !isCancel && !clickCandidate.moved && event.button === 0 && elapsed < 480;
+      clickCandidate = null;
+    }
+    if (!isLostCapture) {
+      orbitDragging = false;
+    }
+    const hadShowcasePointer = pointers.delete(event.pointerId);
+    if (hadShowcasePointer) {
+      if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+      dragging = pointers.size > 0;
+      if (!dragging) { hitRegion.endDrag(); lastInputAt = motionTime; }
+      requestRender();
+    }
+    if (triggerClickPick && interactivePickingEnabled) {
+      const picked = pickInteractiveAt(event.clientX, event.clientY);
+      if (picked) {
+        cancelHoverRaf();
+        setActiveHover(null);
+        options.onPickTarget?.(picked);
+        applyInteractiveCursor();
+        return;
+      }
+    }
+    applyInteractiveCursor();
+  };
+  const pointerLeave = () => {
+    cancelHoverRaf();
+    if (!dragging && !orbitDragging) {
+      clickCandidate = null;
+      setActiveHover(null);
+    }
   };
   const cancelPointers = () => {
+    cancelHoverRaf();
+    clickCandidate = null;
+    orbitDragging = false;
     const ids = [...pointers.keys()]; pointers.clear(); dragging = false;
     hitRegion.endDrag();
     for (const id of ids) if (canvas.hasPointerCapture(id)) {
       try { canvas.releasePointerCapture(id); } catch { /* The browser may have cancelled capture already. */ }
     }
-    hitRegion.element.style.cursor = canvas.style.cursor = 'grab'; lastInputAt = motionTime;
+    setActiveHover(null);
+    applyInteractiveCursor();
+    lastInputAt = motionTime;
   };
   const zoomCamera = (factor: number) => {
     if (disposed || captureGate.busy || !Number.isFinite(factor) || factor <= 0) return;
@@ -1219,11 +1821,17 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   };
   host.addEventListener('pointerdown', pointerDown); host.addEventListener('pointermove', pointerMove);
   host.addEventListener('pointerup', pointerUp); host.addEventListener('pointercancel', pointerUp);
+  host.addEventListener('pointerleave', pointerLeave);
   canvas.addEventListener('lostpointercapture', pointerUp);
   host.addEventListener('wheel', wheel, { passive: false });
   const onControlsStart = () => { if (!captureGate.busy) { cameraTransition = null; pauseFromInteraction(); } };
+  const onControlsEnd = () => {
+    orbitDragging = false;
+    if (clickCandidate?.moved) clickCandidate = null;
+    applyInteractiveCursor();
+  };
   const onControlsChange = () => requestRender();
-  controls.addEventListener('start', onControlsStart); controls.addEventListener('change', onControlsChange);
+  controls.addEventListener('start', onControlsStart); controls.addEventListener('end', onControlsEnd); controls.addEventListener('change', onControlsChange);
   const syncVisibility = () => {
     if (!isVisible()) { cancelIdleRefine(); cancelPointers(); hitRegion.clear(); if (raf) cancelAnimationFrame(raf); raf = 0; prefetch.setEnabled(false); }
     else { lastTime = performance.now(); prefetch.setEnabled(readyRevision === revision); requestRender(); }
@@ -1260,12 +1868,15 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       if (subject && procedural?.subject === subject) return;
       request?.abort(); request = null;
       queuedSelection = null;
+      cancelHoverRaf();
+      setActiveHover(null);
       if (pointers.size) cancelPointers();
       detachProcedural();
       if (active) { recycle(active); active = null; }
       desired = null; desiredKey = '';
       if (!subject) {
         revision++; readyRevision = -1;
+        syncProceduralStudioLighting();
         requestRender();
         return;
       }
@@ -1285,7 +1896,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         resetAdaptiveBudget();
         resize();
         syncGroundToSubject();
-        lights.forEach((light, index) => light.position.set(...settings.lights[index].position).multiplyScalar(procedural!.radius));
+        syncProceduralStudioLighting();
         fit('three-quarter', false, 32);
         if (previewTarget && isVisible()) { renderTo(previewTarget, null, camera); renderFrames++; }
         readyRevision = thisRevision;
@@ -1295,11 +1906,12 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     },
     refreshProceduralBounds(refreshOptions) {
       if (disposed || !procedural) return;
+      host.dataset.productId = procedural.subject.id;
       const nextBounds = procedural.subject.getBounds();
       procedural.bounds = nextBounds;
       procedural.radius = Math.max(0.01, nextBounds.getBoundingSphere(new THREE.Sphere()).radius);
       syncGroundToSubject();
-      lights.forEach((light, index) => light.position.set(...settings.lights[index].position).multiplyScalar(procedural!.radius));
+      syncProceduralStudioLighting();
       if (refreshOptions?.refitCamera) {
         fit(undefined, false);
       } else {
@@ -1370,10 +1982,13 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     },
     setMaterialOverrides(overrides = {}) {
       if (disposed || captureGate.busy) return;
+      const hadSingleLabelHover = activeHoverTarget?.kind === 'bottle-label' && Boolean(active);
+      if (hadSingleLabelHover) restoreSingleLabelHover();
       materialOverrides = overrides;
       if (readyRevision === revision) active?.pool.setLiveOverrides?.(overrides);
       if (readyRevision === revision) active?.bubbles?.set(overrides);
       if (readyRevision === revision) host.dataset.sparklingCount = String(active?.bubbles?.mesh.count ?? 0);
+      if (hadSingleLabelHover) applySingleLabelHover(true);
       requestRender();
     },
     setCamera: manualCamera,
@@ -1391,6 +2006,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       if (normalized === 'auto') autoCalibratedTier = detectedTier;
       resetAdaptiveBudget();
       resize();
+      if (procedural && !active) syncProceduralStudioLighting();
       requestRender();
     },
     setBackground,
@@ -1398,6 +2014,8 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       if (disposed || paused === (pausedAt !== null)) return;
       const now = performance.now();
       if (paused) {
+        cancelHoverRaf();
+        setActiveHover(null);
         cancelIdleRefine();
         pausedAt = now;
         if (raf) cancelAnimationFrame(raf);
@@ -1499,6 +2117,8 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         exportAbort = new AbortController(); const signal = exportAbort.signal;
         captureOptions.signal?.addEventListener('abort', abortExport, { once: true });
         if (captureOptions.signal?.aborted) exportAbort.abort();
+        cancelHoverRaf();
+        setActiveHover(null);
         if (pointers.size) cancelPointers();
         cancelIdleRefine();
         if (raf) cancelAnimationFrame(raf); raf = 0; controls.enabled = false; emit('exporting');
@@ -1517,6 +2137,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         host.dataset.captureTiles = String(tiles.length);
         host.dataset.captureTransparent = String(Boolean(captureOptions.transparent));
         const frame = frameCamera(captureCamera, size.width, size.height, exportAspect);
+        if (procedural && !active) syncProceduralStudioLighting(2048);
         captureOptions.onProgress?.(0);
         let reservoirTiles = 0;
         const exportSamples = Math.min(4, renderer.capabilities.maxSamples);
@@ -1592,14 +2213,81 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
             refractionCulling.length = 0;
           }
         }
+        const exportSoftboxSamples =
+          procedural && !active && shadowKeyLight && renderer.shadowMap.enabled
+            ? resolveSoftboxSampleCount(effectiveQualityTier(), 'export')
+            : 1;
+        host.dataset.captureSoftboxSamples = String(exportSoftboxSamples);
         for (let index = 0; index < tiles.length; index++) {
           if (disposed || signal.aborted || snapshotRevision !== revision) throw mockupAbortError();
           const tile = tiles[index];
           prepareTile(tile.renderWidth, tile.renderHeight);
           refraction?.setTile({ x: tile.renderX, y: tile.renderY, width: tile.renderWidth, height: tile.renderHeight });
-          captureCamera.setViewOffset(frame.fullWidth, frame.fullHeight, frame.offsetX + tile.renderX, frame.offsetY + tile.renderY, tile.renderWidth, tile.renderHeight);
-          renderTo(linear!, output!, captureCamera, captureOptions.transparent, captureBackdrop, captureOptions.paintBackground,
-            { x: tile.renderX, y: tile.renderY, width: tile.renderWidth, height: tile.renderHeight, fullWidth: size.width, fullHeight: size.height });
+          const tileRegion = { x: tile.renderX, y: tile.renderY, width: tile.renderWidth, height: tile.renderHeight, fullWidth: size.width, fullHeight: size.height };
+          if (exportSoftboxSamples > 1 && shadowKeyLight) {
+            ensureSoftboxAccumTargets(tile.renderWidth, tile.renderHeight);
+            const studioTile = sceneMode === 'studio' && !captureOptions.transparent;
+            renderer.setClearColor('#000000', 0);
+            renderer.setRenderTarget(softboxAccumLinear!);
+            renderer.clear(true, false, false);
+            if (studioTile) {
+              renderer.setRenderTarget(softboxAccumMatte!);
+              renderer.clear(true, false, false);
+            }
+            const allowSubpixelJitter = !refraction?.materialCount;
+            const prevCaptureBgAlpha = outputUniforms.backgroundAlpha.value;
+            try {
+              for (let s = 0; s < exportSoftboxSamples; s++) {
+                if (disposed || signal.aborted || snapshotRevision !== revision) throw mockupAbortError();
+                computeSoftboxKeyLightPosition(
+                  shadowKeyBasePosition,
+                  shadowKeyBaseTarget,
+                  shadowKeyBaseRadius,
+                  s,
+                  exportSoftboxSamples,
+                  shadowKeyLight.position,
+                );
+                shadowKeyLight.target.position.copy(shadowKeyBaseTarget);
+                shadowKeyLight.target.updateMatrixWorld();
+                shadowMapDirty = true;
+                softboxLightDisplaced = s > 0;
+                const [jx, jy] = allowSubpixelJitter ? computeHaltonJitterPx(s, 0.34) : [0, 0];
+                captureCamera.setViewOffset(
+                  frame.fullWidth,
+                  frame.fullHeight,
+                  frame.offsetX + tile.renderX + jx,
+                  frame.offsetY + tile.renderY + jy,
+                  tile.renderWidth,
+                  tile.renderHeight,
+                );
+                renderTo(linear!, output!, captureCamera, captureOptions.transparent, captureBackdrop, captureOptions.paintBackground, tileRegion, true);
+                addTargetIntoAccum(linear!.texture, softboxAccumLinear!);
+                if (studioTile && studioMatteTarget) {
+                  addTargetIntoAccum(studioMatteTarget.texture, softboxAccumMatte!);
+                }
+              }
+              if (studioTile) {
+                outputUniforms.studioMatte.value = softboxAccumMatte!.texture;
+                outputUniforms.studioMatteEnabled.value = 1;
+              } else {
+                outputUniforms.studioMatteEnabled.value = 0;
+              }
+              outputUniforms.backgroundAlpha.value = captureOptions.transparent ? 0 : prevCaptureBgAlpha;
+              outputUniforms.tDiffuse.value = softboxAccumLinear!.texture;
+              outputUniforms.toneMappingExposure.value = renderer.toneMappingExposure;
+              outputUniforms.accumInvCount.value = 1 / exportSoftboxSamples;
+              renderer.setRenderTarget(output!);
+              renderer.clear();
+              outputQuad.render(renderer);
+            } finally {
+              outputUniforms.accumInvCount.value = 1;
+              outputUniforms.backgroundAlpha.value = prevCaptureBgAlpha;
+              restoreSoftboxKeyLight();
+            }
+          } else {
+            captureCamera.setViewOffset(frame.fullWidth, frame.fullHeight, frame.offsetX + tile.renderX, frame.offsetY + tile.renderY, tile.renderWidth, tile.renderHeight);
+            renderTo(linear!, output!, captureCamera, captureOptions.transparent, captureBackdrop, captureOptions.paintBackground, tileRegion);
+          }
           const pixels = new Uint8Array(tile.renderWidth * tile.renderHeight * 4);
           await abortable(renderer.readRenderTargetPixelsAsync(output!, 0, 0, tile.renderWidth, tile.renderHeight, pixels), signal, 30000);
           if (disposed || signal.aborted) throw mockupAbortError();
@@ -1626,6 +2314,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
           renderer.setRenderTarget(previousTarget); renderer.setViewport(previousViewport); renderer.setScissor(previousScissor);
           renderer.setScissorTest(previousScissorTest); renderer.setClearColor(previousClearColor, previousClearAlpha);
           controls.enabled = previousControls && !contextLost;
+          if (procedural && !active) syncProceduralStudioLighting();
           lastTime = performance.now();
           if (!contextLost) { emit('ready'); resize(); }
         }
@@ -1656,19 +2345,25 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       canvas.removeEventListener('webglcontextlost', lostContext); canvas.removeEventListener('webglcontextrestored', restoredContext);
       host.removeEventListener('pointerdown', pointerDown); host.removeEventListener('pointermove', pointerMove);
       host.removeEventListener('pointerup', pointerUp); host.removeEventListener('pointercancel', pointerUp);
+      host.removeEventListener('pointerleave', pointerLeave);
       canvas.removeEventListener('lostpointercapture', pointerUp);
       host.removeEventListener('wheel', wheel);
-      controls.removeEventListener('start', onControlsStart); controls.removeEventListener('change', onControlsChange); controls.dispose();
+      controls.removeEventListener('start', onControlsStart); controls.removeEventListener('end', onControlsEnd); controls.removeEventListener('change', onControlsChange); controls.dispose();
       detachProcedural();
       discard(active); active = null; discard(cached); cached = null; [...candidates].forEach(discard);
       prefetch.dispose(); previewTarget?.dispose(); idlePreviewTarget?.dispose(); environmentTarget?.dispose();
       thumbnailLinear?.dispose(); thumbnailOutput?.dispose();
       thumbnailCanvas = null; thumbnailScratch.width = 1; thumbnailScratch.height = 1;
       studioMatteTarget?.dispose();
+      softboxAccumLinear?.dispose();
+      softboxAccumMatte?.dispose();
+      softboxAccumLinear = null;
+      softboxAccumMatte = null;
       setBottleBackdrop(scene, null);
       previewBackdrop.dispose(); thumbnailBackdrop.dispose(); captureBackdrop.dispose();
       studioGround.dispose();
-      neckExport.dispose(); outputQuad.dispose(); outputMaterial.dispose(); pmrem.dispose(); draco.dispose(); basis.dispose();
+      shadowKeyLight?.shadow.map?.dispose();
+      neckExport.dispose(); outputQuad.dispose(); outputMaterial.dispose(); accumQuad.dispose(); accumMaterial.dispose(); pmrem.dispose(); draco.dispose(); basis.dispose();
       disposePaperBackingCapture(renderer);
       renderer.dispose(); canvas.remove();
     },

@@ -7,6 +7,7 @@ export interface StudioGroundController {
   setFloorY(y: number): void;
   setRadius(radius: number): void;
   setContactFootprint(width: number, depth: number, shape?: StudioContactShape): void;
+  setDynamicShadowActive(active: boolean): void;
   setVisible(visible: boolean): void;
   dispose(): void;
 }
@@ -23,7 +24,8 @@ export function createStudioGround(scene: THREE.Scene): StudioGroundController {
   });
   const floor = new THREE.Mesh(floorGeometry, floorMaterial);
   floor.rotation.x = -Math.PI / 2;
-  floor.receiveShadow = true;
+  floor.receiveShadow = false;
+  floor.castShadow = false;
   group.add(floor);
 
   const gridMaterial = new THREE.ShaderMaterial({
@@ -95,6 +97,7 @@ export function createStudioGround(scene: THREE.Scene): StudioGroundController {
       uShape: { value: 0 }, // 0 = radial circle (bottles/cans), 1 = rounded box (boxes/trays)
       uBoxHalf: { value: new THREE.Vector2(0.55, 0.55) },
       uFeather: { value: 0.35 },
+      uStrength: { value: 1.0 },
     },
     vertexShader: `
       varying vec2 contactUv;
@@ -108,6 +111,7 @@ export function createStudioGround(scene: THREE.Scene): StudioGroundController {
       uniform float uShape;
       uniform vec2 uBoxHalf;
       uniform float uFeather;
+      uniform float uStrength;
       void main() {
         vec2 p = (contactUv - 0.5) * 2.0;
         float alpha = 0.0;
@@ -122,7 +126,7 @@ export function createStudioGround(scene: THREE.Scene): StudioGroundController {
           float penumbra = exp(-max(dist, 0.0) * 6.5) * (1.0 - smoothstep(0.0, 0.55, max(dist, 0.0)));
           alpha = clamp(core * 0.16 + penumbra * 0.08, 0.0, 0.22);
         }
-        gl_FragColor = vec4(vec3(0.0), alpha);
+        gl_FragColor = vec4(vec3(0.0), alpha * uStrength);
       }
     `,
   });
@@ -130,7 +134,27 @@ export function createStudioGround(scene: THREE.Scene): StudioGroundController {
   contact.rotation.x = -Math.PI / 2;
   contact.position.y = 0.00004;
   contact.renderOrder = 2;
+  contact.castShadow = false;
+  contact.receiveShadow = false;
   group.add(contact);
+
+  // Real directional cast-shadow receiver used by Parametric Packaging CAD so open lids,
+  // tuck flaps, and packed bottles cast accurate soft shadows onto the pure white floor.
+  const castShadowMaterial = new THREE.ShadowMaterial({
+    color: new THREE.Color("#181c24"),
+    opacity: 0.28,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const castShadowPlane = new THREE.Mesh(floorGeometry, castShadowMaterial);
+  castShadowPlane.rotation.x = -Math.PI / 2;
+  castShadowPlane.position.y = 0.00006;
+  castShadowPlane.renderOrder = 3;
+  castShadowPlane.receiveShadow = true;
+  castShadowPlane.castShadow = false;
+  castShadowPlane.visible = false;
+  group.add(castShadowPlane);
   scene.add(group);
 
   const white = new THREE.Color(0xffffff);
@@ -186,6 +210,11 @@ export function createStudioGround(scene: THREE.Scene): StudioGroundController {
       contactMaterial.uniforms.uFeather.value = 0.28;
       contact.scale.set(planeW / 2.4, planeD / 2.4, 1);
     },
+    setDynamicShadowActive(active) {
+      if (disposed) return;
+      castShadowPlane.visible = active;
+      contactMaterial.uniforms.uStrength.value = active ? 0.52 : 1.0;
+    },
     setVisible(visible) {
       if (!disposed) group.visible = enabled && visible;
     },
@@ -199,6 +228,7 @@ export function createStudioGround(scene: THREE.Scene): StudioGroundController {
       floorMaterial.dispose();
       gridMaterial.dispose();
       contactMaterial.dispose();
+      castShadowMaterial.dispose();
     },
   };
 }

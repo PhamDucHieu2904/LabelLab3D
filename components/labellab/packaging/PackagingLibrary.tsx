@@ -22,6 +22,8 @@ interface Props {
 const CATEGORIES: ReadonlyArray<{ id: "all" | PackagingTemplateCategory; label: string }> = [
   { id: "all", label: "All" },
   { id: "tray", label: "Trays" },
+  { id: "carrier", label: "Carriers" },
+  { id: "rigid-box", label: "Rigid" },
   { id: "carton", label: "Cartons" },
   { id: "mailer", label: "Mailers" },
   { id: "folding-box", label: "Retail" },

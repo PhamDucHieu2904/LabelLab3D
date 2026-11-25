@@ -14,13 +14,17 @@ export async function POST(request: Request) {
     const user = await sessionUser();
     if (!user) throw new Error("FORBIDDEN");
     const runtimeEnv = await env();
-    const body = await request.json().catch(() => ({})) as { coins?: unknown; region?: unknown };
+    const body = await request.json().catch(() => ({})) as { coins?: unknown; packageId?: unknown; region?: unknown };
     const coins = Number(body.coins);
+    const packageId = typeof body.packageId === "string" ? body.packageId.trim() : "";
     const region = body.region === "international" ? "international" : "vietnam";
     const livePackages = await getLiveCoinPackages(runtimeEnv);
-    const selected = Number.isSafeInteger(coins)
-      ? livePackages.find((pkg) => pkg.enabled && pkg.coins === coins) ?? null
-      : null;
+    const regionalPackages = livePackages.filter((pkg) => pkg.enabled && (!pkg.region || pkg.region === region));
+    const selected = packageId
+      ? regionalPackages.find((pkg) => pkg.id === packageId && (!Number.isSafeInteger(coins) || pkg.coins === coins)) ?? null
+      : Number.isSafeInteger(coins)
+        ? regionalPackages.find((pkg) => pkg.coins === coins) ?? null
+        : null;
     if (!selected) throw new Error("INVALID_INPUT");
 
     const id = randomId("pay");
@@ -69,6 +73,7 @@ export async function POST(request: Request) {
       }, { status: 201 });
     }
 
+    if (!Number.isSafeInteger(selected.vnd) || selected.vnd < 1000) throw new Error("INVALID_INPUT");
     const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
     const qrConfig = readSepayQrConfig(runtimeEnv);
 

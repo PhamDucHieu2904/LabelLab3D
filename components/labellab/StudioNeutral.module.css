@@ -62,8 +62,8 @@
 .theme:global(.creative-space.is-studio) :global(:is(.mode-switch button, .zoom-tools button)) { color: var(--studio-muted); background: transparent; }
 .theme:global(.creative-space.is-studio) :global(.mode-switch button[aria-pressed="true"]) { color: #fff; background: var(--studio-charcoal); box-shadow: none; }
 .theme:global(.creative-space.is-studio) :global(.zoom-tools > span) { background: #cfd3d8; }
-.theme:global(.creative-space.is-studio) :global(:is(.studio-project-actions > button, .vertical-tools button)) { color: #4d535b; border-color: var(--studio-line); background: #f5f6f7df; box-shadow: none; }
-.theme:global(.creative-space.is-studio) :global(:is(.studio-project-actions > button, .vertical-tools button, .zoom-tools button):hover:not(:disabled)) { color: var(--studio-ink); background: #e5e8eb; }
+.theme:global(.creative-space.is-studio) :global(:is(.studio-project-actions > button, .vertical-tools > button)) { color: #4d535b; border-color: var(--studio-line); background: #f5f6f7f0; box-shadow: 0 3px 12px #1d232b08; }
+.theme:global(.creative-space.is-studio) :global(:is(.studio-project-actions > button, .vertical-tools > button, .zoom-tools button):hover:not(:disabled)) { color: var(--studio-ink); background: #e5e8eb !important; }
 .theme:global(.creative-space.is-studio) :global(.camera-dpad) { color: var(--studio-muted); border-color: var(--studio-line); background: #f5f6f7df; }
 
 .theme:global(.creative-space.is-studio) :global(.camera-presets) { background: #e8eaede8; border-color: var(--studio-line); box-shadow: 0 4px 16px #1d232b12; }

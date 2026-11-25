@@ -40,11 +40,12 @@ type CheckInState = {
   enabled: boolean;
   claimed: boolean;
   schedule: number[];
+  streak: number;
   nextDayIndex: number;
   todayReward: number;
 };
 
-const DEFAULT_SCHEDULE = [20, 30, 45, 45, 60, 70, 100];
+const DEFAULT_SCHEDULE = [10, 10, 10, 20, 10, 10, 30];
 
 const DEFAULT_ANNOUNCEMENTS: LiveAnnouncement[] = LABELLAB_UPDATES.map((item, idx) => ({
   id: `default-${idx}`,
@@ -61,6 +62,7 @@ export default function HomePage() {
     enabled: true,
     claimed: false,
     schedule: DEFAULT_SCHEDULE,
+    streak: 0,
     nextDayIndex: 0,
     todayReward: DEFAULT_SCHEDULE[0],
   });
@@ -96,6 +98,7 @@ export default function HomePage() {
       if (checkInRes.ok) {
         const payload = await checkInRes.json() as {
           claimed?: boolean;
+          streak?: number;
           nextDayIndex?: number;
           todayReward?: number;
           config?: { enabled: boolean; schedule: number[]; reward: number };
@@ -105,8 +108,9 @@ export default function HomePage() {
           enabled: payload.config?.enabled ?? true,
           claimed: Boolean(payload.claimed),
           schedule,
+          streak: Number(payload.streak ?? 0),
           nextDayIndex: Number(payload.nextDayIndex ?? 0),
-          todayReward: Number(payload.todayReward ?? schedule[0] ?? 20),
+          todayReward: Number(payload.todayReward ?? schedule[0] ?? 10),
         });
       }
     } catch {
@@ -139,11 +143,12 @@ export default function HomePage() {
         return;
       }
       if (!response.ok) throw new Error("check-in failed");
-      const payload = await response.json() as { claimed?: boolean; coins?: number };
+      const payload = await response.json() as { claimed?: boolean; coins?: number; streak?: number };
       if (payload.claimed) {
         setCheckIn((prev) => ({
           ...prev,
           claimed: true,
+          streak: Number(payload.streak ?? prev.streak + 1),
           todayReward: Number(payload.coins ?? prev.todayReward),
         }));
         window.dispatchEvent(new Event("labellab-account-changed"));
@@ -155,13 +160,16 @@ export default function HomePage() {
     }
   };
 
-  const maxScheduleVal = Math.max(...checkIn.schedule, 1);
-  const weekItems = checkIn.schedule.slice(0, 7).map((coins, index) => ({
-    day: `Day ${index + 1}`,
-    coins,
-    reward: index === 6 || (coins >= maxScheduleVal && index > 0) ? `+${coins}` : String(coins),
-    icon: index === 6 || (coins >= maxScheduleVal && index > 0) ? "gift" as const : "coin" as const,
-  }));
+  const baseDayCoins = checkIn.schedule[0] ?? 10;
+  const weekItems = checkIn.schedule.slice(0, 7).map((coins, index) => {
+    const isBonus = index === 6 || (coins > baseDayCoins && index > 0);
+    return {
+      day: `Day ${index + 1}`,
+      coins,
+      reward: isBonus ? `+${coins}` : String(coins),
+      icon: isBonus ? "gift" as const : "coin" as const,
+    };
+  });
 
   return (
     <main className="home-shell">
@@ -274,7 +282,13 @@ export default function HomePage() {
             <article className="home-card home-checkin-card">
               <div className="home-checkin-heading">
                 <h2>Daily check-in</h2>
-                <p>{checkIn.enabled ? "Earn coins every day you check in" : "Daily check-in is temporarily paused"}</p>
+                <p>
+                  {!checkIn.enabled
+                    ? "Daily check-in is temporarily paused"
+                    : checkIn.streak > 0
+                      ? `${checkIn.streak}-day streak · Missing a day resets to Day 1`
+                      : "Check in daily — missing a day resets to Day 1"}
+                </p>
               </div>
               <div className="home-week" role="group" aria-label="Seven day check-in progress">
                 {weekItems.map((item, index) => {

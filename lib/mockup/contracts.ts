@@ -10,6 +10,26 @@ export interface ProceduralContactFootprint {
   shape: 'circle' | 'rounded-box';
 }
 
+/** Interactive 3D target hit by pointer hover or click on a bottle label or packaging face. */
+export type InteractivePickTarget =
+  | {
+      kind: 'packaging-face';
+      templateId: string;
+      panelId: string;
+      surface: 'outside' | 'inside';
+      label: string;
+      shortCode: string;
+      widthMm: number;
+      heightMm: number;
+    }
+  | {
+      kind: 'bottle-label';
+      modelId: string;
+      instanceId: number;
+      label: string;
+      packCount?: number;
+    };
+
 /**
  * Domain-agnostic 3D subject adapter mounted inside the shared MockupRuntime.
  * Used by Parametric Boxes/Trays today and Apparel/Fashion modules in the future.
@@ -21,6 +41,10 @@ export interface ProceduralSubject {
   getBounds(): THREE.Box3;
   /** Optional contact shadow footprint on the Studio floor. */
   getContactFootprint?(): ProceduralContactFootprint;
+  /** Optional interactive 3D hit-testing for hover highlighting and click-to-edit artwork. */
+  pickTarget?(raycaster: THREE.Raycaster): InteractivePickTarget | null;
+  /** Apply or clear live 3D hover highlight on the picked packaging face or bottle label. */
+  setHoverTarget?(target: InteractivePickTarget | null): void;
   /** Optional per-frame animation hook (e.g., folding playback). Returns true to keep rendering. */
   update?(dt: number): boolean;
   /** Dispose owned geometries, materials and textures when unmounted. */
@@ -67,6 +91,10 @@ export interface MockupRuntimeOptions {
   paintBackground?: MockupBackdropPainter;
   /** Manual input pauses turntable; showcase resumes after releasing the product. */
   onInteraction?(): void;
+  /** Notifies Studio UI when pointer hovers or leaves an interactive 3D face/label. */
+  onHoverTarget?(target: InteractivePickTarget | null): void;
+  /** Notifies Studio UI when user clicks (without dragging) an interactive 3D face/label. */
+  onPickTarget?(target: InteractivePickTarget): void;
 }
 export interface MockupRuntime {
   setSceneMode(mode: 'website' | 'studio'): void;

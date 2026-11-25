@@ -30,9 +30,11 @@ Read docs/PARAMETRIC_PACKAGING_HANDOFF.md first to restore full context of our M
 | **Phase 1** | Parametric CAD Kernel (`lib/packaging-cad/`): 2D polygon/hole ops, 3-group solid extrusion, dynamic crease fillet strips, corrugated flute shader, Forward Kinematics folding rig, 3D mm dimensions, `1:1 mm` SVG/PDF/DXF exporters | **DONE** |
 | **Phase 2** | 4 Wave 1 Templates (`FEFCO 0421`, `FEFCO 0201`, `FEFCO 0427`, `ECMA A20/A21`), 3-Tier Progressive Inspector + live 3D hover highlight, Floating Bottom Fold & Camera Dock | **DONE** |
 | **Phase 3** | Dual-Mode 2D/3D Artwork Studio (`Quick Panel Designer` + `Full Dieline Pro`), Split `2D | 3D` View, Dual-side (`Outside`/`Inside`) print, shared 4K/8K Tiled PNG export | **DONE** |
-| **Perf Upgrade** | 4-Tier Graphics Quality (`Auto | Low | Medium | High | Ultra`) × 3 Scene Weights (`Light | Medium | Heavy`) + 4× hardware MSAA + **Idle Sharpness** refinement + Studio top-bar Quality selector | **DONE** |
-| **Phase 4** | Wave 2 Templates (Lid & Base Rigid Box, 4/6-Pack Beverage Carrier, Magnetic Rigid Box, Drawer/Sleeve Box, Grid Divider), Cloud Projects on Cloudflare D1 + R2, Folding Animation Video Export (`.webm`/`.mp4`) | **NEXT** |
-| **Phase 5** | Exclusive Combo Feature **"Pack Your Bottles"** (auto-fit & mount user's 3D bottles/cans inside custom trays/cartons) + **Fashion & Apparel Engine (`engines/apparel`)** | **PLANNED** |
+| **Perf Upgrade** | 4-Tier Graphics Quality (`Auto \| Low \| Medium \| High \| Ultra`) × 3 Scene Weights (`Light \| Medium \| Heavy`) + 4× hardware MSAA + **Idle Sharpness** refinement + Studio top-bar Quality selector | **DONE** |
+| **Phase 4A** | Wave 2 Multi-Piece CAD Templates (`RIGID 2PC` Lid & Base Rigid Box, `F&B PACK` Beverage 4/6/8-Pack Carrier w/ Handle & Dividers, `RIGID MAG` Magnetic Closure Rigid Box, `SLIDE BOX` Drawer & Sleeve Box) + `AssemblyMotionSpec` 2-piece kinematic rig engine | **DONE** |
+| **Phase 4B** | Exclusive Combo Feature **"Pack Your Bottles"** (`pack-layout.ts` + 60 FPS `InstancedMesh` `bottle-packer.ts` + auto-fit mm sizing + synced active Beverage Studio label/liquid/cap colors + moving drawer anchor) | **DONE** |
+| **Phase 4C** | Folding Animation Video Export (`.webm`/`.mp4`) & Cloud Projects on Cloudflare D1 + R2 | **NEXT** |
+| **Phase 5** | **Fashion & Apparel Engine (`lib/apparel/`)** plug-in into shared `ProceduralSubject`, `QualityTier`, and Multi-Zone Artwork Composer | **PLANNED** |
 
 ---
 
@@ -61,10 +63,19 @@ Pure TypeScript + Three.js geometry (zero React/DOM coupling in core solver/expo
 - `lib/packaging-cad/preferences.ts` — Isolated, allowlisted, bounded packaging state storage (`labellab.packaging.preferences.v1`).
 - `lib/packaging-cad/templates/`:
   - `registry.ts` & `helpers.ts`
-  - `fefco-0421-tray.ts` — Flagship Roll End Self-Locking Display Tray (`320×200×60 mm`, 4 base lock slots, double rollover sides, display scoop, hand holes, window, beverage auto-fit presets)
-  - `fefco-0201-rsc.ts` — Standard A1 RSC Shipping Carton (rooted on back bottom flap so 0% lies completely flat; flap gap, hand holes, beverage case presets)
-  - `fefco-0427-mailer.ts` — Self-Locking E-Commerce Mailer Box (rollover sides + hinged lid + lid dust wings + thumb notch + top window; hero fold `0.76` showcases open lid)
-  - `ecma-a20-tuck.ts` — Straight & Reverse Tuck End Retail/Cosmetic Carton (single bottle box preset, thumb notch, front window + PET film)
+  - **Wave 1**:
+    - `fefco-0421-tray.ts` — Flagship Roll End Self-Locking Display Tray (`320×200×60 mm`, 4 base lock slots, double rollover sides, display scoop, hand holes, window, beverage auto-fit presets)
+    - `fefco-0201-rsc.ts` — Standard A1 RSC Shipping Carton (rooted on back bottom flap so 0% lies completely flat; flap gap, hand holes, beverage case presets)
+    - `fefco-0427-mailer.ts` — Self-Locking E-Commerce Mailer Box (rollover sides + hinged lid + lid dust wings + thumb notch + top window; hero fold `0.76` showcases open lid)
+    - `ecma-a20-tuck.ts` — Straight & Reverse Tuck End Retail/Cosmetic Carton (single bottle box preset, thumb notch, front window + PET film)
+  - **Wave 2**:
+    - `beverage-carrier.ts` — `F&B PACK` Beverage 4/6/8-Pack Carrier (pitched gable ends, central arched handle with grip hole, slotted cross-cell dividers, seamless Pack Your Bottles cell alignment)
+    - `rigid-lid-base.ts` — `RIGID 2PC` Telescoping Lid & Base Rigid Box (2-piece flat sheet, 180° flip + hover-lift telescoping lid animation, configurable `lidDepthMm`, top window + thumb notch)
+    - `rigid-magnetic-box.ts` — `RIGID MAG` Magnetic Closure Book-Style Rigid Gift Box (rigid tray + spine + overhanging book lid + chamfered magnetic front wrap flap)
+    - `rigid-drawer-sleeve.ts` — `SLIDE BOX` Drawer & Sleeve Box (2-piece sleeve + inner sliding drawer; packed bottles anchor directly to `drawer-base` and slide smoothly with the drawer!)
+- **Pack Your Bottles Combo Engine**:
+  - `lib/packaging-cad/pack-layout.ts` — Pure mm physical footprint catalog, auto-fit inner box solver (`computeAutoFitBoxDimensions`), symmetric & divider-aligned cell grid solver (`computeBottlePackLayout`), overflow diagnostics.
+  - `lib/packaging-cad/bottle-packer.ts` — 60-FPS `THREE.InstancedMesh` 3D bottle/can mounter sharing single-pass PBR materials + active Beverage Studio custom label artwork, liquid, cap & body colors (`3–6` draw calls for up to 24 bottles).
 
 ### Studio UI Components (`components/labellab/`)
 - `components/labellab/LabellabApp.tsx` — Multi-domain Studio shell with Domain Switcher (`Bottles & Cans | Boxes & Trays CAD | Apparel SOON`), top-bar Quality selector (`Auto | Low | Medium | High | Ultra`), Split `2D | 3D` viewport, and shared `RenderPanel` 4K/8K PNG export.

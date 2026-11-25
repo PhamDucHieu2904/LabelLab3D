@@ -38,6 +38,7 @@ export const FEFCO_0201_RSC_TEMPLATE: PackagingTemplateDefinition = {
     handHoles: true,
     displayScoop: false,
     windowCutout: false,
+    bottlePacking: true,
   },
   sizePresets: [
     {
@@ -418,6 +419,11 @@ export const FEFCO_0201_RSC_TEMPLATE: PackagingTemplateDefinition = {
       innerMm: { length: Linner, width: Winner, height: Hinner },
       outerMm: { length: Louter, width: Wouter, height: Houter },
       rootPanel,
+      contentAnchor: {
+        panelId: rootPanel.id,
+        center2D: [0, -W * 0.5],
+        floorOffsetMm: t * 1.5 + gap,
+      },
       clampNotices,
     });
   },

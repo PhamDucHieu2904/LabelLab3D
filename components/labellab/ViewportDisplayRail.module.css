@@ -1,0 +1,288 @@
+/* Compact Vertical Right-Side Display & Graphics Dock */
+
+.railDock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 50px;
+  padding: 5px 4px;
+  border-radius: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  background: rgba(93, 23, 57, 0.28);
+  color: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 24px rgba(56, 15, 34, 0.16);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  pointer-events: auto;
+  transition: background-color 220ms ease, border-color 220ms ease, color 220ms ease;
+}
+
+.railDock[data-tone="white"] {
+  border-color: #e4dcdf;
+  background: rgba(255, 255, 255, 0.92);
+  color: #6b5863;
+  box-shadow: 0 6px 20px rgba(82, 32, 54, 0.08);
+}
+
+.railDock[data-tone="neutral"] {
+  border-color: #dcdfe2;
+  background: rgba(245, 246, 247, 0.94);
+  color: #555b63;
+  box-shadow: 0 6px 20px rgba(29, 35, 43, 0.08);
+}
+
+.sceneGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+}
+
+.railBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+
+.railBtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+.railDock[data-tone="white"] .railBtn:hover:not(:disabled) {
+  background: #f5eef1;
+  color: #4a2a38;
+}
+
+.railDock[data-tone="neutral"] .railBtn:hover:not(:disabled) {
+  background: #e5e8ec;
+  color: #1f2328;
+}
+
+.railBtn[aria-pressed="true"] {
+  background: #fff9ef;
+  color: #772440;
+  box-shadow: 0 2px 8px rgba(49, 13, 30, 0.16);
+}
+
+.railDock[data-tone="white"] .railBtn[aria-pressed="true"] {
+  background: #f7e6ee;
+  color: #7c2447;
+  box-shadow: inset 0 0 0 1px #e8c7d5;
+}
+
+.railDock[data-tone="neutral"] .railBtn[aria-pressed="true"] {
+  background: #2f3339;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(29, 35, 43, 0.18);
+}
+
+.railBtn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.microLabel {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.015em;
+  line-height: 1;
+  user-select: none;
+}
+
+.divider {
+  width: 24px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.24);
+  flex-shrink: 0;
+}
+
+.railDock[data-tone="white"] .divider {
+  background: #ebe2e5;
+}
+
+.railDock[data-tone="neutral"] .divider {
+  background: #dcdfe2;
+}
+
+/* Tactile Pink / White Theme Swatch */
+.styleDot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: block;
+  transition: transform 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+.styleDotPink {
+  background: linear-gradient(135deg, #e24774 0%, #bd2d56 100%);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 2px 6px rgba(189, 45, 86, 0.35);
+}
+
+.styleDotWhite {
+  background: linear-gradient(135deg, #ffffff 0%, #f2eff0 100%);
+  box-shadow: 0 0 0 1.5px #c5b4bc, 0 2px 5px rgba(80, 50, 65, 0.14);
+}
+
+.railBtn:hover:not(:disabled) .styleDot {
+  transform: scale(1.08);
+}
+
+/* Graphics Quality Trigger & Left-Opening Flyout Menu */
+.qualityWrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.qualityBtn {
+  height: 42px;
+}
+
+.qualityBtn[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+}
+
+.railDock[data-tone="white"] .qualityBtn[aria-expanded="true"] {
+  background: #f7e6ee;
+  color: #7c2447;
+}
+
+.railDock[data-tone="neutral"] .qualityBtn[aria-expanded="true"] {
+  background: #2f3339;
+  color: #ffffff;
+}
+
+.qualityCode {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  user-select: none;
+}
+
+.qualityPopover {
+  position: absolute;
+  right: calc(100% + 14px);
+  top: -6px;
+  width: 272px;
+  padding: 10px;
+  border-radius: 15px;
+  border: 1px solid #dcdfe2;
+  background: rgba(255, 255, 255, 0.98);
+  color: #262a30;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  z-index: 20;
+}
+
+.popoverHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px 9px;
+  margin-bottom: 5px;
+  border-bottom: 1px solid #eceff2;
+}
+
+.popoverHeader strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1f2328;
+}
+
+.popoverBadge {
+  padding: 2.5px 7px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #1d4ed8;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.popoverList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.popoverOption {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #292c30;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+
+.popoverOption:hover {
+  background: #f2f4f7;
+}
+
+.popoverOptionActive {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.popoverOptionActive:hover {
+  background: #e5efff;
+}
+
+.optionText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.optionText strong {
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.optionText small {
+  font-size: 11px;
+  line-height: 1.38;
+  color: #64748b;
+}
+
+.popoverOptionActive .optionText small {
+  color: #3b63c6;
+}
+
+.optionCheck {
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: #2563eb;
+}

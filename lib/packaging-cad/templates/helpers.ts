@@ -1,5 +1,6 @@
 import type {
   BoardMaterialPreset,
+  ContentAnchorSpec,
   CreaseSegment2D,
   DimensionTripleMm,
   FlatPanelSummary,
@@ -38,6 +39,7 @@ export function finalizeSolvedDieline(input: {
   innerMm: DimensionTripleMm;
   outerMm: DimensionTripleMm;
   rootPanel: PanelNode2D;
+  contentAnchor?: ContentAnchorSpec;
   clampNotices: string[];
 }): SolvedDieline {
   const {
@@ -49,6 +51,7 @@ export function finalizeSolvedDieline(input: {
     innerMm,
     outerMm,
     rootPanel,
+    contentAnchor,
     clampNotices,
   } = input;
 
@@ -108,6 +111,11 @@ export function finalizeSolvedDieline(input: {
     blankAreaM2,
     estimatedWeightG,
     rootPanel,
+    contentAnchor: contentAnchor ?? {
+      panelId: rootPanel.id,
+      center2D: [0, 0],
+      floorOffsetMm: params.thicknessMm * 0.5,
+    },
     flatPanels,
     cutLoops,
     holeLoops,

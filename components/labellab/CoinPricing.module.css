@@ -75,20 +75,54 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 5px;
   min-width: 0;
-  min-height: 76px;
-  padding: 10px 4px;
+  min-height: 84px;
+  padding: 8px 4px;
   border: 1px solid rgba(165, 70, 106, .16);
   border-radius: 12px;
   color: #6a334b;
-  background: rgba(255, 255, 255, .28);
+  background: rgba(255, 255, 255, .32);
   cursor: pointer;
+  transition: border-color .15s ease, background-color .15s ease, transform .12s ease;
+}
+.packPopular {
+  border-color: rgba(191, 65, 106, .34);
+  background: rgba(255, 245, 249, .55);
 }
 .pack[aria-pressed="true"] {
   border-color: #bf416a;
-  background: rgba(213, 69, 107, .1);
+  background: rgba(213, 69, 107, .12);
   color: #962e51;
+}
+.packBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: .01em;
+  white-space: nowrap;
+}
+.badgeStarter {
+  color: #84596c;
+  background: rgba(132, 89, 108, .09);
+}
+.badgeBonus {
+  color: #166534;
+  background: rgba(22, 163, 74, .13);
+}
+.badgePopular {
+  color: #ffffff;
+  background: #bf416a;
+}
+.badgeBest {
+  color: #7c2d12;
+  background: rgba(245, 158, 11, .22);
 }
 .coinRow {
   display: flex;
@@ -97,10 +131,10 @@
   gap: 4px;
   white-space: nowrap;
 }
-.coinRow img { width: 20px; height: 20px; object-fit: contain; }
-.coinRow strong { font-size: clamp(18px, calc(24 * var(--home-unit)), 24px); line-height: 1.1; }
-.coinRow span { font-size: 15px; line-height: 1.2; }
-.price { font-size: clamp(16px, calc(18 * var(--home-unit)), 18px); line-height: 1.2; white-space: nowrap; }
+.coinRow img { width: 18px; height: 18px; object-fit: contain; flex-shrink: 0; }
+.coinRow strong { font-size: clamp(16px, calc(21 * var(--home-unit)), 21px); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.coinRow span { font-size: 13px; line-height: 1.2; }
+.price { font-size: clamp(13.5px, calc(15.5 * var(--home-unit)), 15.5px); line-height: 1.2; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .price strong { font-weight: 600; }
 .markets button:hover, .pack:hover { background-color: rgba(255, 255, 255, .65); }
 .markets button:focus-visible, .pack:focus-visible { outline: 2px solid #9c2751; outline-offset: 3px; }

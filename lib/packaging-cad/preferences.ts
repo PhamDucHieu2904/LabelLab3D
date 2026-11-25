@@ -1,5 +1,12 @@
-import type { BoardMaterialId, PackagingParams } from './types';
-import { BOARD_MATERIAL_IDS } from './materials/paper-presets';
+import type {
+  BoardMaterialId,
+  BottlePackConfig,
+  CarrierPackLayout,
+  PackagingFinishMode,
+  PackagingFinishTarget,
+  PackagingParams,
+} from './types';
+import { BOARD_MATERIAL_IDS, PACKAGING_FINISH_MODES } from './materials/paper-presets';
 import {
   createDefaultPackagingParams,
   DEFAULT_PACKAGING_TEMPLATE_ID,
@@ -7,9 +14,12 @@ import {
 } from './templates/registry';
 
 export const PACKAGING_PREFERENCES_KEY = 'labellab.packaging.preferences.v1';
+export const PACKAGING_BOTTLE_PACK_KEY = 'labellab.packaging.bottle-pack.v1';
 
 const validTemplateIds = new Set(PACKAGING_TEMPLATES.map((t) => t.id));
 const validMaterialIds = new Set<string>(BOARD_MATERIAL_IDS);
+const validFinishModes = new Set<string>(PACKAGING_FINISH_MODES);
+const validFinishTargets = new Set<PackagingFinishTarget>(['auto-artwork', 'brand-frame', 'full-surface']);
 
 const safeColor = (value: unknown, fallback: string) =>
   typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
@@ -55,12 +65,28 @@ export function parsePackagingParams(raw: unknown): PackagingParams {
 
       materialId,
       thicknessMm: bounded(own('thicknessMm'), defaults.thicknessMm, 0.25, 8),
-      fluteDirection: own('fluteDirection') === 'along-W' ? 'along-W' : 'along-L',
+      fluteDirection:
+        own('fluteDirection') === 'along-W'
+          ? 'along-W'
+          : own('fluteDirection') === 'along-L'
+            ? 'along-L'
+            : defaults.fluteDirection,
       outsideColor: safeColor(own('outsideColor'), defaults.outsideColor),
       insideColor: safeColor(own('insideColor'), defaults.insideColor),
       outsideRoughness: bounded(own('outsideRoughness'), defaults.outsideRoughness, 0.05, 1),
       outsideMetalness: bounded(own('outsideMetalness'), defaults.outsideMetalness, 0, 1),
       insideRoughness: bounded(own('insideRoughness'), defaults.insideRoughness, 0.05, 1),
+
+      finishMode: (typeof own('finishMode') === 'string' && validFinishModes.has(own('finishMode') as string)
+        ? own('finishMode')
+        : defaults.finishMode) as PackagingFinishMode,
+      finishTarget: (typeof own('finishTarget') === 'string' && validFinishTargets.has(own('finishTarget') as PackagingFinishTarget)
+        ? own('finishTarget')
+        : defaults.finishTarget) as PackagingFinishTarget,
+      finishIntensity: bounded(own('finishIntensity'), defaults.finishIntensity, 0.2, 1),
+      finishRelief: bounded(own('finishRelief'), defaults.finishRelief, -1, 1),
+      finishThreshold: bounded(own('finishThreshold'), defaults.finishThreshold, 0.1, 0.9),
+      finishInvertMask: bool(own('finishInvertMask'), defaults.finishInvertMask),
 
       lockTabCount: own('lockTabCount') === 1 ? 1 : 2,
       lockTabWidthMm: bounded(own('lockTabWidthMm'), defaults.lockTabWidthMm, 10, 180),
@@ -80,6 +106,12 @@ export function parsePackagingParams(raw: unknown): PackagingParams {
       windowHeightMm: bounded(own('windowHeightMm'), defaults.windowHeightMm, 12, 400),
       windowRadiusMm: bounded(own('windowRadiusMm'), defaults.windowRadiusMm, 0, 80),
       windowFilm: bool(own('windowFilm'), defaults.windowFilm),
+
+      lidDepthMm: bounded(own('lidDepthMm'), defaults.lidDepthMm, 14, 280),
+      carrierPack: (own('carrierPack') === '4-pack' || own('carrierPack') === '8-pack'
+        ? own('carrierPack')
+        : '6-pack') as CarrierPackLayout,
+      dividerGrid: bool(own('dividerGrid'), defaults.dividerGrid),
 
       bendAllowanceK: bounded(own('bendAllowanceK'), defaults.bendAllowanceK, 0.2, 1.0),
       slotClearanceMm: bounded(own('slotClearanceMm'), defaults.slotClearanceMm, 0.08, 1.5),
@@ -116,6 +148,110 @@ export function savePackagingParams(params: PackagingParams, storage?: Pick<Stor
     target.setItem(
       PACKAGING_PREFERENCES_KEY,
       JSON.stringify({ version: 1, params: parsePackagingParams(params) }),
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function createDefaultBottlePackConfig(modelId = 'can-mango'): BottlePackConfig {
+  return {
+    enabled: false,
+    modelId,
+    cols: 3,
+    rows: 2,
+    spacingMm: 2,
+    wallPaddingMm: 2,
+    facingYawDeg: 0,
+    organicJitter: false,
+    autoFitOnChange: true,
+  };
+}
+
+export function parseBottlePackConfig(
+  raw: unknown,
+  validModelIds?: ReadonlySet<string>,
+  fallbackModelId = 'can-mango',
+): BottlePackConfig {
+  const fallback = createDefaultBottlePackConfig(fallbackModelId);
+  try {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return fallback;
+    const proto = Object.getPrototypeOf(raw);
+    if (proto !== Object.prototype && proto !== null) return fallback;
+    const own = (key: keyof BottlePackConfig): unknown => {
+      const d = Object.getOwnPropertyDescriptor(raw, key);
+      return d && 'value' in d ? d.value : undefined;
+    };
+    const rawModelId = own('modelId');
+    const modelId =
+      typeof rawModelId === 'string' &&
+      /^[a-z0-9-]+$/i.test(rawModelId) &&
+      (!validModelIds || validModelIds.has(rawModelId))
+        ? rawModelId
+        : fallback.modelId;
+    const rawCustomProjectId = own('customProjectId');
+    const customProjectId =
+      typeof rawCustomProjectId === 'string' && /^[a-z0-9_-]{1,100}$/i.test(rawCustomProjectId)
+        ? rawCustomProjectId
+        : undefined;
+    const rawPackLabelArtworkId = own('packLabelArtworkId');
+    const packLabelArtworkId =
+      typeof rawPackLabelArtworkId === 'string' && /^[a-z0-9_-]{1,100}$/i.test(rawPackLabelArtworkId)
+        ? rawPackLabelArtworkId
+        : undefined;
+
+    return {
+      enabled: bool(own('enabled'), fallback.enabled),
+      modelId,
+      ...(customProjectId ? { customProjectId } : {}),
+      ...(packLabelArtworkId ? { packLabelArtworkId } : {}),
+      cols: Math.round(bounded(own('cols'), fallback.cols, 1, 6)),
+      rows: Math.round(bounded(own('rows'), fallback.rows, 1, 4)),
+      spacingMm: bounded(own('spacingMm'), fallback.spacingMm, 0, 16),
+      wallPaddingMm: bounded(own('wallPaddingMm'), fallback.wallPaddingMm, 0, 16),
+      facingYawDeg: bounded(own('facingYawDeg'), fallback.facingYawDeg, -180, 180),
+      organicJitter: bool(own('organicJitter'), fallback.organicJitter),
+      autoFitOnChange: bool(own('autoFitOnChange'), fallback.autoFitOnChange),
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+export function loadBottlePackConfig(
+  validModelIds?: ReadonlySet<string>,
+  fallbackModelId = 'can-mango',
+  storage?: Pick<Storage, 'getItem'>,
+): BottlePackConfig {
+  try {
+    const target = storage ?? (typeof window !== 'undefined' ? window.localStorage : undefined);
+    const raw = target?.getItem(PACKAGING_BOTTLE_PACK_KEY);
+    if (!raw) return createDefaultBottlePackConfig(fallbackModelId);
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return createDefaultBottlePackConfig(fallbackModelId);
+    }
+    const env = parsed as Record<string, unknown>;
+    return env.version === 1
+      ? parseBottlePackConfig(env.config, validModelIds, fallbackModelId)
+      : createDefaultBottlePackConfig(fallbackModelId);
+  } catch {
+    return createDefaultBottlePackConfig(fallbackModelId);
+  }
+}
+
+export function saveBottlePackConfig(
+  config: BottlePackConfig,
+  validModelIds?: ReadonlySet<string>,
+  storage?: Pick<Storage, 'setItem'>,
+): boolean {
+  try {
+    const target = storage ?? (typeof window !== 'undefined' ? window.localStorage : undefined);
+    if (!target) return false;
+    target.setItem(
+      PACKAGING_BOTTLE_PACK_KEY,
+      JSON.stringify({ version: 1, config: parseBottlePackConfig(config, validModelIds) }),
     );
     return true;
   } catch {

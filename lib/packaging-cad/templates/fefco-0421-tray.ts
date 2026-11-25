@@ -49,6 +49,7 @@ export const FEFCO_0421_TRAY_TEMPLATE: PackagingTemplateDefinition = {
     handHoles: true,
     displayScoop: true,
     windowCutout: true,
+    bottlePacking: true,
   },
   sizePresets: [
     {
@@ -132,20 +133,23 @@ export const FEFCO_0421_TRAY_TEMPLATE: PackagingTemplateDefinition = {
       Hinner = Hreq;
       Lbase = Linner + 2 * sideWallStack;
       Wbase = Winner;
-      Hwall = Hinner + t;
+      // Interior clear height from base floor (+t/2) to underside of rollover bridge (+t/2 + Hwall).
+      Hwall = Hinner;
       Louter = Lbase + 2 * t;
       Wouter = Wbase + 2 * t;
-      Houter = Hwall + t;
+      // Total outer height = base slab (t) + wall height (Hwall) + top rollover bridge (t).
+      Houter = Hwall + 2 * t;
     } else {
       Louter = Lreq;
       Wouter = Wreq;
       Houter = Hreq;
       Lbase = Math.max(40, Louter - 2 * t);
       Wbase = Math.max(35, Wouter - 2 * t);
-      Hwall = Math.max(18, Houter - t);
+      // Reserve `t` for base floor + `t` for the real top rollover bridge so assembled outer height === Houter.
+      Hwall = Math.max(16, Houter - 2 * t);
       Linner = Math.max(20, Lbase - 2 * sideWallStack);
       Winner = Wbase;
-      Hinner = Math.max(14, Hwall - t);
+      Hinner = Hwall;
     }
 
     const halfL = Lbase * 0.5;
@@ -167,7 +171,8 @@ export const FEFCO_0421_TRAY_TEMPLATE: PackagingTemplateDefinition = {
     const slotW = tabW + 2 * gap;
     const slotThickness = t + 2 * gap;
     const tabCentersY = tabCount === 2 ? [-Wbase * 0.27, Wbase * 0.27] : [0];
-    const tabDepth = Math.min(12, Math.max(4.5, t * 2.2 + 2.0));
+    // Lock tabs engage cleanly through the base thickness `t` without protruding past the bottom floor.
+    const tabDepth = Math.min(8, Math.max(1.4, t + 0.12));
 
     // Base lock slot holes (CW polygons)
     const baseHoles: Point2D[][] = [];
@@ -195,17 +200,30 @@ export const FEFCO_0421_TRAY_TEMPLATE: PackagingTemplateDefinition = {
       );
     }
 
+    const bottomRelief = Math.max(t + 0.3, 1.5);
+    const topRelief = 0.08;
+    const innerHeight = Math.max(10, Hwall - 0.18);
+    // Inset corner dust flaps by (t + gap) from the outer side wall crease so when folded 90°,
+    // front/back walls curve smoothly 90° inward into each dust flap (with a real rounded crease)
+    // and sit sandwiched cleanly BETWEEN the outer wall and inner rollover wall with ZERO overlap!
+    const flapInsetX = t + gap;
+    const flapBaseHalfL = Math.max(10, halfL - flapInsetX);
+    // Outer side wall & outer bridge edge extend to ±(halfW + t), flush with front/back outer faces.
+    // Inner rollover wall sits cleanly behind front/back inner faces at ±(halfW - innerInsetY).
+    const outerSideHalfW = halfW + t;
+    const innerInsetY = 0.08;
+
     // Optional front wall display scoop or front window cutout
     let frontOutline: Point2D[];
     const frontHoles: Point2D[][] = [];
     const frontFilms: Point2D[][] = [];
     if (rawParams.displayScoop) {
       const scoopDepth = clampNum(rawParams.displayScoopDepthMm, 8, Hwall * 0.62);
-      const scoopWidth = Math.max(24, Lbase * 0.58);
+      const scoopWidth = Math.max(24, Math.min(flapBaseHalfL * 1.8, Lbase * 0.58));
       frontOutline = notchedRectPoly(
-        -halfL,
+        -flapBaseHalfL,
         -halfW - Hwall,
-        halfL,
+        flapBaseHalfL,
         -halfW,
         'bottom',
         scoopWidth,
@@ -213,10 +231,10 @@ export const FEFCO_0421_TRAY_TEMPLATE: PackagingTemplateDefinition = {
         14,
       );
     } else {
-      frontOutline = rectPoly(-halfL, -halfW - Hwall, halfL, -halfW);
+      frontOutline = rectPoly(-flapBaseHalfL, -halfW - Hwall, flapBaseHalfL, -halfW);
       if (rawParams.windowCutout) {
         const margin = Math.max(10, t * 4);
-        const maxWinW = Math.max(12, Lbase - margin * 2 - sideWallStack * 2);
+        const maxWinW = Math.max(12, flapBaseHalfL * 2 - margin * 2);
         const maxWinH = Math.max(10, Hwall - margin * 2);
         if (maxWinW >= 18 && maxWinH >= 14) {
           const winW = clampNum(rawParams.windowWidthMm, 16, maxWinW);
@@ -234,18 +252,11 @@ export const FEFCO_0421_TRAY_TEMPLATE: PackagingTemplateDefinition = {
       }
     }
 
-    const relief = Math.min(1.5, t * 0.75);
-    const innerHeight = Math.max(10, Hwall - t - 0.35);
-    // Inset corner dust flaps by (t + gap) from the outer side wall crease so when folded 90°,
-    // each dust flap sits cleanly sandwiched BETWEEN the outer wall and inner rollover wall with ZERO Z-fighting!
-    const flapInsetX = t + gap;
-    const flapBaseHalfL = Math.max(10, halfL - flapInsetX);
-
     // Helper: construct rollover inner wall polygon WITH protruding bottom locking tabs.
     const buildInnerWallWithTabs = (side: 'left' | 'right'): Point2D[] => {
-      const yMin = -halfW + t + 0.6;
-      const yMax = halfW - t - 0.6;
-      const chamfer = Math.min(2.5, tabDepth * 0.35);
+      const yMin = -halfW + innerInsetY;
+      const yMax = halfW - innerInsetY;
+      const chamfer = Math.min(2.0, tabDepth * 0.35);
       const sortedTabs = [...tabCentersY].sort((a, b) => a - b);
 
       if (side === 'left') {
@@ -327,8 +338,8 @@ export const FEFCO_0421_TRAY_TEMPLATE: PackagingTemplateDefinition = {
       holes: frontHoles,
       windowFilms: frontFilms,
       hinge: {
-        p1: [-halfL, -halfW],
-        p2: [halfL, -halfW],
+        p1: [-flapBaseHalfL, -halfW],
+        p2: [flapBaseHalfL, -halfW],
         foldDirection: 'inward',
         targetAngleDeg: 90,
         stageStart: 0.0,
@@ -343,19 +354,19 @@ export const FEFCO_0421_TRAY_TEMPLATE: PackagingTemplateDefinition = {
           partGroup: 'flaps',
           uprightAngleDeg: 90,
           outline: ensureCCW([
-            [-flapBaseHalfL, -halfW - relief],
-            [-flapBaseHalfL - flapLen, -halfW - relief - taperDrop * 0.4],
-            [-flapBaseHalfL - flapLen, -halfW - Hwall + relief + taperDrop],
-            [-flapBaseHalfL, -halfW - Hwall + relief],
+            [-flapBaseHalfL, -halfW - bottomRelief],
+            [-flapBaseHalfL - flapLen, -halfW - bottomRelief - taperDrop * 0.4],
+            [-flapBaseHalfL - flapLen, -halfW - Hwall + topRelief + taperDrop],
+            [-flapBaseHalfL, -halfW - Hwall + topRelief],
           ]),
           hinge: {
-            p1: [-flapBaseHalfL, -halfW - relief],
-            p2: [-flapBaseHalfL, -halfW - Hwall + relief],
+            p1: [-flapBaseHalfL, -halfW - bottomRelief],
+            p2: [-flapBaseHalfL, -halfW - Hwall + topRelief],
             foldDirection: 'inward',
             targetAngleDeg: 90,
             stageStart: 0.22,
             stageEnd: 0.46,
-            renderCreaseFillet: false,
+            renderCreaseFillet: true,
           },
           children: [],
         },
@@ -367,19 +378,19 @@ export const FEFCO_0421_TRAY_TEMPLATE: PackagingTemplateDefinition = {
           partGroup: 'flaps',
           uprightAngleDeg: -90,
           outline: ensureCCW([
-            [flapBaseHalfL, -halfW - relief],
-            [flapBaseHalfL, -halfW - Hwall + relief],
-            [flapBaseHalfL + flapLen, -halfW - Hwall + relief + taperDrop],
-            [flapBaseHalfL + flapLen, -halfW - relief - taperDrop * 0.4],
+            [flapBaseHalfL, -halfW - bottomRelief],
+            [flapBaseHalfL, -halfW - Hwall + topRelief],
+            [flapBaseHalfL + flapLen, -halfW - Hwall + topRelief + taperDrop],
+            [flapBaseHalfL + flapLen, -halfW - bottomRelief - taperDrop * 0.4],
           ]),
           hinge: {
-            p1: [flapBaseHalfL, -halfW - relief],
-            p2: [flapBaseHalfL, -halfW - Hwall + relief],
+            p1: [flapBaseHalfL, -halfW - bottomRelief],
+            p2: [flapBaseHalfL, -halfW - Hwall + topRelief],
             foldDirection: 'inward',
             targetAngleDeg: 90,
             stageStart: 0.22,
             stageEnd: 0.46,
-            renderCreaseFillet: false,
+            renderCreaseFillet: true,
           },
           children: [],
         },
@@ -394,10 +405,10 @@ export const FEFCO_0421_TRAY_TEMPLATE: PackagingTemplateDefinition = {
       partGroup: 'height',
       printable: true,
       uprightAngleDeg: 0,
-      outline: rectPoly(-halfL, halfW, halfL, halfW + Hwall),
+      outline: rectPoly(-flapBaseHalfL, halfW, flapBaseHalfL, halfW + Hwall),
       hinge: {
-        p1: [-halfL, halfW],
-        p2: [halfL, halfW],
+        p1: [-flapBaseHalfL, halfW],
+        p2: [flapBaseHalfL, halfW],
         foldDirection: 'inward',
         targetAngleDeg: 90,
         stageStart: 0.0,
@@ -412,19 +423,19 @@ export const FEFCO_0421_TRAY_TEMPLATE: PackagingTemplateDefinition = {
           partGroup: 'flaps',
           uprightAngleDeg: 90,
           outline: ensureCCW([
-            [-flapBaseHalfL, halfW + relief],
-            [-flapBaseHalfL, halfW + Hwall - relief],
-            [-flapBaseHalfL - flapLen, halfW + Hwall - relief - taperDrop],
-            [-flapBaseHalfL - flapLen, halfW + relief + taperDrop * 0.4],
+            [-flapBaseHalfL, halfW + bottomRelief],
+            [-flapBaseHalfL, halfW + Hwall - topRelief],
+            [-flapBaseHalfL - flapLen, halfW + Hwall - topRelief - taperDrop],
+            [-flapBaseHalfL - flapLen, halfW + bottomRelief + taperDrop * 0.4],
           ]),
           hinge: {
-            p1: [-flapBaseHalfL, halfW + relief],
-            p2: [-flapBaseHalfL, halfW + Hwall - relief],
+            p1: [-flapBaseHalfL, halfW + bottomRelief],
+            p2: [-flapBaseHalfL, halfW + Hwall - topRelief],
             foldDirection: 'inward',
             targetAngleDeg: 90,
             stageStart: 0.22,
             stageEnd: 0.46,
-            renderCreaseFillet: false,
+            renderCreaseFillet: true,
           },
           children: [],
         },
@@ -436,19 +447,19 @@ export const FEFCO_0421_TRAY_TEMPLATE: PackagingTemplateDefinition = {
           partGroup: 'flaps',
           uprightAngleDeg: -90,
           outline: ensureCCW([
-            [flapBaseHalfL, halfW + relief],
-            [flapBaseHalfL + flapLen, halfW + relief + taperDrop * 0.4],
-            [flapBaseHalfL + flapLen, halfW + Hwall - relief - taperDrop],
-            [flapBaseHalfL, halfW + Hwall - relief],
+            [flapBaseHalfL, halfW + bottomRelief],
+            [flapBaseHalfL + flapLen, halfW + bottomRelief + taperDrop * 0.4],
+            [flapBaseHalfL + flapLen, halfW + Hwall - topRelief - taperDrop],
+            [flapBaseHalfL, halfW + Hwall - topRelief],
           ]),
           hinge: {
-            p1: [flapBaseHalfL, halfW + relief],
-            p2: [flapBaseHalfL, halfW + Hwall - relief],
+            p1: [flapBaseHalfL, halfW + bottomRelief],
+            p2: [flapBaseHalfL, halfW + Hwall - topRelief],
             foldDirection: 'inward',
             targetAngleDeg: 90,
             stageStart: 0.22,
             stageEnd: 0.46,
-            renderCreaseFillet: false,
+            renderCreaseFillet: true,
           },
           children: [],
         },
@@ -463,7 +474,7 @@ export const FEFCO_0421_TRAY_TEMPLATE: PackagingTemplateDefinition = {
       partGroup: 'width',
       printable: true,
       uprightAngleDeg: 90,
-      outline: rectPoly(-halfL - Hwall, -halfW, -halfL, halfW),
+      outline: rectPoly(-halfL - Hwall, -outerSideHalfW, -halfL, outerSideHalfW),
       holes: leftOuterHoles,
       hinge: {
         p1: [-halfL, -halfW],
@@ -481,10 +492,17 @@ export const FEFCO_0421_TRAY_TEMPLATE: PackagingTemplateDefinition = {
           faceRole: 'bridge',
           partGroup: 'locks',
           uprightAngleDeg: 90,
-          outline: rectPoly(-halfL - Hwall - bridgeW, -halfW + t * 0.6, -halfL - Hwall, halfW - t * 0.6),
+          // Tapered top bridge connects outer wall (±(halfW+t)) flush to inner wall (±(halfW-0.08))
+          // right over the rounded front/back wall corners with zero overhanging stair-step!
+          outline: ensureCCW([
+            [-halfL - Hwall, -outerSideHalfW],
+            [-halfL - Hwall, outerSideHalfW],
+            [-halfL - Hwall - bridgeW, halfW - innerInsetY],
+            [-halfL - Hwall - bridgeW, -halfW + innerInsetY],
+          ]),
           hinge: {
-            p1: [-halfL - Hwall, -halfW + t * 0.6],
-            p2: [-halfL - Hwall, halfW - t * 0.6],
+            p1: [-halfL - Hwall, -outerSideHalfW],
+            p2: [-halfL - Hwall, outerSideHalfW],
             foldDirection: 'inward',
             targetAngleDeg: 90,
             stageStart: 0.64,
@@ -501,8 +519,8 @@ export const FEFCO_0421_TRAY_TEMPLATE: PackagingTemplateDefinition = {
               outline: buildInnerWallWithTabs('left'),
               holes: leftInnerHoles,
               hinge: {
-                p1: [-halfL - Hwall - bridgeW, -halfW + t + 0.6],
-                p2: [-halfL - Hwall - bridgeW, halfW - t - 0.6],
+                p1: [-halfL - Hwall - bridgeW, -halfW + innerInsetY],
+                p2: [-halfL - Hwall - bridgeW, halfW - innerInsetY],
                 foldDirection: 'inward',
                 targetAngleDeg: 90,
                 stageStart: 0.74,
@@ -523,7 +541,7 @@ export const FEFCO_0421_TRAY_TEMPLATE: PackagingTemplateDefinition = {
       partGroup: 'width',
       printable: true,
       uprightAngleDeg: -90,
-      outline: rectPoly(halfL, -halfW, halfL + Hwall, halfW),
+      outline: rectPoly(halfL, -outerSideHalfW, halfL + Hwall, outerSideHalfW),
       holes: rightOuterHoles,
       hinge: {
         p1: [halfL, -halfW],
@@ -541,10 +559,15 @@ export const FEFCO_0421_TRAY_TEMPLATE: PackagingTemplateDefinition = {
           faceRole: 'bridge',
           partGroup: 'locks',
           uprightAngleDeg: -90,
-          outline: rectPoly(halfL + Hwall, -halfW + t * 0.6, halfL + Hwall + bridgeW, halfW - t * 0.6),
+          outline: ensureCCW([
+            [halfL + Hwall, -outerSideHalfW],
+            [halfL + Hwall + bridgeW, -halfW + innerInsetY],
+            [halfL + Hwall + bridgeW, halfW - innerInsetY],
+            [halfL + Hwall, outerSideHalfW],
+          ]),
           hinge: {
-            p1: [halfL + Hwall, -halfW + t * 0.6],
-            p2: [halfL + Hwall, halfW - t * 0.6],
+            p1: [halfL + Hwall, -outerSideHalfW],
+            p2: [halfL + Hwall, outerSideHalfW],
             foldDirection: 'inward',
             targetAngleDeg: 90,
             stageStart: 0.64,
@@ -561,8 +584,8 @@ export const FEFCO_0421_TRAY_TEMPLATE: PackagingTemplateDefinition = {
               outline: buildInnerWallWithTabs('right'),
               holes: rightInnerHoles,
               hinge: {
-                p1: [halfL + Hwall + bridgeW, -halfW + t + 0.6],
-                p2: [halfL + Hwall + bridgeW, halfW - t - 0.6],
+                p1: [halfL + Hwall + bridgeW, -halfW + innerInsetY],
+                p2: [halfL + Hwall + bridgeW, halfW - innerInsetY],
                 foldDirection: 'inward',
                 targetAngleDeg: 90,
                 stageStart: 0.74,

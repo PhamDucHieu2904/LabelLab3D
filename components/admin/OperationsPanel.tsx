@@ -36,7 +36,8 @@ const defaults = {
   resolutions: [1024, 2048, 4096, 8129],
   tileThreshold: 4096,
   freeDownloads: 1,
-  renderCost: 1,
+  renderCost: 10,
+  dielineCost: 20,
   emailVerified: true,
   sessionHours: 720,
   loginLimit: 5,
@@ -366,7 +367,8 @@ export default function OperationsPanel({ section }: { section: "activity" | "se
                       <option value={8129}>8129 px</option>
                     </select>
                   </label>
-                  {textField("renderCost", "Coin cơ bản / lần render", "number", 0, 10000)}
+                  {textField("renderCost", "Coin render chuẩn 2048 px (1K=0.5× · 4K=2× · 8K=4×)", "number", 0, 10000)}
+                  {textField("dielineCost", "Coin xuất Dieline 1:1 mm (SVG/PDF/DXF)", "number", 0, 10000)}
                   {textField("freeDownloads", "Lượt tải miễn phí / ngày", "number", 0, 100)}
                 </>
               )}

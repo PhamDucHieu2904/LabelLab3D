@@ -19,12 +19,17 @@ type UserProfileCardProps = {
 };
 
 function entryLabel(entry: WalletEntry) {
+  if (entry.kind === "welcome_bonus") return "Welcome bonus";
   if (entry.kind === "daily_checkin") return "Daily check-in";
   if (entry.kind === "purchase") return "Coin purchase";
   if (entry.kind === "admin_adjustment") return "Admin adjustment";
   if (entry.kind === "refund") return "Refund";
-  if (entry.kind === "render" || entry.kind === "reservation") return "Image render";
-  if (entry.kind === "reservation_release") return "Render refund";
+  if (entry.kind === "render" || entry.kind === "reservation") {
+    return entry.reference?.startsWith("dieline:") ? "Dieline export (1:1 mm)" : "Image render";
+  }
+  if (entry.kind === "reservation_release") {
+    return entry.reference?.startsWith("dieline:") ? "Dieline refund" : "Render refund";
+  }
   return entry.amount >= 0 ? "Coin reward" : "Coin spend";
 }
 

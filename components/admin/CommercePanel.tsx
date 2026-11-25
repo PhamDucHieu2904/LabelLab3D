@@ -44,7 +44,12 @@ type DbUserLite = {
 
 type LivePack = {
   id: string;
+  region?: "vietnam" | "international";
+  tier?: string;
   coins: number;
+  baseCoins?: number;
+  bonusPct?: number;
+  badge?: "popular" | "best";
   vnd: number;
   usd: number;
   enabled: boolean;
@@ -59,14 +64,25 @@ const ORDER_STATUS_LABELS: Record<DbOrder["status"], string> = {
 };
 
 const LEDGER_KIND_LABELS: Record<string, string> = {
-  purchase: "Nạp coin SePay",
+  purchase: "Nạp coin",
   daily_checkin: "Điểm danh hằng ngày",
+  welcome_bonus: "Quà chào mừng",
   admin_adjustment: "Admin điều chỉnh",
   refund: "Hoàn tiền",
   reservation: "Giữ coin render",
   reservation_release: "Hoàn coin giữ chỗ",
   render: "Render ảnh 3D",
 };
+
+function ledgerLabel(entry: DbLedger) {
+  if ((entry.kind === "reservation" || entry.kind === "render") && entry.reference.startsWith("dieline:")) {
+    return "Xuất Dieline 1:1 mm";
+  }
+  if (entry.kind === "reservation_release" && entry.reference.startsWith("dieline:")) {
+    return "Hoàn coin Dieline";
+  }
+  return LEDGER_KIND_LABELS[entry.kind] ?? entry.kind;
+}
 
 type ModalState = { kind: "adjust" } | { kind: "order"; order: DbOrder } | { kind: "pack"; pack: LivePack } | null;
 
@@ -230,14 +246,29 @@ export default function CommercePanel() {
     if (modal?.kind !== "pack") return;
     const fd = new FormData(event.currentTarget);
     const coins = Number(fd.get("coins"));
-    const vnd = Number(fd.get("vnd"));
-    const usd = Number(fd.get("usd"));
+    const packRegion = modal.pack.region;
+    const vnd = packRegion === "international" ? 0 : Number(fd.get("vnd"));
+    const usd = packRegion === "vietnam" ? 0 : Number(fd.get("usd"));
+    const bonusPctRaw = fd.get("bonusPct");
+    const bonusPct = bonusPctRaw !== null && String(bonusPctRaw).trim() !== "" ? Number(bonusPctRaw) : modal.pack.bonusPct ?? 0;
     const enabled = fd.get("enabled") === "on";
-    if (!Number.isSafeInteger(coins) || coins < 1 || !Number.isSafeInteger(vnd) || vnd < 1000 || !Number.isFinite(usd) || usd < 0.5) {
-      setError("Số coin phải ≥ 1, giá VNĐ ≥ 1.000 ₫ và USD ≥ 0.5.");
+    if (!Number.isSafeInteger(coins) || coins < 1) {
+      setError("Số coin phải là số nguyên ≥ 1.");
       return;
     }
-    const updatedPacks = packs.map((p) => (p.id === modal.pack.id ? { ...p, coins, vnd, usd, enabled } : p));
+    if (packRegion !== "international" && (!Number.isSafeInteger(vnd) || vnd < 1000)) {
+      setError("Giá VNĐ phải là số nguyên ≥ 1.000 ₫.");
+      return;
+    }
+    if (packRegion !== "vietnam" && (!Number.isFinite(usd) || usd < 0.5)) {
+      setError("Giá USD phải ≥ 0.5.");
+      return;
+    }
+    if (!Number.isSafeInteger(bonusPct) || bonusPct < 0 || bonusPct > 100) {
+      setError("Tỷ lệ bonus phải từ 0% đến 100%.");
+      return;
+    }
+    const updatedPacks = packs.map((p) => (p.id === modal.pack.id ? { ...p, coins, vnd, usd, bonusPct, enabled } : p));
     void postAction({ action: "save_packs", packs: updatedPacks }, "Đã lưu bảng giá lên D1 — đồng bộ ngay với trang chủ!");
   }
 
@@ -406,7 +437,7 @@ export default function CommercePanel() {
                         <td className={entry.amount >= 0 ? s.positive : s.negative}>
                           <strong>{entry.amount > 0 ? "+" : ""}{formatNumber(entry.amount)}</strong>
                         </td>
-                        <td>{LEDGER_KIND_LABELS[entry.kind] ?? entry.kind}</td>
+                        <td>{ledgerLabel(entry)}</td>
                         <td>{entry.reference}</td>
                         <td><CoinValue value={Number(entry.balance)} /></td>
                         <td>{formatDate(entry.createdAt)}</td>
@@ -433,17 +464,41 @@ export default function CommercePanel() {
         <section className={s.panel}>
           <div className={s.panelHeader}>
             <div>
-              <h2>Bảng giá gói coin (Đồng bộ trực tiếp với trang chủ & SePay VietQR)</h2>
-              <p className={s.subtle} style={{ margin: "4px 0 0" }}>Thay đổi giá VNĐ / số coin tại đây sẽ áp dụng ngay cho hộp nạp coin và đơn tạo QR mới.</p>
+              <h2>Bảng giá gói coin (Việt Nam · SePay VietQR &amp; Quốc tế · Polar.sh)</h2>
+              <p className={s.subtle} style={{ margin: "4px 0 0" }}>Thay đổi giá hoặc số coin tại đây sẽ đồng bộ ngay với trang chủ và đơn tạo thanh toán mới.</p>
             </div>
+            <button
+              type="button"
+              className={s.secondary}
+              disabled={saving}
+              onClick={() => void postAction({ action: "reset_packs" }, "Đã khôi phục bảng giá mặc định hai khu vực lên Cloudflare D1.")}
+            >
+              <RefreshCw size={14} aria-hidden="true" />Khôi phục mặc định
+            </button>
           </div>
           <div className={s.packRows}>
             {packs.map((pack) => (
               <div className={`${s.packRow} ${!pack.enabled ? s.inactive : ""}`} key={pack.id}>
-                <CoinValue value={pack.coins} />
+                <div className={s.inline}>
+                  <CoinValue value={pack.coins} />
+                  <span className={s.subtle}>
+                    {pack.region === "vietnam" ? "VN · VND" : pack.region === "international" ? "Quốc tế · USD" : "Chung"}
+                    {pack.tier ? ` · ${pack.tier}` : ""}
+                    {pack.bonusPct ? ` · +${pack.bonusPct}%` : ""}
+                  </span>
+                </div>
                 <div>
-                  <strong>{formatMoney(pack.vnd, "vn")}</strong>
-                  <span className={s.subtle}>· {formatMoney(pack.usd, "international")} {!pack.enabled && "· Đang tắt"}</span>
+                  {pack.region === "vietnam" ? (
+                    <strong>{formatMoney(pack.vnd, "vn")}</strong>
+                  ) : pack.region === "international" ? (
+                    <strong>{formatMoney(pack.usd, "international")}</strong>
+                  ) : (
+                    <>
+                      <strong>{formatMoney(pack.vnd, "vn")}</strong>
+                      <span className={s.subtle}>· {formatMoney(pack.usd, "international")}</span>
+                    </>
+                  )}
+                  {!pack.enabled && <span className={s.subtle}>· Đang tắt</span>}
                   <button
                     type="button"
                     className={s.iconButton}
@@ -524,13 +579,21 @@ export default function CommercePanel() {
       )}
 
       {modal?.kind === "pack" && (
-        <Modal title={`Sửa gói ${modal.pack.coins} coins`} close={close}>
+        <Modal
+          title={`Sửa gói ${modal.pack.tier ?? ""} (${modal.pack.region === "international" ? "Quốc tế · USD" : modal.pack.region === "vietnam" ? "Việt Nam · VND" : "Chung"})`}
+          close={close}
+        >
           <form onSubmit={savePack}>
             <div className={s.modalBody}>
               <div className={s.formGrid}>
-                <label className={s.field}>Số coin<input type="number" required min="1" step="1" defaultValue={modal.pack.coins} name="coins" className={s.input} /></label>
-                <label className={s.field}>Giá VNĐ<input type="number" required min="1000" step="1000" defaultValue={modal.pack.vnd} name="vnd" className={s.input} /></label>
-                <label className={s.field}>Giá USD<input type="number" required min="0.5" step="0.5" defaultValue={modal.pack.usd} name="usd" className={s.input} /></label>
+                <label className={s.field}>Số coin nhận được<input type="number" required min="1" step="1" defaultValue={modal.pack.coins} name="coins" className={s.input} /></label>
+                <label className={s.field}>Bonus (%)<input type="number" min="0" max="100" step="1" defaultValue={modal.pack.bonusPct ?? 0} name="bonusPct" className={s.input} /></label>
+                {modal.pack.region !== "international" && (
+                  <label className={s.field}>Giá VNĐ<input type="number" required min="1000" step="1000" defaultValue={modal.pack.vnd} name="vnd" className={s.input} /></label>
+                )}
+                {modal.pack.region !== "vietnam" && (
+                  <label className={s.field}>Giá USD<input type="number" required min="0.5" step="0.5" defaultValue={modal.pack.usd} name="usd" className={s.input} /></label>
+                )}
                 <label className={`${s.inline} ${s.fullWidth}`}><input type="checkbox" name="enabled" defaultChecked={modal.pack.enabled} />Hiển thị gói coin này trên trang chủ</label>
               </div>
               {error && <p role="alert" className={s.formError}>{error}</p>}

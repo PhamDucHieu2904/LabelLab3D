@@ -10,12 +10,20 @@ import { FEFCO_0421_TRAY_TEMPLATE } from './fefco-0421-tray';
 import { FEFCO_0201_RSC_TEMPLATE } from './fefco-0201-rsc';
 import { FEFCO_0427_MAILER_TEMPLATE } from './fefco-0427-mailer';
 import { ECMA_A20_TUCK_TEMPLATE } from './ecma-a20-tuck';
+import { BEVERAGE_CARRIER_TEMPLATE } from './beverage-carrier';
+import { RIGID_LID_BASE_TEMPLATE } from './rigid-lid-base';
+import { RIGID_MAGNETIC_BOX_TEMPLATE } from './rigid-magnetic-box';
+import { RIGID_DRAWER_SLEEVE_TEMPLATE } from './rigid-drawer-sleeve';
 
 export const PACKAGING_TEMPLATES: readonly PackagingTemplateDefinition[] = Object.freeze([
   FEFCO_0421_TRAY_TEMPLATE,
+  BEVERAGE_CARRIER_TEMPLATE,
   FEFCO_0201_RSC_TEMPLATE,
   FEFCO_0427_MAILER_TEMPLATE,
   ECMA_A20_TUCK_TEMPLATE,
+  RIGID_LID_BASE_TEMPLATE,
+  RIGID_MAGNETIC_BOX_TEMPLATE,
+  RIGID_DRAWER_SLEEVE_TEMPLATE,
 ]);
 
 export const DEFAULT_PACKAGING_TEMPLATE_ID = FEFCO_0421_TRAY_TEMPLATE.id;
@@ -53,12 +61,21 @@ export function createDefaultPackagingParams(
 
     materialId: mat.id,
     thicknessMm: mat.thicknessMm,
-    fluteDirection: 'along-L',
+    // FEFCO 0421 display trays run flutes vertically on front/back walls ('along-W') for stacking
+    // crush strength and exposed sinusoidal corrugated waves along the rollover side-wall profile.
+    fluteDirection: tpl.id === 'fefco-0421-tray' ? 'along-W' : 'along-L',
     outsideColor: mat.outsideColor,
     insideColor: mat.insideColor,
     outsideRoughness: mat.outsideRoughness,
     outsideMetalness: mat.outsideMetalness,
     insideRoughness: mat.insideRoughness,
+
+    finishMode: 'none',
+    finishTarget: 'auto-artwork',
+    finishIntensity: 0.92,
+    finishRelief: 0.45,
+    finishThreshold: 0.45,
+    finishInvertMask: false,
 
     lockTabCount: 2,
     lockTabWidthMm: 34,
@@ -78,6 +95,10 @@ export function createDefaultPackagingParams(
     windowHeightMm: Math.round(Math.min(tpl.defaultDimensions.width, tpl.defaultDimensions.height) * 0.52),
     windowRadiusMm: 8,
     windowFilm: true,
+
+    lidDepthMm: Math.max(18, Math.round(tpl.defaultDimensions.height * 0.42)),
+    carrierPack: '6-pack',
+    dividerGrid: true,
 
     bendAllowanceK: mat.bendAllowanceK,
     slotClearanceMm: 0.25,

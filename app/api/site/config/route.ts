@@ -40,6 +40,7 @@ export async function GET() {
         maintenance: settings.maintenance,
         registrations: settings.registrations,
         renderCost: settings.renderCost,
+        dielineCost: settings.dielineCost,
         freeDownloads: settings.freeDownloads,
         resolutions: settings.resolutions,
       },

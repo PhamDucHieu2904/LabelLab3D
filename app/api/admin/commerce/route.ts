@@ -1,7 +1,7 @@
 import { requireAdmin } from "@/lib/server/admin";
 import { nowIso, randomId } from "@/lib/server/db";
 import { assertSameOrigin, errorResponse, json } from "@/lib/server/http";
-import { ensureSiteTables, getLiveCoinPackages, sanitizeCoinPackages, writeConfigJson } from "@/lib/server/site-config";
+import { defaultLiveCoinPackages, ensureSiteTables, getLiveCoinPackages, sanitizeCoinPackages, writeConfigJson } from "@/lib/server/site-config";
 import { appendLedgerEntry } from "@/lib/server/wallet";
 
 export const runtime = "nodejs";
@@ -113,6 +113,15 @@ export async function POST(request: Request) {
       await db.prepare(
         "INSERT INTO audit_events (id,actor_user_id,action,target_type,target_id,metadata_json,created_at) VALUES (?,?,?,?,?,?,?)",
       ).bind(randomId("audit"), actor.id, "admin_update_packs", "site_config", "coin_packages", JSON.stringify({ count: packs.length }), nowIso()).run();
+      return json({ ok: true, packs });
+    }
+
+    if (action === "reset_packs") {
+      const packs = defaultLiveCoinPackages();
+      await writeConfigJson(env, "coin_packages", packs, actor.id);
+      await db.prepare(
+        "INSERT INTO audit_events (id,actor_user_id,action,target_type,target_id,metadata_json,created_at) VALUES (?,?,?,?,?,?,?)",
+      ).bind(randomId("audit"), actor.id, "admin_reset_packs", "site_config", "coin_packages", JSON.stringify({ count: packs.length }), nowIso()).run();
       return json({ ok: true, packs });
     }
 

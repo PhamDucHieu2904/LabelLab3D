@@ -20,9 +20,16 @@ export const formatMoney = (n: number, region: Region) => new Intl.NumberFormat(
 export const formatDate = (date: string) => new Intl.DateTimeFormat("vi-VN", {
   day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh",
 }).format(new Date(date));
-export const INITIAL_PACKS: CoinPack[] = (["vn", "international"] as Region[]).flatMap(region =>
-  [20, 45, 120, 300].map((coins, i) => ({ id: `${region}-${i}`, region, coins, amount: [1, 2, 5, 10][i] * (region === "vn" ? 10000 : 1), enabled: true })),
-);
+export const INITIAL_PACKS: CoinPack[] = [
+  { id: "vn-starter", region: "vn", coins: 330, amount: 20_000, enabled: true },
+  { id: "vn-basic", region: "vn", coins: 870, amount: 50_000, enabled: true },
+  { id: "vn-pro", region: "vn", coins: 1_850, amount: 100_000, enabled: true },
+  { id: "vn-studio", region: "vn", coins: 4_000, amount: 200_000, enabled: true },
+  { id: "intl-starter", region: "international", coins: 620, amount: 5, enabled: true },
+  { id: "intl-basic", region: "international", coins: 1_310, amount: 10, enabled: true },
+  { id: "intl-pro", region: "international", coins: 2_750, amount: 20, enabled: true },
+  { id: "intl-studio", region: "international", coins: 4_500, amount: 30, enabled: true },
+];
 export const INITIAL_ORDERS: AdminOrder[] = Array.from({ length: 144 }, (_, i) => {
   const region: Region = i % 3 === 0 ? "international" : "vn";
   const pack = INITIAL_PACKS.filter(p => p.region === region)[i % 4];

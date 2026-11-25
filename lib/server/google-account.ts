@@ -1,5 +1,7 @@
+import { WELCOME_BONUS_COINS } from "@/lib/payments/packages";
 import { nowIso, randomId, requireDb, type AppEnv } from "./db";
 import type { AuthUser } from "./auth";
+import { appendLedgerEntry } from "./wallet";
 
 export type GoogleIdentity = {
   sub: string;
@@ -67,5 +69,13 @@ export async function upsertGoogleUser(env: AppEnv, identity: GoogleIdentity): P
       "INSERT INTO oauth_accounts (provider,provider_subject,user_id,email,avatar_url,created_at,updated_at) VALUES ('google',?,?,?,?,?,?)",
     ).bind(sub, userId, email, avatarUrl, now, now),
   ]);
+  await appendLedgerEntry(env, {
+    userId,
+    amount: WELCOME_BONUS_COINS,
+    kind: "welcome_bonus",
+    reference: `welcome:${userId}`,
+    idempotencyKey: `welcome:${userId}`,
+    metadata: { source: "google_oauth" },
+  });
   return { id: userId, email, name: displayName, role: "user", status: "active" };
 }

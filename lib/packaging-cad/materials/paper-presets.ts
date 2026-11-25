@@ -1,4 +1,9 @@
-import type { BoardMaterialId, BoardMaterialPreset } from '../types';
+import type {
+  BoardMaterialId,
+  BoardMaterialPreset,
+  PackagingFinishMode,
+  PackagingFinishPreset,
+} from '../types';
 
 export const BOARD_MATERIAL_PRESETS: readonly BoardMaterialPreset[] = Object.freeze([
   {
@@ -167,4 +172,133 @@ export const BOARD_MATERIAL_IDS: readonly BoardMaterialId[] = BOARD_MATERIAL_PRE
 
 export function getBoardMaterialPreset(id?: string | null): BoardMaterialPreset {
   return BOARD_MATERIAL_PRESETS.find((preset) => preset.id === id) ?? BOARD_MATERIAL_PRESETS[0];
+}
+
+export const PACKAGING_FINISH_PRESETS: readonly PackagingFinishPreset[] = Object.freeze([
+  {
+    id: 'none',
+    name: 'No Special Finish',
+    shortName: 'None',
+    shaderMode: 0,
+    foilColor: '#ffffff',
+    metalness: 0,
+    roughness: 0.72,
+    clearcoat: 0,
+    clearcoatRoughness: 0.4,
+    specBoost: 1,
+    defaultRelief: 0,
+    swatchGradient: 'linear-gradient(135deg, #f1f5f9 0%, #cbd5e1 100%)',
+    description: 'Natural paper or board surface without Spot UV or hot foil stamping.',
+  },
+  {
+    id: 'spot-uv',
+    name: 'Raised Spot UV',
+    shortName: 'Spot UV',
+    shaderMode: 1,
+    foilColor: '#ffffff',
+    metalness: 0,
+    roughness: 0.14,
+    clearcoat: 1,
+    clearcoatRoughness: 0.04,
+    specBoost: 1.95,
+    defaultRelief: 0.55,
+    swatchGradient: 'linear-gradient(135deg, #ffffff 0%, #dbeafe 42%, #93c5fd 52%, #f8fafc 100%)',
+    description: 'High-gloss raised UV lacquer over matte board that catches crisp studio highlights.',
+  },
+  {
+    id: 'gold-foil',
+    name: '24K Gold Foil',
+    shortName: 'Gold',
+    shaderMode: 2,
+    foilColor: '#ecc56d',
+    metalness: 0.96,
+    roughness: 0.16,
+    clearcoat: 0.28,
+    clearcoatRoughness: 0.12,
+    specBoost: 2.1,
+    defaultRelief: -0.35,
+    swatchGradient: 'linear-gradient(135deg, #fff1b8 0%, #e4b54f 45%, #a8761c 78%, #f8dc88 100%)',
+    description: 'Hot-stamped champagne 24K gold metallic foil with debossed press edges.',
+  },
+  {
+    id: 'silver-foil',
+    name: 'Mirror Silver Foil',
+    shortName: 'Silver',
+    shaderMode: 2,
+    foilColor: '#e7ecf2',
+    metalness: 0.97,
+    roughness: 0.13,
+    clearcoat: 0.3,
+    clearcoatRoughness: 0.1,
+    specBoost: 1.85,
+    defaultRelief: -0.35,
+    swatchGradient: 'linear-gradient(135deg, #ffffff 0%, #cbd5e1 48%, #8292a5 76%, #f1f5f9 100%)',
+    description: 'Mirror-finish chrome silver metallic hot foil stamping.',
+  },
+  {
+    id: 'rose-gold-foil',
+    name: 'Rose Gold Foil',
+    shortName: 'Rose Gold',
+    shaderMode: 2,
+    foilColor: '#eba892',
+    metalness: 0.95,
+    roughness: 0.17,
+    clearcoat: 0.25,
+    clearcoatRoughness: 0.14,
+    specBoost: 1.82,
+    defaultRelief: -0.35,
+    swatchGradient: 'linear-gradient(135deg, #ffe2d6 0%, #e29982 48%, #a66250 78%, #f9c9b8 100%)',
+    description: 'Warm cosmetic-grade rose gold metallic hot foil stamping.',
+  },
+  {
+    id: 'copper-foil',
+    name: 'Brushed Copper Foil',
+    shortName: 'Copper',
+    shaderMode: 2,
+    foilColor: '#dc8555',
+    metalness: 0.95,
+    roughness: 0.19,
+    clearcoat: 0.22,
+    clearcoatRoughness: 0.16,
+    specBoost: 1.8,
+    defaultRelief: -0.4,
+    swatchGradient: 'linear-gradient(135deg, #ffd1b3 0%, #cf7442 50%, #8c451e 80%, #f0a87b 100%)',
+    description: 'Rich artisan copper metallic foil tailored for kraft and dark luxury cartons.',
+  },
+  {
+    id: 'black-foil',
+    name: 'Gloss Black Foil',
+    shortName: 'Black Foil',
+    shaderMode: 2,
+    foilColor: '#13161b',
+    metalness: 0.38,
+    roughness: 0.08,
+    clearcoat: 1,
+    clearcoatRoughness: 0.04,
+    specBoost: 1.75,
+    defaultRelief: -0.45,
+    swatchGradient: 'linear-gradient(135deg, #4b5563 0%, #111317 48%, #374151 74%, #090b0e 100%)',
+    description: 'Sleek piano-black glossy hot foil — iconic tone-on-tone finish for matte black boxes.',
+  },
+  {
+    id: 'holo-foil',
+    name: 'Holographic Foil',
+    shortName: 'Holo',
+    shaderMode: 3,
+    foilColor: '#dfe7f2',
+    metalness: 0.96,
+    roughness: 0.14,
+    clearcoat: 0.45,
+    clearcoatRoughness: 0.08,
+    specBoost: 2.15,
+    defaultRelief: 0.35,
+    swatchGradient: 'linear-gradient(135deg, #fde68a 0%, #f472b6 28%, #818cf8 56%, #34d399 82%, #f8fafc 100%)',
+    description: 'Prismatic iridescent rainbow diffraction foil that shifts hue as you orbit.',
+  },
+]);
+
+export const PACKAGING_FINISH_MODES: readonly PackagingFinishMode[] = PACKAGING_FINISH_PRESETS.map((p) => p.id);
+
+export function getPackagingFinishPreset(id?: string | null): PackagingFinishPreset {
+  return PACKAGING_FINISH_PRESETS.find((preset) => preset.id === id) ?? PACKAGING_FINISH_PRESETS[0];
 }

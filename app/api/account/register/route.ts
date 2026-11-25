@@ -5,6 +5,8 @@ import { env, json, errorResponse, sessionCookie, assertSameOrigin } from "@/lib
 import { assertRegistrationAllowed, recordRegistrationAttempt } from "@/lib/server/rate-limit";
 import { verifyAndConsumeCode } from "@/lib/server/email-verification";
 import { getLiveSiteSettings } from "@/lib/server/site-config";
+import { appendLedgerEntry } from "@/lib/server/wallet";
+import { WELCOME_BONUS_COINS } from "@/lib/payments/packages";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -57,8 +59,16 @@ export async function POST(request: Request) {
         "INSERT INTO wallets (user_id,balance,updated_at) VALUES (?,0,?) ON CONFLICT(user_id) DO NOTHING",
       ).bind(id, now),
     ]);
+    await appendLedgerEntry(runtimeEnv, {
+      userId: id,
+      amount: WELCOME_BONUS_COINS,
+      kind: "welcome_bonus",
+      reference: `welcome:${id}`,
+      idempotencyKey: `welcome:${id}`,
+      metadata: { source: "email_register" },
+    });
     await sessionCookie({ id, email, name, role: "user", status: "active" });
-    return json({ user: { id, email, name, role: "user" } }, { status: 201 });
+    return json({ user: { id, email, name, role: "user" }, welcomeBonus: WELCOME_BONUS_COINS }, { status: 201 });
   } catch (error) {
     return errorResponse(error);
   }

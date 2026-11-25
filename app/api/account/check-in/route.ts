@@ -1,6 +1,6 @@
 import { requireDb } from "@/lib/server/db";
 import { env, sessionUser, json, errorResponse, assertSameOrigin } from "@/lib/server/http";
-import { claimDailyCheckIn, currentRewardDay, resolveCheckInReward } from "@/lib/server/rewards";
+import { claimDailyCheckIn, computeConsecutiveStreak, currentRewardDay, resolveCheckInReward } from "@/lib/server/rewards";
 import { getLiveCheckInConfig } from "@/lib/server/site-config";
 
 export const runtime = "nodejs";
@@ -20,27 +20,33 @@ export async function GET() {
         history: [],
         config,
         completedCount: 0,
+        streak: 0,
         nextDayIndex: 0,
         todayReward: config.schedule[0] ?? config.reward,
       });
     }
     const db = requireDb(runtimeEnv);
     const [rows, countRow] = await Promise.all([
-      db.prepare("SELECT day,coins,claimed_at AS claimedAt FROM daily_checkins WHERE user_id=? ORDER BY day DESC LIMIT 30").bind(user.id).all<{ day: string; coins: number; claimedAt: string }>(),
+      db.prepare("SELECT day,coins,claimed_at AS claimedAt FROM daily_checkins WHERE user_id=? ORDER BY day DESC LIMIT 4000").bind(user.id).all<{ day: string; coins: number; claimedAt: string }>(),
       db.prepare("SELECT COUNT(*) AS count FROM daily_checkins WHERE user_id=?").bind(user.id).first<{ count: number }>(),
     ]);
-    const history = rows.results ?? [];
-    const todayRow = history.find((row) => row.day === today) ?? null;
-    const completedCount = Number(countRow?.count ?? history.length);
-    const effectivePrior = todayRow ? Math.max(0, completedCount - 1) : completedCount;
-    const { dayIndex, coins } = resolveCheckInReward(config, effectivePrior);
+    const allRows = rows.results ?? [];
+    const history = allRows.slice(0, 30);
+    const todayRow = allRows.find((row) => row.day === today) ?? null;
+    const completedCount = Number(countRow?.count ?? allRows.length);
+    const { claimedToday, streakBeforeToday, currentStreak } = computeConsecutiveStreak(
+      allRows.map((row) => row.day),
+      today,
+    );
+    const { dayIndex, coins } = resolveCheckInReward(config, streakBeforeToday);
     return json({
       today,
-      claimed: Boolean(todayRow),
+      claimed: claimedToday,
       current: todayRow,
       history,
       config,
       completedCount,
+      streak: currentStreak,
       nextDayIndex: dayIndex,
       todayReward: todayRow?.coins ?? coins,
     });

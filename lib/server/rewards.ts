@@ -7,14 +7,46 @@ export function currentRewardDay(now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 }
 
+/** Return the calendar day (YYYY-MM-DD) immediately before `day` using pure UTC date math. */
+export function previousCalendarDay(day: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!match) throw new Error("INVALID_INPUT");
+  const utc = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) - 1);
+  return new Date(utc).toISOString().slice(0, 10);
+}
+
 /**
- * Compute today's reward amount from the live 7-day check-in schedule.
- * Uses the user's completed check-in count modulo the schedule length so Day 1..7
- * progresses deterministically and immediately honors admin changes in D1.
+ * Compute strict consecutive daily check-in streak relative to `today` (Asia/Ho_Chi_Minh).
+ * Missing even a single calendar day resets `streakBeforeToday` back to 0 (Day 1).
  */
-export function resolveCheckInReward(config: LiveCheckInConfig, priorCheckInCount: number): { dayIndex: number; coins: number } {
+export function computeConsecutiveStreak(claimedDays: readonly string[], today: string): {
+  claimedToday: boolean;
+  streakBeforeToday: number;
+  currentStreak: number;
+} {
+  const daySet = new Set(claimedDays);
+  const claimedToday = daySet.has(today);
+  let streakBeforeToday = 0;
+  let cursor = previousCalendarDay(today);
+  while (daySet.has(cursor)) {
+    streakBeforeToday += 1;
+    cursor = previousCalendarDay(cursor);
+  }
+  return {
+    claimedToday,
+    streakBeforeToday,
+    currentStreak: claimedToday ? streakBeforeToday + 1 : streakBeforeToday,
+  };
+}
+
+/**
+ * Compute today's reward amount from the live 7-day check-in schedule based on
+ * the user's consecutive check-in streak immediately prior to today.
+ * Missing a day passes `0`, resetting the reward cycle back to Day 1.
+ */
+export function resolveCheckInReward(config: LiveCheckInConfig, priorConsecutiveDays: number): { dayIndex: number; coins: number } {
   const schedule = config.schedule.length > 0 ? config.schedule : [config.reward];
-  const dayIndex = Math.max(0, Math.floor(priorCheckInCount)) % schedule.length;
+  const dayIndex = Math.max(0, Math.floor(priorConsecutiveDays)) % schedule.length;
   const coins = schedule[dayIndex] ?? config.reward;
   return { dayIndex, coins };
 }
@@ -35,9 +67,11 @@ export async function claimDailyCheckIn(env: AppEnv, userId: string, requestedDa
   const checkInConfig = await getLiveCheckInConfig(env);
   if (!checkInConfig.enabled) throw new Error("CHECKIN_DISABLED");
 
-  const priorCountRow = await db.prepare("SELECT COUNT(*) AS count FROM daily_checkins WHERE user_id=?").bind(userId).first<{ count: number }>();
-  const priorCount = Number(priorCountRow?.count ?? 0);
-  const { dayIndex, coins: reward } = resolveCheckInReward(checkInConfig, priorCount);
+  const priorRows = await db.prepare("SELECT day FROM daily_checkins WHERE user_id=? ORDER BY day DESC LIMIT 4000").bind(userId).all<{ day: string }>();
+  const priorDays = (priorRows.results ?? []).map((row) => row.day);
+  const { streakBeforeToday } = computeConsecutiveStreak(priorDays, day);
+  const { dayIndex, coins: reward } = resolveCheckInReward(checkInConfig, streakBeforeToday);
+  const nextStreak = streakBeforeToday + 1;
   const claimedAt = nowIso();
 
   // Claim the unique day first. This closes the race where two requests both
@@ -50,13 +84,13 @@ export async function claimDailyCheckIn(env: AppEnv, userId: string, requestedDa
   }
   let entry;
   try {
-    entry = await appendLedgerEntry(env, { userId, amount: reward, kind: "daily_checkin", reference: idempotencyKey, idempotencyKey, metadata: { day, dayIndex } });
+    entry = await appendLedgerEntry(env, { userId, amount: reward, kind: "daily_checkin", reference: idempotencyKey, idempotencyKey, metadata: { day, dayIndex, streak: nextStreak } });
   } catch (error) {
     await db.prepare("DELETE FROM daily_checkins WHERE idempotency_key=?").bind(idempotencyKey).run();
     throw error;
   }
   const total = await db.prepare("SELECT COUNT(*) AS count FROM daily_checkins WHERE user_id=?").bind(userId).first<{ count: number }>();
-  if (Number(total?.count ?? 0) >= 1) await awardBadge(env, userId, "first-checkin", { day });
-  if (Number(total?.count ?? 0) >= 7) await awardBadge(env, userId, "seven-checkins", { day });
-  return { claimed: true, id: entry.id, coins: reward, dayIndex, claimedAt: entry.createdAt };
+  if (Number(total?.count ?? 0) >= 1) await awardBadge(env, userId, "first-checkin", { day, streak: nextStreak });
+  if (nextStreak >= 7 || Number(total?.count ?? 0) >= 7) await awardBadge(env, userId, "seven-checkins", { day, streak: nextStreak });
+  return { claimed: true, id: entry.id, coins: reward, dayIndex, streak: nextStreak, claimedAt: entry.createdAt };
 }

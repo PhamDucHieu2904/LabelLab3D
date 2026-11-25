@@ -35,7 +35,9 @@ function createAuthMockDb() {
   const rateLimits = new Map();
   const users = new Map();
   const wallets = new Map();
+  const ledger = new Map();
   const oauth = new Map();
+  let lastChanges = 0;
 
   const exec = (sql, params) => {
     const q = sql.replace(/\s+/g, ' ').trim();
@@ -116,7 +118,38 @@ function createAuthMockDb() {
       return { meta: { changes: 1 } };
     }
     if (q.startsWith('INSERT INTO wallets')) {
-      if (!wallets.has(params[0])) wallets.set(params[0], { user_id: params[0], balance: 0, updated_at: params[1] });
+      if (!wallets.has(params[0])) {
+        const initBal = params.length === 3 ? Number(params[1]) : 0;
+        const updatedAt = params.length === 3 ? params[2] : params[1];
+        wallets.set(params[0], { user_id: params[0], balance: initBal, updated_at: updatedAt });
+        lastChanges = 1;
+      } else {
+        lastChanges = 0;
+      }
+      return { meta: { changes: lastChanges } };
+    }
+    if (q.startsWith('SELECT balance FROM wallets WHERE user_id=?')) {
+      const row = wallets.get(params[0]);
+      return { first: row ? { balance: row.balance } : null };
+    }
+    if (q.startsWith('UPDATE wallets SET balance=balance+?')) {
+      const [delta, updatedAt, userId, expected] = params;
+      const row = wallets.get(userId);
+      if (row && row.balance === expected && row.balance + delta >= 0) {
+        row.balance += delta;
+        row.updated_at = updatedAt;
+        lastChanges = 1;
+      } else {
+        lastChanges = 0;
+      }
+      return { meta: { changes: lastChanges } };
+    }
+    if (q.startsWith('SELECT id,user_id AS userId,amount,kind,reference,balance,created_at AS createdAt FROM coin_ledger WHERE idempotency_key=?')) {
+      return { first: ledger.get(params[0]) ?? null };
+    }
+    if (q.startsWith('INSERT INTO coin_ledger')) {
+      if (lastChanges !== 1) return { meta: { changes: 0 } };
+      ledger.set(params[5], { id: params[0], userId: params[1], amount: params[2], kind: params[3], reference: params[4], balance: params[6], createdAt: params[8] });
       return { meta: { changes: 1 } };
     }
     if (q.startsWith('INSERT INTO oauth_accounts')) {
@@ -135,7 +168,7 @@ function createAuthMockDb() {
   });
 
   return {
-    codes, users, wallets, oauth, rateLimits,
+    codes, users, wallets, ledger, oauth, rateLimits,
     db: {
       prepare: (sql) => makeStmt(sql),
       batch: async (stmts) => stmts.map((stmt) => ({ success: true, meta: stmt._exec().meta ?? { changes: 0 } })),
@@ -228,14 +261,17 @@ test('upsertGoogleUser creates wallet-backed D1 user, reuses link, and prevents 
   });
   assert.equal(created.email, 'hieu@gmail.com');
   assert.ok(mock.wallets.has(created.id));
+  assert.equal(mock.wallets.get(created.id).balance, 20, 'new verified Google user receives 20 welcome bonus coins');
+  assert.equal(mock.ledger.get(`welcome:${created.id}`)?.kind, 'welcome_bonus');
   assert.ok(mock.users.get(created.id).email_verified_at);
   assert.equal(mock.oauth.get('google:google-sub-1').avatar_url, 'https://lh3.googleusercontent.com/a1');
 
-  // Repeat sign-in reuses exact user and refreshes avatar.
+  // Repeat sign-in reuses exact user and refreshes avatar without re-crediting welcome bonus.
   const again = await upsertGoogleUser(env, {
     sub: 'google-sub-1', email: 'hieu@gmail.com', name: 'Đức Hiếu', avatarUrl: 'https://lh3.googleusercontent.com/a2',
   });
   assert.equal(again.id, created.id);
+  assert.equal(mock.wallets.get(created.id).balance, 20);
   assert.equal(mock.oauth.get('google:google-sub-1').avatar_url, 'https://lh3.googleusercontent.com/a2');
 
   // Unverified pre-registered password user gets password_hash cleared when true Google owner signs in.

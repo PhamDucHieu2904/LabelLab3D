@@ -40,6 +40,7 @@ export const FEFCO_0427_MAILER_TEMPLATE: PackagingTemplateDefinition = {
     handHoles: false,
     displayScoop: false,
     windowCutout: true,
+    bottlePacking: true,
   },
   sizePresets: [
     {

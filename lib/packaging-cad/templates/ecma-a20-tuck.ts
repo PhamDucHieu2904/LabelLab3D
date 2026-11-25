@@ -39,6 +39,7 @@ export const ECMA_A20_TUCK_TEMPLATE: PackagingTemplateDefinition = {
     handHoles: false,
     displayScoop: false,
     windowCutout: true,
+    bottlePacking: true,
   },
   sizePresets: [
     {
@@ -489,6 +490,11 @@ export const ECMA_A20_TUCK_TEMPLATE: PackagingTemplateDefinition = {
       innerMm: { length: Linner, width: Winner, height: Hinner },
       outerMm: { length: Louter, width: Wouter, height: Houter },
       rootPanel,
+      contentAnchor: {
+        panelId: rootPanel.id,
+        center2D: [0, -W * 0.5],
+        floorOffsetMm: t * 0.5,
+      },
       clampNotices,
     });
   },
