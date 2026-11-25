@@ -33,7 +33,7 @@
 }
 
 .brandRow { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.brandRow > img { width: 150px; height: auto; }
+.brandRow > img { width: 185px; height: auto; }
 .dialog button { font-family: inherit; filter: none; }
 .dialog :is(button, input):focus-visible { outline: 3px solid #bd416866; outline-offset: 3px; }
 .close {

@@ -59,7 +59,7 @@ export default function AdminWorkspace({ section }: { section: AdminSection }) {
       <aside className={`${s.sidebar} ${menuOpen ? s.sidebarOpen : ""}`} aria-label="Điều hướng quản trị">
         <div className={s.brand}>
           <Link href="/admin" aria-label="HyperMockup Admin">
-            <img src="/branding/LLLogo.svg" width="146" height="39" alt="HyperMockup" />
+            <img src="/branding/hypermockup-logo.svg" width="165" height="24" alt="HyperMockup" />
           </Link>
           <button className={s.mobileOnly} aria-label="Đóng menu" onClick={() => setMenuOpen(false)}><X size={20} /></button>
         </div>

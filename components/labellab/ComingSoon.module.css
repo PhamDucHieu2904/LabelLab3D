@@ -24,8 +24,18 @@
   position: relative;
   z-index: 1;
   display: grid;
+  justify-items: center;
   gap: 14px;
   text-align: center;
+}
+
+.icon {
+  display: block;
+  width: clamp(72px, 10vw, 92px);
+  height: auto;
+  margin-bottom: 6px;
+  border-radius: 20px;
+  box-shadow: 0 18px 48px rgba(255, 0, 121, 0.22);
 }
 
 .brand {

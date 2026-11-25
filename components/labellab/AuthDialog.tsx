@@ -238,7 +238,7 @@ function AuthDialog({ initialMode, initialGoogleError, onDismiss }: {
       }}
     >
       <div className={styles.brandRow}>
-        <Image src="/branding/LLLogo.svg" alt="HyperMockup" width={156} height={33} />
+        <Image src="/branding/hypermockup-logo.svg" alt="HyperMockup" width={185} height={27} unoptimized />
         <button
           type="button"
           className={styles.close}

@@ -46,6 +46,7 @@ export const metadata: Metadata = {
     url: "https://hypermockup.com",
     siteName: "HyperMockup",
     type: "website",
+    images: [{ url: "/branding/hypermockup-icon.svg", width: 358, height: 358, alt: "HyperMockup" }],
   },
 };
 

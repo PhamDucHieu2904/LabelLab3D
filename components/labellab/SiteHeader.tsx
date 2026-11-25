@@ -45,7 +45,7 @@ export default function SiteHeader({ activePage, disabled = false, onOpenProject
   return (
     <header className={styles.header} inert={disabled}>
       <Link className={styles.wordmark} href="/" aria-label="HyperMockup home">
-        <Image src="/branding/LLLogo.svg" alt="HyperMockup" width={208} height={44} priority />
+        <Image src="/branding/hypermockup-logo.svg" alt="HyperMockup" width={220} height={32} priority unoptimized />
       </Link>
       <nav className={styles.nav} aria-label="Main navigation">
         <Link href="/" aria-current={activePage === "home" ? "page" : undefined}>Home</Link>

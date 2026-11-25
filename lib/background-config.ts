@@ -33,8 +33,8 @@ export const backgroundConfig: BackgroundConfig = {
   autoDriftEnabled: true, autoDirectionMinSeconds: 2, autoDirectionMaxSeconds: 6,
   productGlowOpacity: .96, productGlowWidth: 1.45, productGlowHeight: 1.35,
 };
-/** Labellab's white lockup used as the editor's repeating grid mark. */
-export const labellabWhiteIconUrl = '/branding/LLWhiteIcon.svg';
+/** HyperMockup's white mark used as the editor's repeating grid watermark. */
+export const labellabWhiteIconUrl = '/branding/hypermockup-white-icon.svg';
 export const backgroundThemes: BackgroundTheme[] = showcaseFlavors.map(flavor => ({ id: flavor.id, color: flavor.background, icon: flavor.id }));
 export function normalizeBackgroundIcon(input: string): FruitIcon {
   const value = typeof input === 'string' ? input.trim().toLowerCase() : '';
