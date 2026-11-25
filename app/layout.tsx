@@ -36,8 +36,9 @@ export const metadata: Metadata = {
     canonical: "/",
   },
   icons: {
-    icon: "/branding/hypermockup-icon.svg",
-    apple: "/branding/hypermockup-icon.svg",
+    icon: [{ url: "/branding/hypermockup-icon.svg?v=2", type: "image/svg+xml" }],
+    shortcut: "/branding/hypermockup-icon.svg?v=2",
+    apple: "/branding/hypermockup-icon.svg?v=2",
   },
   openGraph: {
     title: "HyperMockup",
