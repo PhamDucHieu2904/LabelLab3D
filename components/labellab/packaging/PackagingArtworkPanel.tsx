@@ -1,8 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import { useMemo } from "react";
-import { Download, ImagePlus, Layers, MousePointerClick, Trash2, Type } from "lucide-react";
+import { ImagePlus, Layers, MousePointerClick, Trash2, Type } from "lucide-react";
 import type {
   PackagingArtworkState,
   PanelDesignOverlay,
@@ -12,6 +11,7 @@ import {
   getPanelUprightSizeMm,
   isInteractivePackagingPanel,
 } from "@/lib/packaging-cad/artwork-composer";
+import { useLocale } from "../LocaleProvider";
 import styles from "./PackagingStudio.module.css";
 
 interface Props {
@@ -20,14 +20,12 @@ interface Props {
   surface: "outside" | "inside";
   selectedPanelId: string;
   tone: "studio" | "pink" | "white";
-  dielineCost?: number;
   disabled?: boolean;
   onChangeSurface: (surface: "outside" | "inside") => void;
   onSelectPanel: (panelId: string) => void;
   onOpenFaceEditor: (panelId: string, surface: "outside" | "inside") => void;
   onChangeArtwork: (next: PackagingArtworkState) => void;
   onRemoveFaceArtwork: (panelId: string, surface: "outside" | "inside") => void;
-  onDownloadDieline: (format: "svg" | "pdf" | "dxf") => void;
   onClearAll: () => void;
 }
 
@@ -46,16 +44,17 @@ export default function PackagingArtworkPanel({
   surface,
   selectedPanelId,
   tone,
-  dielineCost = 20,
   disabled = false,
   onChangeSurface,
   onSelectPanel,
   onOpenFaceEditor,
   onChangeArtwork,
   onRemoveFaceArtwork,
-  onDownloadDieline,
   onClearAll,
 }: Props) {
+  const { t } = useLocale();
+  const pkg = t.studio.packaging;
+
   const editablePanels = useMemo(
     () => solved.flatPanels.filter((p) => isInteractivePackagingPanel(p)),
     [solved.flatPanels],
@@ -74,6 +73,7 @@ export default function PackagingArtworkPanel({
   };
   const activeDims = activePanel ? getPanelUprightSizeMm(activePanel) : null;
   const boardColor = surface === "outside" ? solved.params.outsideColor : solved.params.insideColor;
+  const surfaceLabel = surface === "outside" ? pkg.outsideLabel : pkg.insideLabel;
 
   const updateOverlay = (patch: Partial<PanelDesignOverlay>) => {
     if (!activePanel) return;
@@ -98,24 +98,24 @@ export default function PackagingArtworkPanel({
       <div className={styles.interactiveTipCard}>
         <MousePointerClick size={15} aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }} />
         <span>
-          <strong>Click any face in 3D</strong> to edit its artwork directly. Each face has its own
-          independent artwork &amp; saved history.
+          <strong>{pkg.artworkTipLead}</strong>
+          {pkg.artworkTipBody}
         </span>
       </div>
 
       {/* Dual-Surface Print Switch (Outside / Inside) */}
       <div className={styles.sectionHeader}>
         <span className={styles.sectionTitle}>
-          <Layers size={13} aria-hidden="true" /> Print Side
+          <Layers size={13} aria-hidden="true" /> {pkg.printSide}
         </span>
-        <div className={styles.segmented} role="group" aria-label="Print surface">
+        <div className={styles.segmented} role="group" aria-label={pkg.printSide}>
           <button
             type="button"
             aria-pressed={surface === "outside"}
             disabled={disabled}
             onClick={() => onChangeSurface("outside")}
           >
-            Outside
+            {pkg.outsideLabel}
           </button>
           <button
             type="button"
@@ -123,7 +123,7 @@ export default function PackagingArtworkPanel({
             disabled={disabled}
             onClick={() => onChangeSurface("inside")}
           >
-            Inside
+            {pkg.insideLabel}
           </button>
         </div>
       </div>
@@ -131,19 +131,20 @@ export default function PackagingArtworkPanel({
       {/* Per-Face Independent Artwork List */}
       <section className={styles.inspectorSection}>
         <div className={styles.sectionHeader}>
-          <span className={styles.sectionTitle}>
-            Box Faces ({surface === "outside" ? "Outside" : "Inside"})
+          <span className={styles.sectionTitle}>{pkg.boxFacesTitle(surface)}</span>
+          <span style={{ fontSize: 10, color: "var(--pkg-muted)" }}>
+            {pkg.faceCount(editablePanels.length)}
           </span>
-          <span style={{ fontSize: 10, color: "var(--pkg-muted)" }}>{editablePanels.length} faces</span>
         </div>
 
-        <div className={styles.faceList} role="list" aria-label="Independent box face artwork slots">
+        <div className={styles.faceList} role="list" aria-label={pkg.boxFacesTitle(surface)}>
           {editablePanels.map((panel) => {
             const key = overlayKey(surface, panel.id);
             const ov = artwork.panelOverlays[key];
             const dims = getPanelUprightSizeMm(panel);
             const isSelected = activePanel?.id === panel.id;
             const hasFaceDesign = Boolean(ov?.imageUrl || ov?.fillColor || ov?.text?.trim());
+            const faceName = pkg.faceLabel(panel.label);
             return (
               <div
                 key={panel.id}
@@ -168,10 +169,14 @@ export default function PackagingArtworkPanel({
                     )}
                   </span>
                   <span className={styles.faceRowMeta}>
-                    <strong>{panel.label}</strong>
+                    <strong>{faceName}</strong>
                     <small>
                       {dims.widthMm} × {dims.heightMm} mm
-                      {ov?.artworkName ? ` · ${ov.artworkName}` : hasFaceDesign ? " · Custom" : " · Empty"}
+                      {ov?.artworkName
+                        ? ` · ${ov.artworkName}`
+                        : hasFaceDesign
+                          ? ` · ${pkg.faceCustom}`
+                          : ` · ${pkg.faceEmpty}`}
                     </small>
                   </span>
                 </button>
@@ -179,14 +184,14 @@ export default function PackagingArtworkPanel({
                   type="button"
                   className={styles.faceEditBtn}
                   disabled={disabled}
-                  title={`Replace artwork on ${panel.label} (${surface})`}
+                  title={`${faceName} (${surfaceLabel})`}
                   onClick={() => {
                     onSelectPanel(panel.id);
                     onOpenFaceEditor(panel.id, surface);
                   }}
                 >
                   <ImagePlus size={13} aria-hidden="true" />
-                  <span>{ov?.imageUrl ? "Replace" : "Add"}</span>
+                  <span>{ov?.imageUrl ? pkg.btnReplace : pkg.btnAdd}</span>
                 </button>
               </div>
             );
@@ -199,7 +204,7 @@ export default function PackagingArtworkPanel({
         <section className={styles.inspectorSection}>
           <div className={styles.sectionHeader}>
             <span className={styles.sectionTitle}>
-              {activePanel.label} ({surface})
+              {pkg.faceLabel(activePanel.label)} ({surfaceLabel})
             </span>
             <span style={{ fontSize: 10, color: "var(--pkg-muted)", fontVariantNumeric: "tabular-nums" }}>
               {activeDims.widthMm} × {activeDims.heightMm} mm
@@ -214,14 +219,14 @@ export default function PackagingArtworkPanel({
           >
             <ImagePlus size={14} aria-hidden="true" />
             {activeOverlay.imageUrl
-              ? `Edit / Replace ${activePanel.shortCode} artwork`
-              : `Upload artwork for ${activePanel.shortCode}`}
+              ? pkg.replaceFaceArt(activePanel.shortCode)
+              : pkg.uploadFaceArt(activePanel.shortCode)}
           </button>
 
           {/* Selected Panel Background Color */}
           <div className={styles.colorPairRow}>
             <label className={styles.colorMini}>
-              <span>Face tint</span>
+              <span>{pkg.faceTint}</span>
               <input
                 type="color"
                 value={activeOverlay.fillColor ?? boardColor}
@@ -235,7 +240,7 @@ export default function PackagingArtworkPanel({
               disabled={disabled || !activeOverlay.fillColor}
               onClick={() => updateOverlay({ fillColor: undefined })}
             >
-              Reset tint
+              {pkg.resetTint}
             </button>
           </div>
 
@@ -246,19 +251,19 @@ export default function PackagingArtworkPanel({
               disabled={disabled}
               onClick={() => onRemoveFaceArtwork(activePanel.id, surface)}
             >
-              <Trash2 size={12} /> Remove artwork from {activePanel.shortCode}
+              <Trash2 size={12} /> {pkg.removeFaceArt(activePanel.shortCode)}
             </button>
           )}
 
           {/* Quick Brand Text for this face */}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <span className={styles.sectionTitle}>
-              <Type size={12} aria-hidden="true" /> Quick text on {activePanel.shortCode}
+              <Type size={12} aria-hidden="true" /> {pkg.quickTextOn(activePanel.shortCode)}
             </span>
             <input
               type="text"
               className={styles.textField}
-              placeholder={`e.g. HYPERMOCKUP · ${activePanel.shortCode}`}
+              placeholder={pkg.textPlaceholder(activePanel.shortCode)}
               maxLength={48}
               disabled={disabled}
               value={activeOverlay.text ?? ""}
@@ -267,7 +272,7 @@ export default function PackagingArtworkPanel({
             {activeOverlay.text?.trim() && (
               <div className={styles.colorPairRow}>
                 <label className={styles.colorMini}>
-                  <span>Text color</span>
+                  <span>{pkg.textColor}</span>
                   <input
                     type="color"
                     value={activeOverlay.textColor ?? "#1e293b"}
@@ -277,7 +282,7 @@ export default function PackagingArtworkPanel({
                 </label>
                 <div className={styles.sliderRow}>
                   <div className={styles.sliderHead}>
-                    <label htmlFor="panel-text-sz">Size</label>
+                    <label htmlFor="panel-text-sz">{pkg.textSize}</label>
                     <output>{activeOverlay.textSizePct ?? 24}%</output>
                   </div>
                   <input
@@ -298,55 +303,6 @@ export default function PackagingArtworkPanel({
         </section>
       )}
 
-      {/* 1:1 mm Manufacturing CAD Dieline Export */}
-      <section className={styles.inspectorSection}>
-        <div className={styles.dielineCostRow}>
-          <span>1:1 mm Dieline Export</span>
-          <span
-            className={styles.dielineCostBadge}
-            aria-label={dielineCost === 0 ? "Free export" : `${dielineCost} coins per file`}
-          >
-            {dielineCost === 0 ? (
-              "Free"
-            ) : (
-              <>
-                <Image src="/branding/LLCoin.svg" alt="" width={12} height={12} aria-hidden="true" />
-                <span>{dielineCost}</span>
-              </>
-            )}
-          </span>
-        </div>
-        <div className={styles.dielineExportRow}>
-          <button
-            type="button"
-            className={styles.dielineExportBtn}
-            disabled={disabled}
-            onClick={() => onDownloadDieline("svg")}
-            title={`Download 1:1 mm SVG · ${dielineCost === 0 ? "Free" : `${dielineCost} coins`}`}
-          >
-            <Download size={12} /> SVG
-          </button>
-          <button
-            type="button"
-            className={styles.dielineExportBtn}
-            disabled={disabled}
-            onClick={() => onDownloadDieline("pdf")}
-            title={`Download 1:1 mm PDF · ${dielineCost === 0 ? "Free" : `${dielineCost} coins`}`}
-          >
-            <Download size={12} /> PDF
-          </button>
-          <button
-            type="button"
-            className={styles.dielineExportBtn}
-            disabled={disabled}
-            onClick={() => onDownloadDieline("dxf")}
-            title={`Download 1:1 mm DXF · ${dielineCost === 0 ? "Free" : `${dielineCost} coins`}`}
-          >
-            <Download size={12} /> DXF
-          </button>
-        </div>
-      </section>
-
       {/* Clear All Faces */}
       {hasAnyArtwork && (
         <button
@@ -355,7 +311,7 @@ export default function PackagingArtworkPanel({
           disabled={disabled}
           onClick={onClearAll}
         >
-          <Trash2 size={12} /> Clear all box faces
+          <Trash2 size={12} /> {pkg.clearAllFaces}
         </button>
       )}
     </div>

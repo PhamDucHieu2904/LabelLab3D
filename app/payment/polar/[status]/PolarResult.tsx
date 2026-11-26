@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useLocale } from "@/components/labellab/LocaleProvider";
 
 type Order = { orderCode?: string; status: string; coins: number; amount: number; currency: string };
 
 export default function PolarResult({ status, orderId }: { status: "success" | "cancel"; orderId: string }) {
+  const { t } = useLocale();
+  const m = t.paymentResult;
   const [order, setOrder] = useState<Order | null>(null);
   const [checking, setChecking] = useState(status === "success");
 
@@ -35,23 +38,23 @@ export default function PolarResult({ status, orderId }: { status: "success" | "
   const paid = order?.status === "paid";
   return (
     <main style={{ maxWidth: 560, margin: "80px auto", padding: 28, borderRadius: 24, border: "1px solid #f0d7e1", background: "#fff9fb", color: "#3d1e2e", fontFamily: "system-ui, sans-serif" }}>
-      <p style={{ margin: "0 0 8px", color: "#a12e56", fontSize: 12, fontWeight: 700, letterSpacing: ".08em" }}>HYPERMOCKUP · POLAR INTERNATIONAL</p>
+      <p style={{ margin: "0 0 8px", color: "#a12e56", fontSize: 12, fontWeight: 700, letterSpacing: 0 }}>{m.polarEyebrow}</p>
       <h1 style={{ margin: "0 0 12px", fontSize: 28 }}>
-        {status === "success" ? (paid ? "Payment successful!" : "Confirming your payment…") : "Checkout cancelled"}
+        {status === "success" ? (paid ? m.polarTitlePaid : m.polarTitleConfirming) : m.polarTitleCancel}
       </h1>
-      {order?.orderCode && <p style={{ margin: "0 0 12px", color: "#795464" }}>Order code: <code>{order.orderCode}</code></p>}
+      {order?.orderCode && <p style={{ margin: "0 0 12px", color: "#795464" }}>{m.orderCodeLabel} <code>{order.orderCode}</code></p>}
       {status === "success" && checking && (
-        <p style={{ margin: "0 0 20px", lineHeight: 1.55 }}>Polar is sending the verified payment webhook. Your coins will appear automatically in a few seconds.</p>
+        <p style={{ margin: "0 0 20px", lineHeight: 1.55 }}>{m.polarChecking}</p>
       )}
       {status === "success" && !checking && !paid && (
-        <p style={{ margin: "0 0 20px", lineHeight: 1.55 }}>Still waiting for confirmation. Please check your wallet on the home page in a moment or contact support with your order code.</p>
+        <p style={{ margin: "0 0 20px", lineHeight: 1.55 }}>{m.polarDelayed}</p>
       )}
       {paid && order && (
-        <p style={{ margin: "0 0 20px", color: "#1f7a4c", fontWeight: 600 }}>+{order.coins} coins have been added to your account!</p>
+        <p style={{ margin: "0 0 20px", color: "#1f7a4c", fontWeight: 600 }}>{m.polarCredited(order.coins)}</p>
       )}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <Link href="/" style={{ padding: "10px 20px", borderRadius: 12, background: "#a12e56", color: "#fff", textDecoration: "none", fontWeight: 650 }}>Back to Home</Link>
-        <Link href="/studio" style={{ padding: "10px 20px", borderRadius: 12, border: "1px solid #ddb8c7", color: "#7e2544", textDecoration: "none", fontWeight: 650 }}>Open Studio</Link>
+        <Link href="/" style={{ padding: "10px 20px", borderRadius: 12, background: "#a12e56", color: "#fff", textDecoration: "none", fontWeight: 650 }}>{m.backHome}</Link>
+        <Link href="/studio" style={{ padding: "10px 20px", borderRadius: 12, border: "1px solid #ddb8c7", color: "#7e2544", textDecoration: "none", fontWeight: 650 }}>{m.openStudio}</Link>
       </div>
     </main>
   );

@@ -311,7 +311,7 @@ export function createBasilWebBottleMaterialContext(root: THREE.Object3D, asset:
             clarity: 0, density: 1, turbidity: 1, brightness: 1,
             scattering: .9, roughness: .8, ior: 1.333,
           }, material, material.userData.bottleProfile === 'glass-300-v1' ? .18 : 0);
-          // Unity's Milk interior outputs the liquid pigment directly. Native
+          // The Milk interior outputs the liquid pigment directly. Native
           // diffuse lighting creates a gray disc on the downward-facing water
           // surface. Glass still supplies the outer reflections/refraction;
           // tone mapping and explicit live optics run after this reservoir.

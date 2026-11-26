@@ -2,11 +2,11 @@
  * Label Lab's accepted Glass290 High optical integrator, ported to GLSL ES 3.
  *
  * Source: Glass290HighOptics.shader, Glass290HighRenderer.cs (High, not Ultra).
- * Coordinates are the unscaled Unity shell mesh: radial XY, bottle axis Z.
+ * Coordinates are the unscaled source shell mesh: radial XY, bottle axis Z.
  * Keep the source shell-local frame. World-distance attenuation uses the actual
- * Label Lab display scale; changing it changes optical depth and seed visibility.
+ * HyperMockup display scale; changing it changes optical depth and seed visibility.
  *
- * Each data texture is RGBA32F/NearestFilter, flattened in original Unity order:
+ * Each data texture is RGBA32F/NearestFilter, flattened in authored source order:
  * residualTriangles: a/e1/e2/n0/n1/n2 (6 texels), residualNodes: lo/hi/range (3),
  * profiles: shape/normals/media (3), profileNodes: lo/hi/range (3),
  * seeds: center/inverseX/inverseY/inverseZ (4), seedNodes: lo/hi/range (3).

@@ -52,7 +52,7 @@ function createPrintTexture(label: NonNullable<ProductAppearance['label']>, volu
   // Repeated print panels keep branding visible throughout the full turn.
   for (const x of [0, 1024, 2048]) {
     context.font = '900 120px Arial, sans-serif';
-    context.fillText(label.brand || 'VINUT', x, 335, 770);
+    context.fillText(label.brand || 'HYPERMOCKUP', x, 335, 770);
     context.font = '500 29px Arial, sans-serif';
     context.letterSpacing = '7px';
     context.fillText(label.category || 'SPARKLING DRINK', x, 405, 770);
@@ -67,7 +67,7 @@ function createPrintTexture(label: NonNullable<ProductAppearance['label']>, volu
     context.fillText(label.name.toUpperCase(), x, 850, 790);
     context.font = '500 29px Arial, sans-serif';
     const volume = label.volumeMl ?? volumeMl;
-    context.fillText(volume ? `${volume} ml  ·  VINUT` : 'VINUT', x, 930, 770);
+    context.fillText(volume ? `${volume} ml  ·  HYPERMOCKUP` : 'HYPERMOCKUP', x, 930, 770);
     context.fillStyle = '#fffaf1';
   }
   const texture = new THREE.CanvasTexture(canvas);

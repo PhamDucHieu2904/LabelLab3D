@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Changa_One, Luckiest_Guy, Mona_Sans } from "next/font/google";
 import { AuthDialogProvider } from "@/components/labellab/AuthDialog";
+import CookieConsentBanner from "@/components/labellab/CookieConsentBanner";
+import { LocaleProvider } from "@/components/labellab/LocaleProvider";
+import { readServerLocale } from "@/lib/server/locale";
 import "./globals.css";
 
 const uiFont = Mona_Sans({
@@ -51,13 +54,19 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const initialLocale = await readServerLocale();
   return (
-    <html lang="en">
+    <html lang={initialLocale}>
       <body className={`${uiFont.variable} ${titleFont.variable} ${accentFont.variable}`}>
-        <AuthDialogProvider>{children}</AuthDialogProvider>
+        <LocaleProvider initialLocale={initialLocale}>
+          <AuthDialogProvider>
+            {children}
+            <CookieConsentBanner />
+          </AuthDialogProvider>
+        </LocaleProvider>
       </body>
     </html>
   );

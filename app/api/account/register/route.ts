@@ -5,7 +5,9 @@ import { env, json, errorResponse, sessionCookie, assertSameOrigin } from "@/lib
 import { assertRegistrationAllowed, recordRegistrationAttempt } from "@/lib/server/rate-limit";
 import { verifyAndConsumeCode } from "@/lib/server/email-verification";
 import { getLiveSiteSettings } from "@/lib/server/site-config";
+import { recordLegalConsent } from "@/lib/server/legal";
 import { appendLedgerEntry } from "@/lib/server/wallet";
+import { CURRENT_POLICY_VERSION } from "@/lib/legal/policies";
 import { WELCOME_BONUS_COINS } from "@/lib/payments/packages";
 
 export const runtime = "nodejs";
@@ -19,11 +21,19 @@ export async function POST(request: Request) {
       name?: unknown;
       password?: unknown;
       verificationCode?: unknown;
+      acceptedTerms?: unknown;
+      acceptedPrivacy?: unknown;
     };
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const password = typeof body.password === "string" ? body.password : "";
     const verificationCode = typeof body.verificationCode === "string" ? body.verificationCode.trim() : "";
+    const acceptedTerms = body.acceptedTerms === true;
+    const acceptedPrivacy = body.acceptedPrivacy === true;
+
+    if (!acceptedTerms || !acceptedPrivacy) {
+      throw new Error("CONSENT_REQUIRED");
+    }
 
     if (
       !/^\S+@\S+\.\S+$/.test(email) || email.length > 254
@@ -66,6 +76,13 @@ export async function POST(request: Request) {
       reference: `welcome:${id}`,
       idempotencyKey: `welcome:${id}`,
       metadata: { source: "email_register" },
+    });
+    await recordLegalConsent(runtimeEnv, {
+      userId: id,
+      consentType: "register_email",
+      ip,
+      policyVersion: CURRENT_POLICY_VERSION,
+      metadata: { email, acceptedTerms: true, acceptedPrivacy: true },
     });
     await sessionCookie({ id, email, name, role: "user", status: "active" });
     return json({ user: { id, email, name, role: "user" }, welcomeBonus: WELCOME_BONUS_COINS }, { status: 201 });

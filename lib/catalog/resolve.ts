@@ -29,14 +29,16 @@ export function resolveModelAsset(data: CatalogData, model: Model3D): ProductAss
 }
 
 /** Artwork mapping is identical in sales previews and free compatible pairings. */
-export function resolveLabelAppearance(data: CatalogData, label: Label, appearanceId = `${label.id}:${label.revision}`): ProductAppearance | null {
-  const media = data.media.find(item => item.id === label.mediaId);
-  if (!media || media.role !== 'label' || media.status !== 'ready' || media.lifecycle !== 'active') return null;
+export function resolveLabelAppearance(data: CatalogData, label?: Label | null, appearanceId = label ? `${label.id}:${label.revision}` : 'blank'): ProductAppearance | null {
+  const media = label ? data.media.find(item => item.id === label.mediaId) : undefined;
+  if (!media || media.role !== 'label' || media.status !== 'ready' || media.lifecycle !== 'active' || !media.url) {
+    return { id: appearanceId, requiredSlots: ['label'], slots: { label: { color: '#ffffff', metalness: 0, roughness: 0.15, clearcoat: 0.2 } } };
+  }
   return { id: appearanceId, requiredSlots: ['label'], slots: { label: { baseColorMap: mediaUrl(media), metalness: 0, roughness: 0.15, clearcoat: 0.2 } } };
 }
 
 /** Sales and Studio use the same liquid tint; imported PET/cloudiness settings stay intact. */
-export function resolveModelLabelAppearance(data: CatalogData, model: Model3D, label: Label, flavor?: Pick<Flavor, 'accentColor'>, liquidColor?: string | null, appearanceId = `${label.id}:${label.revision}`, capColor?: string | null, labelOffset = 0, finish?: Pick<Display3D, 'labelSmoothness' | 'labelMetalness'>): ProductAppearance | null {
+export function resolveModelLabelAppearance(data: CatalogData, model: Model3D, label?: Label | null, flavor?: Pick<Flavor, 'accentColor'>, liquidColor?: string | null, appearanceId = label ? `${label.id}:${label.revision}` : 'blank', capColor?: string | null, labelOffset = 0, finish?: Pick<Display3D, 'labelSmoothness' | 'labelMetalness'>): ProductAppearance | null {
   const appearance = resolveLabelAppearance(data, label, appearanceId);
   if (!appearance) return null;
   appearance.slots ??= {};
@@ -123,11 +125,11 @@ export function resolveDisplay3D(data: CatalogData, display: Display3D, seed = '
   const flavor = data.flavors.find(item => item.id === variant?.flavorId);
   const packaging = data.packagingVariants.find(item => item.id === variant?.packagingVariantId);
   const modelMedia = data.media.find(item => item.id === model?.mediaId);
-  const label = data.labels.find(item => item.id === display.labelId);
-  const labelMedia = data.media.find(item => item.id === label?.mediaId);
-  if (!variant || !model || !flavor || !packaging || !modelMedia || !labelMedia || modelMedia.status!=='ready'||labelMedia.status!=='ready'||modelMedia.lifecycle!=='active'||labelMedia.lifecycle!=='active'||modelMedia.role!=='model'||labelMedia.role!=='label') return null;
+  const label = display.labelId ? data.labels.find(item => item.id === display.labelId) : undefined;
+  if (!variant || !model || !flavor || !packaging || !modelMedia || modelMedia.status!=='ready'||modelMedia.lifecycle!=='active'||modelMedia.role!=='model') return null;
   const asset = resolveModelAsset(data, model);
-  const appearance = label && resolveModelLabelAppearance(data, model, label, flavor, display.liquidColor, `${display.id}:${label.id}:${label.revision}`, display.capColor, display.labelOffset, display);
+  const appearanceId = label ? `${display.id}:${label.id}:${label.revision}` : `${display.id}:blank`;
+  const appearance = resolveModelLabelAppearance(data, model, label, flavor, display.liquidColor, appearanceId, display.capColor, display.labelOffset, display);
   if (!asset || !appearance) return null;
   return {
     variant, flavor,

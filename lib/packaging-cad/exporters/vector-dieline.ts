@@ -71,7 +71,7 @@ export function exportDielineSvg(solved: SolvedDieline, options: DielineSvgOptio
               : solved.params.insideColor;
           const opacity = isHi ? '1' : '0.32';
           const d = [polyPath(panel.outline), ...panel.holes.map(polyPath)].join(' ');
-          return `    <path data-panel-id="${escapeXml(panel.id)}" d="${d}" fill="${fill}" fill-opacity="${opacity}" fill-rule="evenodd" stroke="none"/>`;
+          return `    <path data-panel-id="${escapeXml(panel.id)}" d="${d}" fill="${escapeXml(fill)}" fill-opacity="${opacity}" fill-rule="evenodd" stroke="none"/>`;
         })
         .join('\n')
     : '';
@@ -266,7 +266,7 @@ export function exportDielinePdf(solved: SolvedDieline, side: 'outside' | 'insid
   ops.push('Q');
 
   // Engineering specification footer block
-  const specLine1 = `LabelLab 3D CAD Dieline (1:1 mm) | ${solved.templateCode} ${solved.templateName} | ${side.toUpperCase()} PRINT VIEW`;
+  const specLine1 = `HyperMockup CAD Dieline (1:1 mm) | ${solved.templateCode} ${solved.templateName} | ${side.toUpperCase()} PRINT VIEW`;
   const specLine2 = `Inner: ${fmt(solved.innerMm.length)}x${fmt(solved.innerMm.width)}x${fmt(solved.innerMm.height)} mm | Outer: ${fmt(solved.outerMm.length)}x${fmt(solved.outerMm.width)}x${fmt(solved.outerMm.height)} mm | Board: ${solved.material.shortName} (${fmt(solved.params.thicknessMm)} mm) | Blank: ${fmt(b.width)}x${fmt(b.height)} mm`;
   const legend = 'RED SOLID = Cut / Holes   |   GREEN DASHED = Crease / Fold   |   BLUE DASHED = Bleed';
 

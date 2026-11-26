@@ -1,11 +1,11 @@
 import type {
   BottlePackConfig,
-  CarrierPackLayout,
   DimensionTripleMm,
   SolvedDieline,
 } from './types';
 import { getPackagingTemplate } from './templates/registry';
 import { clampNum } from './templates/helpers';
+import { getHoneycombDividerThicknessMm } from './geometry/partition-builder';
 
 export interface BeverageFootprintMm {
   readonly diameterXMm: number;
@@ -94,7 +94,7 @@ export const KNOWN_BEVERAGE_FOOTPRINTS_MM: Readonly<Record<string, BeverageFootp
   'pp-2000': { diameterXMm: 102.0, diameterZMm: 102.0, heightMm: 294.0 },
 });
 
-const OPEN_TOP_TEMPLATES = new Set(['fefco-0421-tray', 'beverage-carrier']);
+const OPEN_TOP_TEMPLATES = new Set(['fefco-0421-tray']);
 
 export function getBeverageFootprintMm(modelId: string, volumeMl?: number): BeverageFootprintMm {
   const known = KNOWN_BEVERAGE_FOOTPRINTS_MM[modelId];
@@ -106,11 +106,11 @@ export function getBeverageFootprintMm(modelId: string, volumeMl?: number): Beve
   return { diameterXMm: 82, diameterZMm: 82, heightMm: 265 };
 }
 
-/** Deterministic small rotation jitter in radians for natural hand-packed realism. */
-function deterministicJitterRad(col: number, row: number): number {
-  const hash = Math.sin((col + 1) * 12.9898 + (row + 1) * 78.233) * 43758.5453;
+/** Full 360° unconstrained random rotation in radians for natural hand-packed realism. */
+function deterministicJitterRad(col: number, row: number, seed = 0): number {
+  const hash = Math.sin((col + 1) * 12.9898 + (row + 1) * 78.233 + seed * 37.719) * 43758.5453;
   const frac = hash - Math.floor(hash); // [0, 1)
-  return ((frac * 2 - 1) * 9 * Math.PI) / 180; // ±9°
+  return (frac * 2 - 1) * Math.PI; // Full unconstrained 360° (-180° .. +180°)
 }
 
 export function isOpenTopPackagingTemplate(templateId: string): boolean {
@@ -124,26 +124,31 @@ export function isOpenTopPackagingTemplate(templateId: string): boolean {
 export function computeAutoFitBoxDimensions(input: {
   templateId: string;
   itemMm: BeverageFootprintMm;
-  config: Pick<BottlePackConfig, 'cols' | 'rows' | 'spacingMm' | 'wallPaddingMm'>;
+  config: Pick<BottlePackConfig, 'cols' | 'rows' | 'spacingMm' | 'wallPaddingMm' | 'honeycombDividers'>;
   thicknessMm: number;
   dividerGrid?: boolean;
 }): {
   lengthMm: number;
   widthMm: number;
   heightMm: number;
-  carrierPack?: CarrierPackLayout;
   clamped: boolean;
 } {
   const tpl = getPackagingTemplate(input.templateId);
   const cols = Math.max(1, Math.min(6, Math.round(input.config.cols)));
   const rows = Math.max(1, Math.min(4, Math.round(input.config.rows)));
   const wallPad = Math.max(0.5, input.config.wallPaddingMm);
-  const isCarrier = tpl.id === 'beverage-carrier';
-  const hasDividers = isCarrier && input.dividerGrid !== false;
-  const minDivGap = hasDividers ? input.thicknessMm + 2.5 : 0;
+  const hasHoneycomb =
+    tpl.id === 'fefco-0201-rsc' && Boolean(input.config.honeycombDividers) && (cols > 1 || rows > 1);
+  const honeycombDivGap = hasHoneycomb ? getHoneycombDividerThicknessMm(input.thicknessMm) + 2.0 : 0;
 
-  const colGap = Math.max(input.config.spacingMm, minDivGap);
-  const rowGap = Math.max(input.config.spacingMm, isCarrier ? input.thicknessMm + 2.5 : 0);
+  const colGap = Math.max(
+    input.config.spacingMm,
+    cols > 1 ? honeycombDivGap : 0,
+  );
+  const rowGap = Math.max(
+    input.config.spacingMm,
+    rows > 1 ? honeycombDivGap : 0,
+  );
 
   const rawL = Math.ceil(cols * input.itemMm.diameterXMm + Math.max(0, cols - 1) * colGap + 2 * wallPad);
   const rawW = Math.ceil(rows * input.itemMm.diameterZMm + Math.max(0, rows - 1) * rowGap + 2 * wallPad);
@@ -152,11 +157,8 @@ export function computeAutoFitBoxDimensions(input: {
   if (tpl.id === 'fefco-0421-tray') {
     // Showcase tray: ~46% of bottle/can height so labels shine clearly above tray walls.
     rawH = Math.round(clampNum(input.itemMm.heightMm * 0.46, 46, 88));
-  } else if (tpl.id === 'beverage-carrier') {
-    // Beverage carrier basket hugs the torso while bottle necks stand beside the arched handle.
-    rawH = Math.round(clampNum(input.itemMm.heightMm * 0.62, 68, 132));
   } else {
-    // Enclosed shipping / retail / rigid boxes clear caps cleanly under the lid.
+    // Enclosed shipping / rigid boxes clear caps cleanly under the lid.
     rawH = Math.ceil(input.itemMm.heightMm + 5);
   }
 
@@ -165,12 +167,7 @@ export function computeAutoFitBoxDimensions(input: {
   const heightMm = Math.round(clampNum(rawH, tpl.minDimensions.height, tpl.maxDimensions.height));
   const clamped = lengthMm !== rawL || widthMm !== rawW || heightMm !== rawH;
 
-  let carrierPack: CarrierPackLayout | undefined;
-  if (isCarrier) {
-    carrierPack = cols <= 2 ? '4-pack' : cols >= 4 ? '8-pack' : '6-pack';
-  }
-
-  return { lengthMm, widthMm, heightMm, carrierPack, clamped };
+  return { lengthMm, widthMm, heightMm, clamped };
 }
 
 /**
@@ -185,12 +182,19 @@ export function computeBottlePackLayout(
   const cols = Math.max(1, Math.min(6, Math.round(config.cols)));
   const rows = Math.max(1, Math.min(4, Math.round(config.rows)));
   const t = solved.params.thicknessMm;
-  const isCarrier = solved.templateId === 'beverage-carrier';
-  const hasDividers = isCarrier && solved.params.dividerGrid !== false;
+  const hasHoneycomb =
+    solved.templateId === 'fefco-0201-rsc' && Boolean(config.honeycombDividers) && (cols > 1 || rows > 1);
+  const honeycombDivGap = hasHoneycomb ? getHoneycombDividerThicknessMm(t) + 2.0 : 0;
   const openTopTemplate = isOpenTopPackagingTemplate(solved.templateId);
 
-  const colGap = Math.max(config.spacingMm, hasDividers ? t + 2.0 : 0);
-  const rowGap = Math.max(config.spacingMm, isCarrier ? t + 2.0 : 0);
+  const colGap = Math.max(
+    config.spacingMm,
+    cols > 1 ? honeycombDivGap : 0,
+  );
+  const rowGap = Math.max(
+    config.spacingMm,
+    rows > 1 ? honeycombDivGap : 0,
+  );
   const wallPad = Math.max(0, config.wallPaddingMm);
 
   const requiredLength = cols * itemMm.diameterXMm + Math.max(0, cols - 1) * colGap + 2 * wallPad;
@@ -206,16 +210,14 @@ export function computeBottlePackLayout(
   const fitsHorizontal = overflowLengthMm <= 0.8 && overflowWidthMm <= 0.8;
   const fitsHeight = overflowHeightMm <= 0.8;
 
-  // When packing inside a divided carrier that fits, center each bottle inside its physical cell
-  // so it never clips the central carry handle spine or cross partitions!
-  const carrierCols =
-    solved.params.carrierPack === '4-pack' ? 2 : solved.params.carrierPack === '8-pack' ? 4 : 3;
-  const alignToCarrierCells = isCarrier && cols === carrierCols && rows === 2 && fitsHorizontal;
+  // When packing inside a honeycomb-partitioned RSC carton that fits,
+  // center each bottle inside its physical cell so it never clips internal divider walls!
+  const alignToCells = fitsHorizontal && hasHoneycomb;
 
-  const pitchX = alignToCarrierCells
+  const pitchX = alignToCells
     ? solved.innerMm.length / cols
     : itemMm.diameterXMm + colGap;
-  const pitchZ = alignToCarrierCells
+  const pitchZ = alignToCells
     ? solved.innerMm.width / rows
     : itemMm.diameterZMm + rowGap;
 
@@ -229,7 +231,7 @@ export function computeBottlePackLayout(
       const xMm = -totalSpanX * 0.5 + col * pitchX;
       // Front row (+Z) has highest row index or symmetric around 0
       const zMm = -totalSpanZ * 0.5 + row * pitchZ;
-      const jitter = config.organicJitter ? deterministicJitterRad(col, row) : 0;
+      const jitter = config.organicJitter ? deterministicJitterRad(col, row, config.jitterSeed ?? 0) : 0;
       slots.push({
         col,
         row,

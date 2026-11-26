@@ -37,6 +37,10 @@
 .notificationPanel ul { display: grid; gap: 14px; padding: 0; margin: 16px 0 0; list-style: none; }
 .notificationPanel li { display: grid; gap: 4px; }
 .notificationPanel small { color: #765d69; font-size: 13px; }
+.langSwitch { display: inline-flex; align-items: center; gap: 2px; height: 44px; padding: 4px; border: 1px solid #6c4c5b29; border-radius: 10px; background: #ffffff99; flex-shrink: 0; }
+.langSwitch button { min-width: 34px; height: 34px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: #6e5863; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; cursor: pointer; }
+.langSwitch button:hover:not(.langActive) { background: #fbe8ef; color: #a90f45; }
+.langActive { background: #d7195c !important; color: #fff !important; box-shadow: 0 2px 8px #d7195c33; }
 .start { position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; gap: 16px; min-width: 136px; min-height: 44px; padding: 0 20px; border: 0; border-radius: 10px; background: #2b2028; color: #fff; font: inherit; white-space: nowrap; cursor: pointer; box-shadow: 0 5px 14px #2b202819; }
 .start::after { content: ""; position: absolute; inset: -30% auto -30% -45%; width: 35%; transform: translateX(-120%) skewX(-18deg); background: linear-gradient(90deg, transparent, #ffffff55, transparent); transition: transform .6s ease; }
 .start:hover { background: #4c3543; }
@@ -54,6 +58,8 @@
 @container labellab-page (max-width: 520px) {
   .wordmark img { width: 140px; }
   .actions { gap: 6px; }
+  .langSwitch { height: 40px; padding: 3px; }
+  .langSwitch button { min-width: 28px; height: 32px; padding: 0 6px; font-size: 11px; }
   .notificationPanel { right: -50px; }
 }
 @media (prefers-reduced-motion: reduce) { .start::after { transition: none; } }

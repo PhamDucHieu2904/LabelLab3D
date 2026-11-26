@@ -6,7 +6,7 @@ export interface RefractiveBackdropRegion {
   fullWidth: number; fullHeight: number;
 }
 
-/** Same sRGB backdrop input as Vinut Enhanced Graphics. Each view owns bounded
+/** High-fidelity sRGB backdrop input for Enhanced Graphics. Each view owns bounded
  * texture storage; export tiles sample their frozen full-image coordinates.
  * Live preview supports throttled/dirty updates so static or slow-drifting
  * backgrounds do not force 60 Hz 2D canvas repaints and GPU texture uploads. */

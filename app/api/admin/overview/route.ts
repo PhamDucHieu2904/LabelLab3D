@@ -1,6 +1,8 @@
 import { periodBounds, previousAnchor, type Granularity, type TrafficPoint } from "@/lib/admin/analytics";
 import { requireAdmin } from "@/lib/server/admin";
+import { buildAntiCheatReport } from "@/lib/server/anticheat";
 import { errorResponse, json } from "@/lib/server/http";
+import { getWorkerRequestReport } from "@/lib/server/request-meter";
 import { currentRewardDay } from "@/lib/server/rewards";
 import { ensureSiteTables } from "@/lib/server/site-config";
 
@@ -83,6 +85,8 @@ export async function GET(request: Request) {
     const toIso = new Date(toMs).toISOString();
     const prevFromIso = new Date(prevFromMs).toISOString();
     const prevToIso = new Date(prevToMs).toISOString();
+    const fromDay = new Date(fromMs + OFFSET_MS).toISOString().slice(0, 10);
+    const toDay = new Date(Math.max(fromMs, toMs - 1) + OFFSET_MS).toISOString().slice(0, 10);
 
     const [
       eventsCur,
@@ -95,9 +99,11 @@ export async function GET(request: Request) {
       sessionsPrev,
       usersRows,
       recentOrdersRows,
+      workerQuota,
+      antiCheatReport,
     ] = await Promise.all([
-      db.prepare("SELECT kind,visitor_type AS visitorType,user_id AS userId,created_at AS createdAt FROM site_events WHERE created_at>=? AND created_at<?").bind(fromIso, toIso).all<{ kind: string; visitorType: string; userId: string | null; createdAt: string }>(),
-      db.prepare("SELECT kind,visitor_type AS visitorType,created_at AS createdAt FROM site_events WHERE created_at>=? AND created_at<?").bind(prevFromIso, prevToIso).all<{ kind: string; visitorType: string; createdAt: string }>(),
+      db.prepare("SELECT kind,visitor_type AS visitorType,user_id AS userId,created_at AS createdAt FROM site_events WHERE created_at>=? AND created_at<? ORDER BY created_at DESC LIMIT 25000").bind(fromIso, toIso).all<{ kind: string; visitorType: string; userId: string | null; createdAt: string }>(),
+      db.prepare("SELECT kind,visitor_type AS visitorType,created_at AS createdAt FROM site_events WHERE created_at>=? AND created_at<? ORDER BY created_at DESC LIMIT 25000").bind(prevFromIso, prevToIso).all<{ kind: string; visitorType: string; createdAt: string }>(),
       db.prepare("SELECT id,user_id AS userId,order_code AS orderCode,package_coins AS coins,amount_minor AS amount,currency,status,created_at AS createdAt FROM payment_orders WHERE created_at>=? AND created_at<? ORDER BY created_at DESC").bind(fromIso, toIso).all<{ id: string; userId: string; orderCode: string; coins: number; amount: number; currency: string; status: string; createdAt: string }>(),
       db.prepare("SELECT package_coins AS coins,amount_minor AS amount,currency,status FROM payment_orders WHERE created_at>=? AND created_at<?").bind(prevFromIso, prevToIso).all<{ coins: number; amount: number; currency: string; status: string }>(),
       db.prepare("SELECT created_at AS createdAt FROM coin_reservations WHERE status='committed' AND created_at>=? AND created_at<?").bind(fromIso, toIso).all<{ createdAt: string }>(),
@@ -109,6 +115,8 @@ export async function GET(request: Request) {
         po.package_coins AS coins,po.amount_minor AS amount,po.currency,po.status,po.created_at AS createdAt
         FROM payment_orders po LEFT JOIN users u ON u.id=po.user_id
         ORDER BY po.created_at DESC LIMIT 10`).all<{ id: string; orderCode: string; userId: string; userName: string | null; userEmail: string | null; coins: number; amount: number; currency: string; status: string; createdAt: string }>(),
+      getWorkerRequestReport(env, { fromDay, toDay, today }).catch(() => null),
+      buildAntiCheatReport(env, 300).catch(() => null),
     ]);
 
     const points = buildEmptyBuckets(anchor, granularity);
@@ -234,6 +242,18 @@ export async function GET(request: Request) {
       revenueBars: { vn: vnBars, international: intlBars },
       rankedUsers,
       recentOrders: recentOrdersRows.results ?? [],
+      workerQuota,
+      antiCheatSummary: antiCheatReport
+        ? {
+            flaggedUsersCount: antiCheatReport.summary.flaggedUsersCount,
+            highRiskCount: antiCheatReport.summary.highRiskCount,
+            mediumRiskCount: antiCheatReport.summary.mediumRiskCount,
+            totalCoinDiscrepancy: antiCheatReport.summary.totalCoinDiscrepancy,
+            totalToolUsesCommitted: antiCheatReport.summary.totalToolUsesCommitted,
+            totalExpectedCoinBurn: antiCheatReport.summary.totalExpectedCoinBurn,
+            totalActualCoinBurn: antiCheatReport.summary.totalActualCoinBurn,
+          }
+        : null,
       summary: {
         totalUsers: (usersRows.results ?? []).length,
         totalCoinsBalance: (usersRows.results ?? []).reduce((sum, u) => sum + Number(u.balance), 0),

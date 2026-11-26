@@ -16,12 +16,21 @@
       "migrations_dir": "db/migrations"
     }
   ],
+  // Optional Cloudflare R2 bucket for 3D Share Link label/thumbnail assets
+  // (10 GB free storage, $0 egress). Until enabled, assets safely fall back to D1.
+  // Run `wrangler r2 bucket create hypermockup-shares` and uncomment below:
+  // "r2_buckets": [
+  //   {
+  //     "binding": "SHARE_BUCKET",
+  //     "bucket_name": "hypermockup-shares"
+  //   }
+  // ],
   "routes": [
     {
       "pattern": "hypermockup.com",
       "custom_domain": true
     }
   ],
-  "workers_dev": true,
-  "preview_urls": true
+  "workers_dev": false,
+  "preview_urls": false
 }

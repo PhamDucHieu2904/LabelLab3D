@@ -45,3 +45,22 @@ export async function recordRegistrationAttempt(env: AppEnv, scope: string) {
   const db = await ensureTable(env), now = nowIso();
   await db.prepare("INSERT INTO auth_rate_limits (scope,failures,locked_until,updated_at) VALUES (?,1,NULL,?) ON CONFLICT(scope) DO UPDATE SET failures=CASE WHEN julianday(?) - julianday(auth_rate_limits.updated_at) > (15.0/1440.0) THEN 1 ELSE auth_rate_limits.failures+1 END,locked_until=NULL,updated_at=excluded.updated_at").bind(scope, now, now).run();
 }
+
+/**
+ * Atomic sliding/fixed-window rate limiter backed by `auth_rate_limits`.
+ * Returns `true` when the caller is within budget and `false` once exceeded.
+ */
+export async function consumeRateLimit(
+  env: AppEnv,
+  input: { namespace: string; key: string; limit: number; windowMinutes: number },
+): Promise<boolean> {
+  const db = await ensureTable(env);
+  const scope = `${input.namespace}:v1:${await sha256(input.key || "unknown")}`;
+  const now = nowIso();
+  const windowDays = Math.max(1, input.windowMinutes) / 1440;
+  await db.prepare(
+    "INSERT INTO auth_rate_limits (scope,failures,locked_until,updated_at) VALUES (?,1,NULL,?) ON CONFLICT(scope) DO UPDATE SET failures=CASE WHEN julianday(?) - julianday(auth_rate_limits.updated_at) > ? THEN 1 ELSE auth_rate_limits.failures+1 END,locked_until=NULL,updated_at=excluded.updated_at",
+  ).bind(scope, now, now, windowDays).run();
+  const row = await db.prepare("SELECT failures FROM auth_rate_limits WHERE scope=?").bind(scope).first<{ failures: number }>();
+  return Number(row?.failures ?? 1) <= input.limit;
+}

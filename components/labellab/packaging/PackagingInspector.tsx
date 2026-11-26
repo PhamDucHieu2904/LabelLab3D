@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -9,12 +8,12 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
-  Download,
   ImagePlus,
   Layers,
   Milk,
   RotateCcw,
   Ruler,
+  Shuffle,
   Sliders,
   Sparkles,
   Upload,
@@ -44,7 +43,10 @@ import {
 } from "@/lib/packaging-cad/pack-layout";
 import { getLabModel, LAB_MODELS } from "@/lib/labellab/catalog";
 import type { CustomProjectRecord } from "@/lib/labellab/project-store";
+import { useLocale } from "../LocaleProvider";
 import styles from "./PackagingStudio.module.css";
+
+export type PackagingInspectorSection = "size" | "pack" | "material" | "structure" | "procad";
 
 interface Props {
   template: PackagingTemplateDefinition;
@@ -60,7 +62,8 @@ interface Props {
   finishMaskName?: string;
   measuredFootprints: Record<string, BeverageFootprintMm>;
   tone: "studio" | "pink" | "white";
-  dielineCost?: number;
+  /** When provided, renders only the selected sidebar section cleanly. */
+  activeSection?: PackagingInspectorSection;
   disabled?: boolean;
   onChange: (patch: Partial<PackagingParams>, interactive?: boolean) => void;
   onChangeBottlePack: (patch: Partial<BottlePackConfig>) => void;
@@ -72,18 +75,7 @@ interface Props {
   onGoCustomizeBottle: () => void;
   onReset: () => void;
   onHoverPart: (part: PackagingPartGroup | null) => void;
-  onDownloadDieline: (format: "svg" | "pdf" | "dxf") => void;
 }
-
-const PACK_MODEL_GROUPS: ReadonlyArray<{
-  label: string;
-  category: "can" | "glass" | "pet" | "pp";
-}> = [
-  { label: "Aluminum Cans", category: "can" },
-  { label: "Glass Bottles", category: "glass" },
-  { label: "PET Bottles", category: "pet" },
-  { label: "PP Bottles", category: "pp" },
-];
 
 export default function PackagingInspector({
   template,
@@ -99,7 +91,7 @@ export default function PackagingInspector({
   finishMaskName,
   measuredFootprints,
   tone,
-  dielineCost = 20,
+  activeSection,
   disabled = false,
   onChange,
   onChangeBottlePack,
@@ -111,14 +103,26 @@ export default function PackagingInspector({
   onGoCustomizeBottle,
   onReset,
   onHoverPart,
-  onDownloadDieline,
 }: Props) {
-  const [proCadMode, setProCadMode] = useState(false);
+  const { t } = useLocale();
+  const pkg = t.studio.packaging;
   const finishMaskInputRef = useRef<HTMLInputElement | null>(null);
   const activeFinishPreset = getPackagingFinishPreset(params.finishMode);
+  const showSection = (section: PackagingInspectorSection) =>
+    !activeSection || activeSection === section;
   const [packSourceTab, setPackSourceTab] = useState<"projects" | "catalog">(
     bottlePack.customProjectId ? "projects" : "catalog",
   );
+
+  const packModelGroups: ReadonlyArray<{
+    label: string;
+    category: "can" | "glass" | "pet" | "pp";
+  }> = [
+    { label: pkg.groupCans, category: "can" },
+    { label: pkg.groupGlass, category: "glass" },
+    { label: pkg.groupPet, category: "pet" },
+    { label: pkg.groupPp, category: "pp" },
+  ];
 
   const activeCustomProject = bottlePack.customProjectId
     ? savedBottleProjects.find((p) => p.id === bottlePack.customProjectId)
@@ -149,7 +153,6 @@ export default function PackagingInspector({
     });
   };
 
-  const oppositeMode = params.dimensionMode === "inner" ? "Outer" : "Inner";
   const oppositeDims = params.dimensionMode === "inner" ? solved.outerMm : solved.innerMm;
   const f = template.features;
 
@@ -160,31 +163,32 @@ export default function PackagingInspector({
       onMouseLeave={() => onHoverPart(null)}
     >
       {/* TIER 1: ESSENTIAL DIMENSIONS & QUICK PRESETS */}
+      {showSection("size") && (
       <section className={styles.inspectorSection}>
         <div className={styles.sectionHeader}>
           <h3 className={styles.sectionTitle}>
             <Ruler size={14} aria-hidden="true" />
-            Dimensions (mm)
+            {pkg.dimensionsTitle}
           </h3>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <div className={styles.segmented} role="group" aria-label="Dimension reference mode">
+            <div className={styles.segmented} role="group" aria-label={pkg.dimensionsTitle}>
               <button
                 type="button"
                 aria-pressed={params.dimensionMode === "inner"}
                 disabled={disabled}
                 onClick={() => onChange({ dimensionMode: "inner" })}
-                title="Clear interior space inside the box"
+                title={pkg.innerTitle}
               >
-                Inner
+                {pkg.inner}
               </button>
               <button
                 type="button"
                 aria-pressed={params.dimensionMode === "outer"}
                 disabled={disabled}
                 onClick={() => onChange({ dimensionMode: "outer" })}
-                title="Overall exterior shipping footprint"
+                title={pkg.outerTitle}
               >
-                Outer
+                {pkg.outer}
               </button>
             </div>
             <button
@@ -192,8 +196,8 @@ export default function PackagingInspector({
               className={styles.dockIconBtn}
               onClick={onReset}
               disabled={disabled}
-              title="Reset dimensions & material to template defaults"
-              aria-label="Reset packaging parameters"
+              title={pkg.resetParamsTitle}
+              aria-label={pkg.resetParamsTitle}
             >
               <RotateCcw size={13} />
             </button>
@@ -205,7 +209,7 @@ export default function PackagingInspector({
             {
               key: "lengthMm" as const,
               code: "L",
-              label: "Length",
+              label: pkg.length,
               part: "length" as const,
               min: template.minDimensions.length,
               max: template.maxDimensions.length,
@@ -213,7 +217,7 @@ export default function PackagingInspector({
             {
               key: "widthMm" as const,
               code: "W",
-              label: "Width",
+              label: pkg.width,
               part: "width" as const,
               min: template.minDimensions.width,
               max: template.maxDimensions.width,
@@ -221,7 +225,7 @@ export default function PackagingInspector({
             {
               key: "heightMm" as const,
               code: "H",
-              label: "Height",
+              label: pkg.height,
               part: "height" as const,
               min: template.minDimensions.height,
               max: template.maxDimensions.height,
@@ -259,7 +263,7 @@ export default function PackagingInspector({
               <input
                 type="range"
                 className={styles.rangeInput}
-                aria-label={`${axis.label} millimetres`}
+                aria-label={`${axis.label} (mm)`}
                 min={axis.min}
                 max={axis.max}
                 step={1}
@@ -274,13 +278,13 @@ export default function PackagingInspector({
 
         <div className={styles.specSummary}>
           <div>
-            <span>{oppositeMode} size</span>
+            <span>{pkg.oppositeSize(params.dimensionMode)}</span>
             <strong>
               {Math.round(oppositeDims.length)}×{Math.round(oppositeDims.width)}×{Math.round(oppositeDims.height)} mm
             </strong>
           </div>
           <div>
-            <span>Flat blank · Est. weight</span>
+            <span>{pkg.blankAndWeight}</span>
             <strong>
               {Math.round(solved.blankBounds.width)}×{Math.round(solved.blankBounds.height)} mm · {solved.estimatedWeightG}g
             </strong>
@@ -288,7 +292,7 @@ export default function PackagingInspector({
         </div>
 
         {/* Quick Size Presets (including Beverage Auto-Fit presets) */}
-        <div className={styles.presetChips} role="group" aria-label="Quick size presets">
+        <div className={styles.presetChips} role="group" aria-label={pkg.dimensionsTitle}>
           {template.sizePresets.map((preset) => (
             <button
               key={preset.id}
@@ -319,7 +323,7 @@ export default function PackagingInspector({
               }}
             >
               <span>{preset.label}</span>
-              {preset.beverageFit && <span className={styles.presetChipFit}>Fit</span>}
+              {preset.beverageFit && <span className={styles.presetChipFit}>{pkg.fitBadge}</span>}
             </button>
           ))}
         </div>
@@ -331,20 +335,21 @@ export default function PackagingInspector({
           </div>
         ))}
       </section>
+      )}
 
       {/* EXCLUSIVE COMBO: PACK YOUR BOTTLES / CANS INSIDE BOX OR TRAY */}
-      {f.bottlePacking !== false && (
+      {showSection("pack") && f.bottlePacking !== false && (
         <section className={styles.inspectorSection}>
           <div className={styles.comboCard}>
             <label className={styles.switchRow} style={{ minHeight: 24 }}>
               <span className={styles.sectionTitle}>
                 <Milk size={14} aria-hidden="true" color="#d53660" />
-                Pack Your Bottles
-                <span className={styles.comboBadge}>Combo</span>
+                {pkg.packTitle}
+                <span className={styles.comboBadge}>{pkg.packComboBadge}</span>
               </span>
               <input
                 type="checkbox"
-                aria-label="Pack bottles or cans inside this box"
+                aria-label={pkg.packTitle}
                 checked={bottlePack.enabled}
                 disabled={disabled}
                 onChange={(e) => onChangeBottlePack({ enabled: e.target.checked })}
@@ -353,13 +358,12 @@ export default function PackagingInspector({
 
             {!bottlePack.enabled ? (
               <p style={{ margin: 0, fontSize: 10.5, lineHeight: 1.45, color: "var(--pkg-muted)" }}>
-                Mount real 3D LabelLab bottles or cans with your custom label directly inside this{" "}
-                {template.shortName.toLowerCase()} and auto-fit exact mm dimensions.
+                {pkg.packIntro(template.shortName.toLowerCase())}
               </p>
             ) : (
               <>
                 {/* Source Tabs: Saved Custom Projects vs Standard Beverage Catalog */}
-                <div className={styles.comboSourceSwitch} role="group" aria-label="Bottle pack source">
+                <div className={styles.comboSourceSwitch} role="group" aria-label={pkg.packTitle}>
                   <button
                     type="button"
                     aria-pressed={packSourceTab === "projects"}
@@ -367,7 +371,7 @@ export default function PackagingInspector({
                     onClick={() => setPackSourceTab("projects")}
                   >
                     <BookmarkCheck size={12} aria-hidden="true" />
-                    <span>My Projects ({savedBottleProjects.length})</span>
+                    <span>{pkg.myProjectsTab(savedBottleProjects.length)}</span>
                   </button>
                   <button
                     type="button"
@@ -375,13 +379,13 @@ export default function PackagingInspector({
                     disabled={disabled}
                     onClick={() => setPackSourceTab("catalog")}
                   >
-                    <span>Catalog</span>
+                    <span>{pkg.catalogTab}</span>
                   </button>
                 </div>
 
                 {packSourceTab === "projects" ? (
                   savedBottleProjects.length > 0 ? (
-                    <div className={styles.customProjectList} role="group" aria-label="Saved custom bottle and can projects">
+                    <div className={styles.customProjectList} role="group" aria-label={pkg.myCustomProjectsGroup}>
                       {savedBottleProjects.map((project) => {
                         const base = getLabModel(project.settings.modelId);
                         const active = activeCustomProject?.id === project.id;
@@ -408,10 +412,10 @@ export default function PackagingInspector({
                                 {base.name} · {base.volume}
                               </small>
                               <span className={styles.customProjectDots}>
-                                <i title={`Liquid ${project.settings.liquidColor}`} style={{ backgroundColor: project.settings.liquidColor }} />
-                                <i title={`Cap ${project.settings.capColor}`} style={{ backgroundColor: project.settings.capColor }} />
-                                <i title={`Body ${project.settings.bodyColor}`} style={{ backgroundColor: project.settings.bodyColor }} />
-                                {project.artworkBlob && <span className={styles.customProjectTag}>Custom label</span>}
+                                <i title={project.settings.liquidColor} style={{ backgroundColor: project.settings.liquidColor }} />
+                                <i title={project.settings.capColor} style={{ backgroundColor: project.settings.capColor }} />
+                                <i title={project.settings.bodyColor} style={{ backgroundColor: project.settings.bodyColor }} />
+                                {project.artworkBlob && <span className={styles.customProjectTag}>{pkg.customLabelTag}</span>}
                               </span>
                             </span>
                             {active && <Check size={14} color="#2563eb" aria-hidden="true" />}
@@ -424,15 +428,17 @@ export default function PackagingInspector({
                         disabled={disabled}
                         onClick={onGoCustomizeBottle}
                       >
-                        <ArrowUpRight size={12} aria-hidden="true" /> Customize new bottle in Bottles &amp; Cans
+                        <ArrowUpRight size={12} aria-hidden="true" /> {pkg.customizeNewBottle}
                       </button>
                     </div>
                   ) : (
                     <div className={styles.customProjectEmpty}>
                       <span>
-                        No custom projects yet. Customize any bottle or can in{" "}
-                        <strong>Bottles &amp; Cans</strong>, click <strong>Save project</strong>, and select
-                        it right here!
+                        {pkg.noCustomProjectsLead}
+                        <strong>{pkg.noCustomProjectsHighlight1}</strong>
+                        {pkg.noCustomProjectsMid}
+                        <strong>{pkg.noCustomProjectsHighlight2}</strong>
+                        {pkg.noCustomProjectsTail}
                       </span>
                       <button
                         type="button"
@@ -440,7 +446,7 @@ export default function PackagingInspector({
                         disabled={disabled}
                         onClick={onGoCustomizeBottle}
                       >
-                        <ArrowUpRight size={13} aria-hidden="true" /> Go customize in Bottles &amp; Cans
+                        <ArrowUpRight size={13} aria-hidden="true" /> {pkg.goCustomizeBottle}
                       </button>
                     </div>
                   )
@@ -456,7 +462,7 @@ export default function PackagingInspector({
                     <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
                       <select
                         className={styles.comboSelect}
-                        aria-label="Choose bottle, can, or saved custom project to pack inside"
+                        aria-label={pkg.packTitle}
                         disabled={disabled}
                         value={selectValue}
                         onChange={(e) => {
@@ -481,7 +487,7 @@ export default function PackagingInspector({
                         }}
                       >
                         {savedBottleProjects.length > 0 && (
-                          <optgroup label="★ My Custom Projects">
+                          <optgroup label={pkg.myCustomProjectsGroup}>
                             {savedBottleProjects.map((project) => {
                               const base = getLabModel(project.settings.modelId);
                               return (
@@ -492,7 +498,7 @@ export default function PackagingInspector({
                             })}
                           </optgroup>
                         )}
-                        {PACK_MODEL_GROUPS.map((group) => {
+                        {packModelGroups.map((group) => {
                           const items = LAB_MODELS.filter((m) => m.category === group.category);
                           if (!items.length) return null;
                           return (
@@ -511,10 +517,10 @@ export default function PackagingInspector({
                           Ø {Math.round(bottleFootprint.diameterXMm)} × {Math.round(bottleFootprint.heightMm)} mm
                         </span>
                         {activeCustomProject ? (
-                          <span className={styles.comboSyncTag}>Custom: {activeCustomProject.name}</span>
+                          <span className={styles.comboSyncTag}>{pkg.customTag(activeCustomProject.name)}</span>
                         ) : syncedWithActiveStudio ? (
                           <span className={styles.comboSyncTag}>
-                            {hasActiveBeverageArtwork ? "Your label synced" : "Active Studio model"}
+                            {hasActiveBeverageArtwork ? pkg.labelSyncedTag : pkg.activeStudioModelTag}
                           </span>
                         ) : null}
                       </div>
@@ -527,7 +533,7 @@ export default function PackagingInspector({
                     <span>
                       Ø {Math.round(bottleFootprint.diameterXMm)} × {Math.round(bottleFootprint.heightMm)} mm
                     </span>
-                    <span className={styles.comboSyncTag}>Active: {activeCustomProject.name}</span>
+                    <span className={styles.comboSyncTag}>{pkg.activeTag(activeCustomProject.name)}</span>
                   </div>
                 )}
 
@@ -538,12 +544,10 @@ export default function PackagingInspector({
                     className={styles.comboLabelBtn}
                     disabled={disabled}
                     onClick={onOpenBottleLabelEditor}
-                    title="Click any bottle label in 3D or use this button to replace artwork across all packed bottles"
+                    title={pkg.replaceAllLabelsTitle}
                   >
                     <ImagePlus size={13} aria-hidden="true" />
-                    <span>
-                      Replace label (all {bottlePack.cols * bottlePack.rows} pcs)
-                    </span>
+                    <span>{pkg.replaceAllLabels(bottlePack.cols * bottlePack.rows)}</span>
                   </button>
                   {hasPackLabelOverride && (
                     <button
@@ -551,15 +555,15 @@ export default function PackagingInspector({
                       className={styles.comboResetLink}
                       disabled={disabled}
                       onClick={onClearPackLabelOverride}
-                      title="Revert tray label override"
+                      title={pkg.resetLabelTitle}
                     >
-                      Reset
+                      {pkg.resetShort}
                     </button>
                   )}
                 </div>
 
                 {/* Quick Pack Count Grid Presets */}
-                <div className={styles.comboGridPills} role="group" aria-label="Pack quantity grid presets">
+                <div className={styles.comboGridPills} role="group" aria-label={pkg.packTitle}>
                   {PACK_GRID_PRESETS.map((preset) => {
                     const active = bottlePack.cols === preset.cols && bottlePack.rows === preset.rows;
                     return (
@@ -571,7 +575,7 @@ export default function PackagingInspector({
                         disabled={disabled}
                         onClick={() => onChangeBottlePack({ cols: preset.cols, rows: preset.rows })}
                       >
-                        {preset.label}
+                        {pkg.gridPresetLabel(preset.cols, preset.rows, preset.label)}
                       </button>
                     );
                   })}
@@ -580,11 +584,11 @@ export default function PackagingInspector({
                 {/* Custom Columns × Rows Steppers */}
                 <div className={styles.comboStepperRow}>
                   <div className={styles.comboStepper}>
-                    <span>Cols (L)</span>
+                    <span>{pkg.colsLabel}</span>
                     <div className={styles.comboStepperControls}>
                       <button
                         type="button"
-                        aria-label="Decrease columns"
+                        aria-label="-"
                         disabled={disabled || bottlePack.cols <= 1}
                         onClick={() => onChangeBottlePack({ cols: Math.max(1, bottlePack.cols - 1) })}
                       >
@@ -593,7 +597,7 @@ export default function PackagingInspector({
                       <strong>{bottlePack.cols}</strong>
                       <button
                         type="button"
-                        aria-label="Increase columns"
+                        aria-label="+"
                         disabled={disabled || bottlePack.cols >= 6}
                         onClick={() => onChangeBottlePack({ cols: Math.min(6, bottlePack.cols + 1) })}
                       >
@@ -602,11 +606,11 @@ export default function PackagingInspector({
                     </div>
                   </div>
                   <div className={styles.comboStepper}>
-                    <span>Rows (W)</span>
+                    <span>{pkg.rowsLabel}</span>
                     <div className={styles.comboStepperControls}>
                       <button
                         type="button"
-                        aria-label="Decrease rows"
+                        aria-label="-"
                         disabled={disabled || bottlePack.rows <= 1}
                         onClick={() => onChangeBottlePack({ rows: Math.max(1, bottlePack.rows - 1) })}
                       >
@@ -615,7 +619,7 @@ export default function PackagingInspector({
                       <strong>{bottlePack.rows}</strong>
                       <button
                         type="button"
-                        aria-label="Increase rows"
+                        aria-label="+"
                         disabled={disabled || bottlePack.rows >= 4}
                         onClick={() => onChangeBottlePack({ rows: Math.min(4, bottlePack.rows + 1) })}
                       >
@@ -635,16 +639,20 @@ export default function PackagingInspector({
                         <AlertTriangle size={13} style={{ flexShrink: 0 }} />
                       )}
                       {packLayout.fitsAll
-                        ? `${packLayout.itemCount}× fit cleanly inside`
-                        : `Tight by ${[
-                            packLayout.overflowLengthMm > 0.8 ? `+${Math.ceil(packLayout.overflowLengthMm)}mm L` : "",
-                            packLayout.overflowWidthMm > 0.8 ? `+${Math.ceil(packLayout.overflowWidthMm)}mm W` : "",
-                            packLayout.overflowHeightMm > 0.8 ? `+${Math.ceil(packLayout.overflowHeightMm)}mm H` : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}`}
+                        ? pkg.fitCleanly(packLayout.itemCount)
+                        : pkg.tightBy(
+                            [
+                              packLayout.overflowLengthMm > 0.8 ? `+${Math.ceil(packLayout.overflowLengthMm)}mm L` : "",
+                              packLayout.overflowWidthMm > 0.8 ? `+${Math.ceil(packLayout.overflowWidthMm)}mm W` : "",
+                              packLayout.overflowHeightMm > 0.8 ? `+${Math.ceil(packLayout.overflowHeightMm)}mm H` : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" · "),
+                          )}
                     </span>
-                    <span style={{ fontVariantNumeric: "tabular-nums" }}>{packLayout.itemCount} pcs</span>
+                    <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                      {pkg.packCountUnit(packLayout.itemCount)}
+                    </span>
                   </div>
                 )}
 
@@ -654,12 +662,12 @@ export default function PackagingInspector({
                   disabled={disabled}
                   onClick={onAutoFitBottlePack}
                 >
-                  <Wand2 size={13} /> Auto-Fit Box to {bottlePack.cols * bottlePack.rows}× {selectedBottle.volume}
+                  <Wand2 size={13} /> {pkg.autoFitCta(bottlePack.cols * bottlePack.rows, selectedBottle.volume)}
                 </button>
 
                 <div className={styles.sliderRow}>
                   <div className={styles.sliderHead}>
-                    <label htmlFor="pkg-bottle-gap">Bottle spacing</label>
+                    <label htmlFor="pkg-bottle-gap">{pkg.bottleSpacing}</label>
                     <output>{bottlePack.spacingMm.toFixed(1)} mm</output>
                   </div>
                   <input
@@ -677,7 +685,7 @@ export default function PackagingInspector({
 
                 <div className={styles.sliderRow}>
                   <div className={styles.sliderHead}>
-                    <label htmlFor="pkg-bottle-yaw">Label facing angle</label>
+                    <label htmlFor="pkg-bottle-yaw">{pkg.labelFacingAngle}</label>
                     <output>{Math.round(bottlePack.facingYawDeg)}°</output>
                   </div>
                   <input
@@ -693,8 +701,28 @@ export default function PackagingInspector({
                   />
                 </div>
 
+                {template.id === "fefco-0201-rsc" && (
+                  <label className={styles.switchRow}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <span>{t.studio.library.honeycombDividers}</span>
+                      {bottlePack.honeycombDividers && bottlePack.cols * bottlePack.rows > 1 && (
+                        <span className={styles.comboSyncTag}>
+                          {t.studio.library.honeycombCells(bottlePack.cols * bottlePack.rows)}
+                        </span>
+                      )}
+                    </span>
+                    <input
+                      type="checkbox"
+                      aria-label={t.studio.library.honeycombDividers}
+                      checked={Boolean(bottlePack.honeycombDividers)}
+                      disabled={disabled}
+                      onChange={(e) => onChangeBottlePack({ honeycombDividers: e.target.checked })}
+                    />
+                  </label>
+                )}
+
                 <label className={styles.switchRow}>
-                  <span>Auto-resize box on grid change</span>
+                  <span>{pkg.autoResizeOnGrid}</span>
                   <input
                     type="checkbox"
                     checked={bottlePack.autoFitOnChange}
@@ -703,22 +731,52 @@ export default function PackagingInspector({
                   />
                 </label>
 
-                <label className={styles.switchRow}>
-                  <span>Natural hand-packed angle variance</span>
-                  <input
-                    type="checkbox"
-                    checked={bottlePack.organicJitter}
-                    disabled={disabled}
-                    onChange={(e) => onChangeBottlePack({ organicJitter: e.target.checked })}
-                  />
-                </label>
+                <div className={styles.switchRow}>
+                  <label htmlFor="pkg-organic-jitter" style={{ display: "inline-flex", alignItems: "center", gap: 6, flex: 1, cursor: "pointer" }}>
+                    <span>{pkg.organicJitter}</span>
+                  </label>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    {bottlePack.organicJitter && (
+                      <button
+                        type="button"
+                        className={styles.dockIconBtn}
+                        style={{ minWidth: 24, height: 24, padding: "0 5px" }}
+                        disabled={disabled}
+                        title={pkg.rerollAngles}
+                        aria-label={pkg.rerollAngles}
+                        onClick={() =>
+                          onChangeBottlePack({
+                            jitterSeed: Math.floor(Math.random() * 100000),
+                          })
+                        }
+                      >
+                        <Shuffle size={12} aria-hidden="true" />
+                      </button>
+                    )}
+                    <input
+                      id="pkg-organic-jitter"
+                      type="checkbox"
+                      checked={bottlePack.organicJitter}
+                      disabled={disabled}
+                      onChange={(e) =>
+                        onChangeBottlePack(
+                          e.target.checked
+                            ? { organicJitter: true, jitterSeed: Math.floor(Math.random() * 100000) }
+                            : { organicJitter: false },
+                        )
+                      }
+                    />
+                  </div>
+                </div>
               </>
             )}
           </div>
         </section>
       )}
 
-      {/* TIER 1B: BOARD MATERIAL SWATCHES */}
+      {/* TIER 1B & 1C: BOARD MATERIAL SWATCHES, SURFACE FINISH & LUXURY PRINT FINISHES */}
+      {showSection("material") && (
+      <>
       <section
         className={styles.inspectorSection}
         onMouseEnter={() => onHoverPart("material")}
@@ -727,11 +785,11 @@ export default function PackagingInspector({
         <div className={styles.sectionHeader}>
           <h3 className={styles.sectionTitle}>
             <Layers size={14} aria-hidden="true" />
-            Board & Material
+            {pkg.boardMaterialTitle}
           </h3>
           <span style={{ fontSize: 10, color: "var(--pkg-muted)" }}>{params.thicknessMm.toFixed(2)} mm</span>
         </div>
-        <div className={styles.materialGrid} role="group" aria-label="Packaging board materials">
+        <div className={styles.materialGrid} role="group" aria-label={pkg.boardMaterialTitle}>
           {BOARD_MATERIAL_PRESETS.map((preset) => (
             <button
               key={preset.id}
@@ -750,6 +808,45 @@ export default function PackagingInspector({
             </button>
           ))}
         </div>
+
+        {/* Outside / Inside surface color & finish */}
+        <div className={styles.colorPairRow}>
+          <label className={styles.colorMini}>
+            <span>{pkg.outsideLabel}</span>
+            <input
+              type="color"
+              value={params.outsideColor}
+              disabled={disabled}
+              onChange={(e) => onChange({ outsideColor: e.target.value })}
+            />
+          </label>
+          <label className={styles.colorMini}>
+            <span>{pkg.insideLabel}</span>
+            <input
+              type="color"
+              value={params.insideColor}
+              disabled={disabled}
+              onChange={(e) => onChange({ insideColor: e.target.value })}
+            />
+          </label>
+        </div>
+        <div className={styles.sliderRow}>
+          <div className={styles.sliderHead}>
+            <label htmlFor="pkg-out-rough">{pkg.surfaceFinish}</label>
+            <output>{Math.round(params.outsideRoughness * 100)}%</output>
+          </div>
+          <input
+            id="pkg-out-rough"
+            type="range"
+            className={styles.rangeInput}
+            min={0.08}
+            max={0.96}
+            step={0.02}
+            disabled={disabled}
+            value={params.outsideRoughness}
+            onChange={(e) => onChange({ outsideRoughness: Number(e.target.value) })}
+          />
+        </div>
       </section>
 
       {/* TIER 1C: LUXURY PRINT FINISHES — COLLAPSIBLE ACCORDION (SPOT UV, HOT FOIL & EMBOSS/DEBOSS) */}
@@ -758,9 +855,9 @@ export default function PackagingInspector({
           <summary>
             <span className={styles.sectionTitle}>
               <Sparkles size={13} aria-hidden="true" color="#d97706" />
-              Print Finish
+              {pkg.printFinishTitle}
               {params.finishMode === "none" ? (
-                <span className={styles.finishBadge}>Spot UV · Foil</span>
+                <span className={styles.finishBadge}>{pkg.printFinishBadge}</span>
               ) : (
                 <span className={styles.finishActivePill}>
                   <span
@@ -768,7 +865,7 @@ export default function PackagingInspector({
                     style={{ background: activeFinishPreset.swatchGradient }}
                     aria-hidden="true"
                   />
-                  {activeFinishPreset.shortName}
+                  {pkg.finishPresetLabel(activeFinishPreset.id, activeFinishPreset.shortName)}
                 </span>
               )}
             </span>
@@ -776,7 +873,7 @@ export default function PackagingInspector({
           </summary>
 
           <div className={`${styles.accordionBody} ${styles.finishBody}`}>
-            <div className={styles.finishGrid} role="group" aria-label="Special print finish presets">
+            <div className={styles.finishGrid} role="group" aria-label={pkg.printFinishTitle}>
             {PACKAGING_FINISH_PRESETS.map((preset) => {
               const active = params.finishMode === preset.id;
               return (
@@ -795,7 +892,7 @@ export default function PackagingInspector({
                   }
                 >
                   <span className={styles.finishSwatchDot} style={{ background: preset.swatchGradient }} />
-                  <span>{preset.shortName}</span>
+                  <span>{pkg.finishPresetLabel(preset.id, preset.shortName)}</span>
                 </button>
               );
             })}
@@ -804,13 +901,13 @@ export default function PackagingInspector({
           {params.finishMode !== "none" ? (
             <>
               <div className={styles.sectionHeader} style={{ marginTop: 2 }}>
-                <span style={{ fontSize: 10.5, fontWeight: 600 }}>Apply area</span>
-                <div className={styles.segmented} role="group" aria-label="Finish mask target">
+                <span style={{ fontSize: 10.5, fontWeight: 600 }}>{pkg.applyArea}</span>
+                <div className={styles.segmented} role="group" aria-label={pkg.applyArea}>
                   {(
                     [
-                      { id: "auto-artwork", label: "Auto Art" },
-                      { id: "brand-frame", label: "Frame" },
-                      { id: "full-surface", label: "Full" },
+                      { id: "auto-artwork", label: pkg.targetAutoArt },
+                      { id: "brand-frame", label: pkg.targetFrame },
+                      { id: "full-surface", label: pkg.targetFull },
                     ] as ReadonlyArray<{ id: PackagingFinishTarget; label: string }>
                   ).map((item) => (
                     <button
@@ -832,7 +929,9 @@ export default function PackagingInspector({
               <div className={styles.sliderRow}>
                 <div className={styles.sliderHead}>
                   <label htmlFor="pkg-finish-relief">
-                    Tactile relief ({params.finishRelief > 0.05 ? "Emboss ↑" : params.finishRelief < -0.05 ? "Deboss ↓" : "Flat"})
+                    {pkg.tactileRelief(
+                      params.finishRelief > 0.05 ? "emboss" : params.finishRelief < -0.05 ? "deboss" : "flat",
+                    )}
                   </label>
                   <output>{Math.round(params.finishRelief * 100)}%</output>
                 </div>
@@ -851,7 +950,7 @@ export default function PackagingInspector({
 
               <div className={styles.sliderRow}>
                 <div className={styles.sliderHead}>
-                  <label htmlFor="pkg-finish-intensity">Finish strength</label>
+                  <label htmlFor="pkg-finish-intensity">{pkg.finishStrength}</label>
                   <output>{Math.round(params.finishIntensity * 100)}%</output>
                 </div>
                 <input
@@ -870,7 +969,7 @@ export default function PackagingInspector({
               {!hasCustomFinishMask && params.finishTarget === "auto-artwork" && (
                 <div className={styles.sliderRow}>
                   <div className={styles.sliderHead}>
-                    <label htmlFor="pkg-finish-thresh">Artwork mask sensitivity</label>
+                    <label htmlFor="pkg-finish-thresh">{pkg.artworkMaskSens}</label>
                     <output>{Math.round(params.finishThreshold * 100)}%</output>
                   </div>
                   <input
@@ -889,7 +988,7 @@ export default function PackagingInspector({
 
               {params.finishTarget !== "full-surface" && (
                 <label className={styles.switchRow}>
-                  <span>Invert finish mask</span>
+                  <span>{pkg.invertFinishMask}</span>
                   <input
                     type="checkbox"
                     checked={params.finishInvertMask}
@@ -917,13 +1016,13 @@ export default function PackagingInspector({
                     className={styles.finishMaskBtn}
                     disabled={disabled}
                     onClick={() => finishMaskInputRef.current?.click()}
-                    title="Upload a black-and-white separation mask (white = Foil / Spot UV, black = matte paper)"
+                    title={pkg.uploadFinishMask}
                   >
                     <Upload size={12} aria-hidden="true" />
                     <span>
                       {hasCustomFinishMask
-                        ? `Mask: ${finishMaskName || "Custom B&W"}`
-                        : "Upload B&W Foil/UV Mask"}
+                        ? pkg.maskSelected(finishMaskName || "B&W")
+                        : pkg.uploadFinishMask}
                     </span>
                   </button>
                   {hasCustomFinishMask && onClearFinishMask && (
@@ -933,36 +1032,34 @@ export default function PackagingInspector({
                       disabled={disabled}
                       onClick={onClearFinishMask}
                     >
-                      Clear
+                      {pkg.clearShort}
                     </button>
                   )}
                 </div>
               )}
 
-              <p className={styles.finishHint}>
-                {activeFinishPreset.description} Standing still automatically refines studio softbox shadows &amp; highlights.
-              </p>
+              <p className={styles.finishHint}>{pkg.finishActiveHint}</p>
             </>
           ) : (
-            <p className={styles.finishHint}>
-              Add raised Spot UV lacquer, 24K Gold / Silver / Rose Gold / Holo hot foil stamping &amp; tactile emboss relief.
-            </p>
+            <p className={styles.finishHint}>{pkg.finishEmptyHint}</p>
           )}
           </div>
         </details>
       </section>
+      </>
+      )}
 
       {/* TIER 2: STRUCTURE, LOCKS & CUTOUTS */}
+      {showSection("structure") && (
       <section className={styles.inspectorSection}>
-        <details className={styles.accordion}>
-          <summary>
-            <span className={styles.sectionTitle}>
-              <Sliders size={13} aria-hidden="true" />
-              Structure & Cutouts
-            </span>
-            <ChevronDown size={14} className={styles.accordionChevron} aria-hidden="true" />
-          </summary>
-          <div className={styles.accordionBody}>
+        <div className={styles.sectionHeader}>
+          <h3 className={styles.sectionTitle}>
+            <Sliders size={14} aria-hidden="true" />
+            {pkg.structureTitle}
+          </h3>
+          <span style={{ fontSize: 10, color: "var(--pkg-muted)" }}>{template.code}</span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {f.carrierPack && (
               <div
                 onMouseEnter={() => onHoverPart("dividers")}
@@ -970,8 +1067,8 @@ export default function PackagingInspector({
                 style={{ display: "flex", flexDirection: "column", gap: 8 }}
               >
                 <div className={styles.sectionHeader}>
-                  <span style={{ fontSize: 11, fontWeight: 550 }}>Carrier pack layout</span>
-                  <div className={styles.segmented} role="group" aria-label="Beverage carrier cell layout">
+                  <span style={{ fontSize: 11, fontWeight: 550 }}>{pkg.carrierPackLayout}</span>
+                  <div className={styles.segmented} role="group" aria-label={pkg.carrierPackLayout}>
                     {(["4-pack", "6-pack", "8-pack"] as const).map((layout) => (
                       <button
                         key={layout}
@@ -980,7 +1077,7 @@ export default function PackagingInspector({
                         disabled={disabled}
                         onClick={() => onChange({ carrierPack: layout })}
                       >
-                        {layout === "4-pack" ? "4-Pk" : layout === "6-pack" ? "6-Pk" : "8-Pk"}
+                        {pkg.carrierPackBtn(layout)}
                       </button>
                     ))}
                   </div>
@@ -994,7 +1091,7 @@ export default function PackagingInspector({
                 onMouseEnter={() => onHoverPart("dividers")}
                 onMouseLeave={() => onHoverPart(null)}
               >
-                <span>Internal cell dividers</span>
+                <span>{pkg.internalDividers}</span>
                 <input
                   type="checkbox"
                   checked={params.dividerGrid}
@@ -1011,7 +1108,7 @@ export default function PackagingInspector({
                 onMouseLeave={() => onHoverPart(null)}
               >
                 <div className={styles.sliderHead}>
-                  <label htmlFor="pkg-lid-depth">Telescoping lid skirt depth</label>
+                  <label htmlFor="pkg-lid-depth">{pkg.lidSkirtDepth}</label>
                   <output>{Math.round(params.lidDepthMm)} mm</output>
                 </div>
                 <input
@@ -1036,7 +1133,7 @@ export default function PackagingInspector({
                 style={{ display: "flex", flexDirection: "column", gap: 8 }}
               >
                 <div className={styles.sectionHeader}>
-                  <span style={{ fontSize: 11, fontWeight: 550 }}>Lock tabs per side</span>
+                  <span style={{ fontSize: 11, fontWeight: 550 }}>{pkg.lockTabsPerSide}</span>
                   <div className={styles.segmented}>
                     <button
                       type="button"
@@ -1044,7 +1141,7 @@ export default function PackagingInspector({
                       disabled={disabled}
                       onClick={() => onChange({ lockTabCount: 1 })}
                     >
-                      1 Tab
+                      {pkg.oneTab}
                     </button>
                     <button
                       type="button"
@@ -1052,13 +1149,13 @@ export default function PackagingInspector({
                       disabled={disabled}
                       onClick={() => onChange({ lockTabCount: 2 })}
                     >
-                      2 Tabs
+                      {pkg.twoTabs}
                     </button>
                   </div>
                 </div>
                 <div className={styles.sliderRow}>
                   <div className={styles.sliderHead}>
-                    <label htmlFor="pkg-lock-tab-w">Lock tab width</label>
+                    <label htmlFor="pkg-lock-tab-w">{pkg.lockTabWidth}</label>
                     <output>{Math.round(params.lockTabWidthMm)} mm</output>
                   </div>
                   <input
@@ -1084,7 +1181,7 @@ export default function PackagingInspector({
                 style={{ display: "flex", flexDirection: "column", gap: 8 }}
               >
                 <div className={styles.sectionHeader}>
-                  <span style={{ fontSize: 11, fontWeight: 550 }}>Tuck style</span>
+                  <span style={{ fontSize: 11, fontWeight: 550 }}>{pkg.tuckStyle}</span>
                   <div className={styles.segmented}>
                     <button
                       type="button"
@@ -1092,7 +1189,7 @@ export default function PackagingInspector({
                       disabled={disabled}
                       onClick={() => onChange({ tuckStyle: "reverse" })}
                     >
-                      Reverse
+                      {pkg.tuckReverse}
                     </button>
                     <button
                       type="button"
@@ -1100,13 +1197,13 @@ export default function PackagingInspector({
                       disabled={disabled}
                       onClick={() => onChange({ tuckStyle: "straight" })}
                     >
-                      Straight
+                      {pkg.tuckStraight}
                     </button>
                   </div>
                 </div>
                 <div className={styles.sliderRow}>
                   <div className={styles.sliderHead}>
-                    <label htmlFor="pkg-tuck-len">Tuck flap length</label>
+                    <label htmlFor="pkg-tuck-len">{pkg.tuckFlapLength}</label>
                     <output>{Math.round(params.tuckFlapLengthMm)} mm</output>
                   </div>
                   <input
@@ -1131,7 +1228,9 @@ export default function PackagingInspector({
                 onMouseLeave={() => onHoverPart(null)}
               >
                 <div className={styles.sliderHead}>
-                  <label htmlFor="pkg-flap-gap">Top & bottom flap gap</label>
+                  <label htmlFor="pkg-flap-gap">
+                    {template.id === "fefco-0201e-beer-case" ? pkg.sideFlapGap : pkg.topBottomFlapGap}
+                  </label>
                   <output>{params.flapGapMm.toFixed(1)} mm</output>
                 </div>
                 <input
@@ -1155,7 +1254,7 @@ export default function PackagingInspector({
                 onMouseLeave={() => onHoverPart(null)}
               >
                 <div className={styles.sliderHead}>
-                  <label htmlFor="pkg-taper">Corner dust flap taper</label>
+                  <label htmlFor="pkg-taper">{pkg.dustFlapTaper}</label>
                   <output>{params.dustFlapTaperDeg}°</output>
                 </div>
                 <input
@@ -1178,7 +1277,7 @@ export default function PackagingInspector({
                 onMouseEnter={() => onHoverPart("height")}
                 onMouseLeave={() => onHoverPart(null)}
               >
-                <span>Thumb opening notch</span>
+                <span>{pkg.thumbNotch}</span>
                 <input
                   type="checkbox"
                   checked={params.thumbNotch}
@@ -1194,7 +1293,7 @@ export default function PackagingInspector({
                 onMouseLeave={() => onHoverPart(null)}
               >
                 <label className={styles.switchRow}>
-                  <span>Front retail display scoop</span>
+                  <span>{pkg.frontDisplayScoop}</span>
                   <input
                     type="checkbox"
                     checked={params.displayScoop}
@@ -1205,7 +1304,7 @@ export default function PackagingInspector({
                 {params.displayScoop && (
                   <div className={styles.sliderRow}>
                     <div className={styles.sliderHead}>
-                      <label htmlFor="pkg-scoop-depth">Scoop depth</label>
+                      <label htmlFor="pkg-scoop-depth">{pkg.scoopDepth}</label>
                       <output>{Math.round(params.displayScoopDepthMm)} mm</output>
                     </div>
                     <input
@@ -1230,7 +1329,9 @@ export default function PackagingInspector({
                 onMouseLeave={() => onHoverPart(null)}
               >
                 <label className={styles.switchRow}>
-                  <span>Side carry hand holes</span>
+                  <span>
+                    {template.id === "fefco-0201e-beer-case" ? pkg.carryHandHoles : pkg.sideHandHoles}
+                  </span>
                   <input
                     type="checkbox"
                     checked={params.handHoles}
@@ -1241,7 +1342,7 @@ export default function PackagingInspector({
                 {params.handHoles && (
                   <div className={styles.sliderRow}>
                     <div className={styles.sliderHead}>
-                      <label htmlFor="pkg-hh-w">Handle width</label>
+                      <label htmlFor="pkg-hh-w">{pkg.handleWidth}</label>
                       <output>{Math.round(params.handHoleWidthMm)} mm</output>
                     </div>
                     <input
@@ -1266,7 +1367,7 @@ export default function PackagingInspector({
                 onMouseLeave={() => onHoverPart(null)}
               >
                 <label className={styles.switchRow}>
-                  <span>Display window cutout</span>
+                  <span>{pkg.windowCutout}</span>
                   <input
                     type="checkbox"
                     checked={params.windowCutout}
@@ -1278,7 +1379,7 @@ export default function PackagingInspector({
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
                     <div className={styles.sliderRow}>
                       <div className={styles.sliderHead}>
-                        <label htmlFor="pkg-win-w">Window width</label>
+                        <label htmlFor="pkg-win-w">{pkg.windowWidth}</label>
                         <output>{Math.round(params.windowWidthMm)} mm</output>
                       </div>
                       <input
@@ -1295,7 +1396,7 @@ export default function PackagingInspector({
                     </div>
                     <div className={styles.sliderRow}>
                       <div className={styles.sliderHead}>
-                        <label htmlFor="pkg-win-h">Window height</label>
+                        <label htmlFor="pkg-win-h">{pkg.windowHeight}</label>
                         <output>{Math.round(params.windowHeightMm)} mm</output>
                       </div>
                       <input
@@ -1311,7 +1412,7 @@ export default function PackagingInspector({
                       />
                     </div>
                     <label className={styles.switchRow}>
-                      <span>Clear PET window film</span>
+                      <span>{pkg.windowFilm}</span>
                       <input
                         type="checkbox"
                         checked={params.windowFilm}
@@ -1323,220 +1424,125 @@ export default function PackagingInspector({
                 )}
               </div>
             )}
-
-            {/* Outside / Inside surface color & finish */}
-            <div className={styles.colorPairRow}>
-              <label className={styles.colorMini}>
-                <span>Outside</span>
-                <input
-                  type="color"
-                  value={params.outsideColor}
-                  disabled={disabled}
-                  onChange={(e) => onChange({ outsideColor: e.target.value })}
-                />
-              </label>
-              <label className={styles.colorMini}>
-                <span>Inside</span>
-                <input
-                  type="color"
-                  value={params.insideColor}
-                  disabled={disabled}
-                  onChange={(e) => onChange({ insideColor: e.target.value })}
-                />
-              </label>
-            </div>
-            <div className={styles.sliderRow}>
-              <div className={styles.sliderHead}>
-                <label htmlFor="pkg-out-rough">Print finish (Gloss ↔ Matte)</label>
-                <output>{Math.round(params.outsideRoughness * 100)}%</output>
-              </div>
-              <input
-                id="pkg-out-rough"
-                type="range"
-                className={styles.rangeInput}
-                min={0.08}
-                max={0.96}
-                step={0.02}
-                disabled={disabled}
-                value={params.outsideRoughness}
-                onChange={(e) => onChange({ outsideRoughness: Number(e.target.value) })}
-              />
-            </div>
-          </div>
-        </details>
+        </div>
       </section>
+      )}
 
       {/* TIER 3: PRO CAD ENGINEERING MODE */}
+      {showSection("procad") && (
       <section className={styles.inspectorSection}>
         <div className={styles.sectionHeader}>
-          <label className={styles.switchRow} style={{ flex: 1 }}>
-            <span className={styles.sectionTitle}>
-              <Wrench size={13} aria-hidden="true" />
-              Pro CAD Mode
-              <span className={styles.proCadBadge}>
-                <Sparkles size={9} /> Eng
-              </span>
+          <h3 className={styles.sectionTitle}>
+            <Wrench size={14} aria-hidden="true" />
+            {pkg.proCadTitle}
+            <span className={styles.proCadBadge}>
+              <Sparkles size={9} /> {pkg.proCadBadge}
             </span>
-            <input
-              type="checkbox"
-              checked={proCadMode}
-              disabled={disabled}
-              onChange={(e) => setProCadMode(e.target.checked)}
-            />
-          </label>
+          </h3>
+          <span style={{ fontSize: 10, color: "var(--pkg-muted)" }}>{params.thicknessMm.toFixed(2)} mm</span>
         </div>
 
-        {proCadMode && (
-          <div className={styles.accordion} style={{ padding: 10, display: "flex", flexDirection: "column", gap: 9 }}>
-            <div className={styles.sliderRow}>
-              <div className={styles.sliderHead}>
-                <label htmlFor="pkg-thick">Exact board caliper (t)</label>
-                <output>{params.thicknessMm.toFixed(2)} mm</output>
-              </div>
-              <input
-                id="pkg-thick"
-                type="range"
-                className={styles.rangeInput}
-                min={0.3}
-                max={6.0}
-                step={0.05}
-                disabled={disabled}
-                value={params.thicknessMm}
-                onChange={(e) => onChange({ thicknessMm: Number(e.target.value) }, true)}
-                onPointerUp={() => onChange({}, false)}
-              />
+        <div className={styles.accordion} style={{ padding: 10, display: "flex", flexDirection: "column", gap: 9 }}>
+          <div className={styles.sliderRow}>
+            <div className={styles.sliderHead}>
+              <label htmlFor="pkg-thick">{pkg.boardCaliper}</label>
+              <output>{params.thicknessMm.toFixed(2)} mm</output>
             </div>
+            <input
+              id="pkg-thick"
+              type="range"
+              className={styles.rangeInput}
+              min={0.3}
+              max={6.0}
+              step={0.05}
+              disabled={disabled}
+              value={params.thicknessMm}
+              onChange={(e) => onChange({ thicknessMm: Number(e.target.value) }, true)}
+              onPointerUp={() => onChange({}, false)}
+            />
+          </div>
 
-            <div className={styles.sectionHeader}>
-              <span style={{ fontSize: 11, fontWeight: 550 }}>Flute direction</span>
-              <div className={styles.segmented}>
-                <button
-                  type="button"
-                  aria-pressed={params.fluteDirection === "along-L"}
-                  disabled={disabled}
-                  onClick={() => onChange({ fluteDirection: "along-L" })}
-                >
-                  Along L
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={params.fluteDirection === "along-W"}
-                  disabled={disabled}
-                  onClick={() => onChange({ fluteDirection: "along-W" })}
-                >
-                  Along W
-                </button>
-              </div>
-            </div>
-
-            <div className={styles.sliderRow}>
-              <div className={styles.sliderHead}>
-                <label htmlFor="pkg-clearance">Lock & fold clearance</label>
-                <output>{params.slotClearanceMm.toFixed(2)} mm</output>
-              </div>
-              <input
-                id="pkg-clearance"
-                type="range"
-                className={styles.rangeInput}
-                min={0.1}
-                max={1.2}
-                step={0.05}
+          <div className={styles.sectionHeader}>
+            <span style={{ fontSize: 11, fontWeight: 550 }}>{pkg.fluteDirection}</span>
+            <div className={styles.segmented}>
+              <button
+                type="button"
+                aria-pressed={params.fluteDirection === "along-L"}
                 disabled={disabled}
-                value={params.slotClearanceMm}
-                onChange={(e) => onChange({ slotClearanceMm: Number(e.target.value) }, true)}
-              />
-            </div>
-
-            <div className={styles.sliderRow}>
-              <div className={styles.sliderHead}>
-                <label htmlFor="pkg-bleed">Print bleed margin</label>
-                <output>{params.bleedMm.toFixed(1)} mm</output>
-              </div>
-              <input
-                id="pkg-bleed"
-                type="range"
-                className={styles.rangeInput}
-                min={0}
-                max={10}
-                step={0.5}
+                onClick={() => onChange({ fluteDirection: "along-L" })}
+              >
+                {pkg.alongL}
+              </button>
+              <button
+                type="button"
+                aria-pressed={params.fluteDirection === "along-W"}
                 disabled={disabled}
-                value={params.bleedMm}
-                onChange={(e) => onChange({ bleedMm: Number(e.target.value) })}
-              />
-            </div>
-
-            <label className={styles.switchRow}>
-              <span>Show crease guidelines</span>
-              <input
-                type="checkbox"
-                checked={params.showCreaseLines}
-                disabled={disabled}
-                onChange={(e) => onChange({ showCreaseLines: e.target.checked })}
-              />
-            </label>
-
-            <div className={styles.specSummary}>
-              <div>
-                <span>Net sheet area</span>
-                <strong>{solved.blankAreaM2.toFixed(3)} m²</strong>
-              </div>
-              <div>
-                <span>Panels / Creases</span>
-                <strong>{solved.flatPanels.length} panels · {solved.creaseSegments.length} folds</strong>
-              </div>
+                onClick={() => onChange({ fluteDirection: "along-W" })}
+              >
+                {pkg.alongW}
+              </button>
             </div>
           </div>
-        )}
 
-        {/* 1:1 mm Production Dieline Vector Export */}
-        <div>
-          <div className={styles.dielineCostRow}>
-            <span>Download 1:1 mm Dieline Vector</span>
-            <span
-              className={styles.dielineCostBadge}
-              aria-label={dielineCost === 0 ? "Free export" : `${dielineCost} coins per file`}
-            >
-              {dielineCost === 0 ? (
-                "Free"
-              ) : (
-                <>
-                  <Image src="/branding/LLCoin.svg" alt="" width={12} height={12} aria-hidden="true" />
-                  <span>{dielineCost}</span>
-                </>
-              )}
-            </span>
+          <div className={styles.sliderRow}>
+            <div className={styles.sliderHead}>
+              <label htmlFor="pkg-clearance">{pkg.lockFoldClearance}</label>
+              <output>{params.slotClearanceMm.toFixed(2)} mm</output>
+            </div>
+            <input
+              id="pkg-clearance"
+              type="range"
+              className={styles.rangeInput}
+              min={0.1}
+              max={1.2}
+              step={0.05}
+              disabled={disabled}
+              value={params.slotClearanceMm}
+              onChange={(e) => onChange({ slotClearanceMm: Number(e.target.value) }, true)}
+            />
           </div>
-          <div className={styles.dielineExportRow}>
-            <button
-              type="button"
-              className={styles.dielineExportBtn}
+
+          <div className={styles.sliderRow}>
+            <div className={styles.sliderHead}>
+              <label htmlFor="pkg-bleed">{pkg.printBleedMargin}</label>
+              <output>{params.bleedMm.toFixed(1)} mm</output>
+            </div>
+            <input
+              id="pkg-bleed"
+              type="range"
+              className={styles.rangeInput}
+              min={0}
+              max={10}
+              step={0.5}
               disabled={disabled}
-              onClick={() => onDownloadDieline("svg")}
-              title={`Scalable Vector Graphics 1:1 mm (Illustrator / Inkscape) · ${dielineCost === 0 ? "Free" : `${dielineCost} coins`}`}
-            >
-              <Download size={12} /> SVG
-            </button>
-            <button
-              type="button"
-              className={styles.dielineExportBtn}
+              value={params.bleedMm}
+              onChange={(e) => onChange({ bleedMm: Number(e.target.value) })}
+            />
+          </div>
+
+          <label className={styles.switchRow}>
+            <span>{pkg.showCreaseGuidelines}</span>
+            <input
+              type="checkbox"
+              checked={params.showCreaseLines}
               disabled={disabled}
-              onClick={() => onDownloadDieline("pdf")}
-              title={`True Vector PDF 1:1 mm with Cut/Crease/Bleed · ${dielineCost === 0 ? "Free" : `${dielineCost} coins`}`}
-            >
-              <Download size={12} /> PDF
-            </button>
-            <button
-              type="button"
-              className={styles.dielineExportBtn}
-              disabled={disabled}
-              onClick={() => onDownloadDieline("dxf")}
-              title={`AutoCAD DXF R12 (mm) for CNC die-cutters · ${dielineCost === 0 ? "Free" : `${dielineCost} coins`}`}
-            >
-              <Download size={12} /> DXF
-            </button>
+              onChange={(e) => onChange({ showCreaseLines: e.target.checked })}
+            />
+          </label>
+
+          <div className={styles.specSummary}>
+            <div>
+              <span>{pkg.netSheetArea}</span>
+              <strong>{solved.blankAreaM2.toFixed(3)} m²</strong>
+            </div>
+            <div>
+              <span>{pkg.panelsAndCreases}</span>
+              <strong>{pkg.panelsFoldsValue(solved.flatPanels.length, solved.creaseSegments.length)}</strong>
+            </div>
           </div>
         </div>
       </section>
+      )}
     </div>
   );
 }

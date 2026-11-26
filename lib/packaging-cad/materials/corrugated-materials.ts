@@ -5,6 +5,8 @@ import { getPackagingFinishPreset } from './paper-presets';
 export interface PackagingMaterialSet {
   outside: THREE.MeshPhysicalMaterial;
   inside: THREE.MeshPhysicalMaterial;
+  /** Unprinted matte interior kraft/board material for honeycomb cell partition inserts. */
+  partition: THREE.MeshPhysicalMaterial;
   /** Interactive Pacdora-style hover highlight material for outside face only. */
   hoverOutside: THREE.MeshPhysicalMaterial;
   /** Interactive Pacdora-style hover highlight material for inside face only. */
@@ -831,6 +833,13 @@ export function createPackagingMaterialSet(
   insideRough.repeat.set(6, 6);
   insideRough.needsUpdate = true;
 
+  const partitionNormal = paperPbr.normalMap.clone();
+  partitionNormal.repeat.set(1, 1);
+  partitionNormal.needsUpdate = true;
+  const partitionRough = paperPbr.roughnessMap.clone();
+  partitionRough.repeat.set(1, 1);
+  partitionRough.needsUpdate = true;
+
   const outside = new THREE.MeshPhysicalMaterial({
     color: new THREE.Color(params.outsideColor),
     roughness: params.outsideRoughness,
@@ -878,6 +887,24 @@ export function createPackagingMaterialSet(
   enhancePaperFaceMaterial(hoverInside, insideUniforms, 'hypermockup-paper-inside-hover-v1', {
     color: new THREE.Color('#2563eb'),
     mix: 0.34,
+  });
+
+  const partition = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color(params.insideColor).multiplyScalar(0.95),
+    roughness: Math.max(0.76, params.insideRoughness),
+    metalness: 0,
+    normalMap: partitionNormal,
+    normalScale: new THREE.Vector2(
+      Math.max(0.16, outsideProfile.normalScale * 1.15),
+      Math.max(0.16, outsideProfile.normalScale * 1.15),
+    ),
+    roughnessMap: partitionRough,
+    sheen: Math.max(0.24, outsideProfile.sheen),
+    sheenRoughness: 0.85,
+    sheenColor: new THREE.Color('#e6d7c4'),
+    clearcoat: 0,
+    envMapIntensity: 0.72,
+    side: THREE.FrontSide,
   });
 
   const windowFilm = new THREE.MeshPhysicalMaterial({
@@ -985,6 +1012,11 @@ export function createPackagingMaterialSet(
     hoverInside.normalScale.copy(inside.normalScale);
     hoverInside.sheen = inside.sheen;
 
+    partition.color.set(nextParams.insideColor).multiplyScalar(0.95);
+    partition.roughness = Math.max(0.76, nextParams.insideRoughness);
+    partition.normalScale.set(inNorm, inNorm);
+    partition.sheen = Math.max(0.24, inProf.sheen);
+
     insideUniforms.uGrainStrength.value = Math.max(0.06, nextPreset.fiberStrength * (hasInsideArtwork ? 0.35 : 0.65));
     insideUniforms.uFlutePitchMm.value = Math.max(1.5, nextPreset.flutePitchMm || 3.2);
     insideUniforms.uFluteAlongL.value = nextParams.fluteDirection === 'along-L' ? 1 : 0;
@@ -1046,6 +1078,7 @@ export function createPackagingMaterialSet(
   return {
     outside,
     inside,
+    partition,
     hoverOutside,
     hoverInside,
     edge,
@@ -1057,6 +1090,7 @@ export function createPackagingMaterialSet(
     dispose() {
       outside.dispose();
       inside.dispose();
+      partition.dispose();
       hoverOutside.dispose();
       hoverInside.dispose();
       edge.dispose();
@@ -1065,6 +1099,8 @@ export function createPackagingMaterialSet(
       outsideRough.dispose();
       insideNormal.dispose();
       insideRough.dispose();
+      partitionNormal.dispose();
+      partitionRough.dispose();
       outsideCreviceTex?.dispose();
       insideCreviceTex?.dispose();
       outsideCreviceTex = null;

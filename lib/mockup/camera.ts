@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { MockupCameraPreset } from './contracts';
-import { unityCameraDestination } from './unity-camera-presets';
+import { studioCameraDestination } from './camera-presets';
 
 export const MOCKUP_ASPECTS = { square: 1, portrait: 4 / 5, landscape: 16 / 9, story: 9 / 16 } as const;
 
@@ -17,16 +17,16 @@ export function normalizeMockupAspect(aspect: number): number {
 }
 
 export function mockupCameraDirection(preset: MockupCameraPreset): THREE.Vector3 {
-  const unity = preset.startsWith('view-') ? unityCameraDestination(preset as Parameters<typeof unityCameraDestination>[0]) : undefined;
-  const yaw = unity ? THREE.MathUtils.degToRad(unity.yawDegrees) : preset === 'three-quarter' ? Math.PI / 4 : 0;
-  const elevation = unity ? THREE.MathUtils.degToRad(unity.pitchDegrees) : preset === 'three-quarter' ? 0.12 : 0.025;
+  const authored = preset.startsWith('view-') ? studioCameraDestination(preset as Parameters<typeof studioCameraDestination>[0]) : undefined;
+  const yaw = authored ? THREE.MathUtils.degToRad(authored.yawDegrees) : preset === 'three-quarter' ? Math.PI / 4 : 0;
+  const elevation = authored ? THREE.MathUtils.degToRad(authored.pitchDegrees) : preset === 'three-quarter' ? 0.12 : 0.025;
   return new THREE.Vector3(Math.sin(yaw) * Math.cos(elevation), Math.sin(elevation), Math.cos(yaw) * Math.cos(elevation));
 }
 
-/** Undo the exported model's centered pivot before applying Unity's [0,1,0] focus. */
-export function unityMockupCameraFocus(bounds: THREE.Box3, modelSrc: string): THREE.Vector3 {
+/** Undo the exported model's centered pivot before applying the authored [0,1,0] focus. */
+export function authoredMockupCameraFocus(bounds: THREE.Box3, modelSrc: string): THREE.Vector3 {
   const focus = bounds.getCenter(new THREE.Vector3());
-  // Vinut export manifests: appMetersPerSourceUnit/exportScale=.1; source Z is height.
+  // Export manifests use exportScale = 0.1; source Z is height.
   if (/glass-290-basil/.test(modelSrc)) focus.y += (1 - 0.9023135900497437) * 0.1;
   else if (/pet-500-short-label/.test(modelSrc)) focus.y += (1 - 1.0481757521629333) * 0.1;
   else focus.y = bounds.min.y + 0.1;
@@ -55,13 +55,13 @@ export function fitMockupCamera(bounds: THREE.Box3, direction: THREE.Vector3, as
 export function authoredMockupCameraFrame(
   bounds: THREE.Box3,
   asset: { src: string; cameraFraming?: 'bounds' },
-  preset: Parameters<typeof unityCameraDestination>[0],
+  preset: Parameters<typeof studioCameraDestination>[0],
   aspect: number,
 ) {
-  const authored = unityCameraDestination(preset);
+  const authored = studioCameraDestination(preset);
   const direction = mockupCameraDirection(preset);
   if (asset.cameraFraming !== 'bounds') {
-    return { distanceMetres: authored.distanceMetres, fieldOfView: authored.fieldOfView, target: unityMockupCameraFocus(bounds, asset.src) };
+    return { distanceMetres: authored.distanceMetres, fieldOfView: authored.fieldOfView, target: authoredMockupCameraFocus(bounds, asset.src) };
   }
   return {
     distanceMetres: Math.max(authored.distanceMetres, fitMockupCamera(bounds, direction, aspect, authored.fieldOfView, 0.8)),

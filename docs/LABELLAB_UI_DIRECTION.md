@@ -6,11 +6,11 @@ Date: 23/10/2026. Scope: visual implementation direction for the first editor-fi
 
 The three supplied screenshots were inspected directly:
 
-1. `codex-clipboard-e671bcb0-81d6-48b0-929f-5e4af5b05bb0.png`: original VINUT website. Pink full-bleed background, animated orthogonal decorative grid, luminous white halo behind the product, floating tilted bottle, rounded translucent panels, white typography, cream active pills and warm orange CTA in the source reference.
+1. `codex-clipboard-e671bcb0-81d6-48b0-929f-5e4af5b05bb0.png`: original HyperMockup website. Pink full-bleed background, animated orthogonal decorative grid, luminous white halo behind the product, floating tilted bottle, rounded translucent panels, white typography, cream active pills and warm orange CTA in the source reference.
 2. `codex-clipboard-93cffd3d-9967-4517-942d-09f9d1815273.png`: original Mockup Studio. Three columns: model library, large product viewport, controls/export. Left focal-length rail; right motion rail; top background chooser; lower zoom/reset bar. Pink background and glass surfaces carry through the whole composition.
-3. `codex-clipboard-37a91c0f-96e6-412e-a644-ab58e5926235.png`: Unity-style spatial studio. Upright product stands on an actual horizontal floor; perspective grid converges in depth, product has a contact shadow. This is scene geometry, not a flat CSS grid.
+3. `codex-clipboard-37a91c0f-96e6-412e-a644-ab58e5926235.png`: source 3D-style spatial studio. Upright product stands on an actual horizontal floor; perspective grid converges in depth, product has a contact shadow. This is scene geometry, not a flat CSS grid.
 
-References reside in the Windows clipboard Temp directory. They are evidence, not production assets. Do not retain VINUT wordmark, beverage marketing copy or certifications in the Labellab interface.
+References reside in the Windows clipboard Temp directory. They are evidence, not production assets. Do not retain HyperMockup wordmark, beverage marketing copy or certifications in the Labellab interface.
 
 ## 2. Exact mapping to Labellab
 
@@ -20,13 +20,13 @@ References reside in the Windows clipboard Temp directory. They are evidence, no
 | White glowing halo | Radial white halo behind canvas/product; decorative and pointer-transparent | Silhouette separates from pink, controls remain legible |
 | Orthogonal moving grid | Reuse established old website grid motion/background behavior | Grid moves behind panels, never captures pointer input |
 | Tilted floating bottle | Website mode starts with tilt and idle rotation enabled | First loaded product animates; Idle stops it; drag takes immediate precedence |
-| Vinut-style studio | Floating library / flexible canvas / inspector | At desktop no overlap; canvas remains dominant on one continuous background |
+| HyperMockup-style studio | Floating library / flexible canvas / inspector | At desktop no overlap; canvas remains dominant on one continuous background |
 | Contextual tool rail | Models, Artwork, Scene, Properties and Export open one floating panel at a time | Active tool has text + selected semantics; closing the active tool returns space to the canvas |
 | Properties inspector | Liquid, Cap/Top, Bottle/Body and Label selectors reveal one compact group at a time; only supported model slots appear | Numeric inputs and sliders share values, colors have editable hex fields, and each part can reset independently |
 | Motion rail | Website (tilt/rotate) and Idle (still) | Buttons reflect actual runtime state, mode switch preserves selected model |
 | Focal rail | Front / three-quarter camera views plus zoom/reset | Preset changes visibly update camera, not just selected CSS |
 | Export panel | Format, frame, quality, download action | Real output matches dimensions and selected background |
-| Unity floor | Studio mode uses actual XZ white plane and perspective grid | Orbit low to confirm lines converge and product bottom touches floor |
+| source 3D floor | Studio mode uses actual XZ white plane and perspective grid | Orbit low to confirm lines converge and product bottom touches floor |
 | Depth fade | Studio grid/fog fade through 12–20 m under current asset unit contracts, fully faded at 20 m | No harsh end-of-floor edge or CSS-grid illusion |
 | Contact shadow | Soft procedural grounding shadow under product | Shadow follows floor/model position; no hovering |
 
@@ -115,7 +115,7 @@ These checks do not constitute cross-browser/GPU validation, context-loss testin
 
 ### Xác nhận sau hiệu chỉnh Web-only
 
-Agent chính xác nhận typecheck/lint/8 tests (3 catalog/resolver + 5 preferences)/verify-assets (12 assets)/build đều pass. Chromium switch cả ba model cho thấy chỉ studio-softbox.exr và glass-290-basil-web.glb/can-330.glb/pet-500-short-label.glb; không tải High GLB/buffers/HDRI. Cả ba ready ở Website/Studio, console không lỗi/cảnh báo. PNG Basil Web Studio 1024×1024 đã tải và kiểm tra trực quan sản phẩm/grid/watermark. SHA256 cả ba GLB trùng source VINUT (Basil 424312 bytes, can 126500 bytes, PET 1128836 bytes).
+Agent chính xác nhận typecheck/lint/8 tests (3 catalog/resolver + 5 preferences)/verify-assets (12 assets)/build đều pass. Chromium switch cả ba model cho thấy chỉ studio-softbox.exr và glass-290-basil-web.glb/can-330.glb/pet-500-short-label.glb; không tải High GLB/buffers/HDRI. Cả ba ready ở Website/Studio, console không lỗi/cảnh báo. PNG Basil Web Studio 1024×1024 đã tải và kiểm tra trực quan sản phẩm/grid/watermark. SHA256 cả ba GLB trùng source HyperMockup (Basil 424312 bytes, can 126500 bytes, PET 1128836 bytes).
 
 Bằng chứng mới: `docs/screenshots/labellab-basil-web.png`, `docs/screenshots/labellab-basil-web-export.png`. Các kiểm tra upload WEBP/color picker/preferences/project restore/responsive và PNG portrait/landscape ghi phía trên là đợt kiểm tra rộng hơn trước hiệu chỉnh, không được hiểu là toàn bộ đã rerun. Không có benchmark FPS hoặc audit cross-browser/GPU/context loss/screen reader/commercial.
 

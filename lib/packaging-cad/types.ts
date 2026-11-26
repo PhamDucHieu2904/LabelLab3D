@@ -233,6 +233,9 @@ export interface BottlePackConfig {
   wallPaddingMm: number;
   facingYawDeg: number;
   organicJitter: boolean;
+  jitterSeed?: number;
+  /** Optional interlocking corrugated honeycomb cell dividers inside FEFCO 0201 Top-Open Carton. */
+  honeycombDividers?: boolean;
   autoFitOnChange: boolean;
 }
 

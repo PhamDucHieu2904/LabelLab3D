@@ -30,7 +30,8 @@ test('each can has a native model and poster without borrowed flavor textures', 
     assert.ok(model, `missing LabModel for ${asset.id}`);
     assert.equal(model.asset.src.split('?')[0], asset.src);
     assert.deepEqual(model.asset.orientation, [0, 0, 0]);
-    if (asset.id !== 'can-330') { assert.deepEqual(model.appearance.slots?.label, { metalness: 0.18, roughness: 0.28, clearcoat: 0.35 }); assert.equal(model.appearance.slots?.label?.baseColorMap, undefined); }
+    assert.deepEqual(model.appearance.slots?.label, { metalness: 0, roughness: 0.15, clearcoat: 0.35 });
+    assert.equal(model.appearance.slots?.label?.baseColorMap, undefined);
     assert.ok(fs.existsSync(path.join(root, 'public/models/cans/posters', `${asset.id}.webp`)));
     assert.equal(model.asset.materialSlots?.label?.[0] ?? 'printed-label', 'printed-label');
   }

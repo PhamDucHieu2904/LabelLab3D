@@ -79,9 +79,9 @@ export interface ArtworkEditorProps {
   onClose: () => void;
 }
 
-const MAX_BYTES = 15 * 1024 * 1024;
-const MAX_EDGE = 8192;
-const MAX_PIXELS = 32_000_000;
+// Local preview accepts arbitrarily large pixel dimensions (print-ready PNG/JPG/WebP);
+// cloud uploads automatically normalize to <= 2048px WebP before storing in Cloudflare R2.
+const MAX_BYTES = 64 * 1024 * 1024;
 const HANDLES: ArtworkHandle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 
 function readImage(blob: Blob): Promise<{ image: HTMLImageElement; width: number; height: number; url: string }> {
@@ -251,14 +251,13 @@ export default function ArtworkEditor({
     if (!file || blocked) return;
     setError("");
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) { setError("Choose a PNG, JPG, or WebP image."); return; }
-    if (file.size > MAX_BYTES) { setError("Images must be 15 MB or smaller."); return; }
+    if (file.size > MAX_BYTES) { setError("Images must be 64 MB or smaller."); return; }
     const generation = ++fileGeneration.current;
     setDecoding(true);
     try {
       const result = await readImage(file);
       URL.revokeObjectURL(result.url);
       if (generation !== fileGeneration.current) return;
-      if (result.width > MAX_EDGE || result.height > MAX_EDGE || result.width * result.height > MAX_PIXELS) throw new Error("Images must be no larger than 8192 × 8192 and 32 megapixels.");
       setImage(null); setDecodedSource(null); setSource(file); setName(file.name.replace(/\.[^.]+$/, "") || "Artwork");
     } catch (e) { if (generation === fileGeneration.current) { setDecoding(false); setError(e instanceof Error ? e.message : "Unable to read artwork."); } }
   }, [blocked]);

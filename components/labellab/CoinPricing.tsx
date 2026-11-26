@@ -5,13 +5,15 @@ import Link from "next/link";
 import { Check, CheckCircle2, Copy, CreditCard, Download, ExternalLink, Globe, Landmark, RefreshCw, ShieldCheck, Smartphone } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { numberLocale } from "@/lib/i18n/locale";
 import { COIN_PACKAGES, getCoinPackagesByRegion, type CoinPackage, type CoinRegion } from "@/lib/payments/packages";
 import { useAccount, useAuthDialog } from "./AuthDialog";
+import { useLocale } from "./LocaleProvider";
 import styles from "./CoinPricing.module.css";
 
 const regions = [
-  { id: "vietnam", label: "Vietnam", currency: "VND", locale: "vi-VN" },
-  { id: "international", label: "International", currency: "USD", locale: "en-US" },
+  { id: "vietnam", currency: "VND", locale: "vi-VN" },
+  { id: "international", currency: "USD", locale: "en-US" },
 ] as const;
 
 type RegionId = CoinRegion;
@@ -48,9 +50,13 @@ function formatCountdown(ms: number): string {
 }
 
 export default function CoinPricing() {
+  const { locale, t } = useLocale();
+  const p = t.pricing;
+  const numLocale = numberLocale(locale);
   const { user } = useAccount();
   const openAuth = useAuthDialog();
   const [regionId, setRegionId] = useState<RegionId>("vietnam");
+  const [allowRegionSwitch, setAllowRegionSwitch] = useState(false);
   const [packages, setPackages] = useState<readonly CoinPackage[]>(COIN_PACKAGES);
   const [intlReady, setIntlReady] = useState(false);
   const [intlSandbox, setIntlSandbox] = useState(false);
@@ -71,11 +77,15 @@ export default function CoinPricing() {
   const [intlMethod, setIntlMethod] = useState<"gpay" | "card" | "bank">("card");
   const [embedOpening, setEmbedOpening] = useState(false);
   const [embedConfirmed, setEmbedConfirmed] = useState(false);
+  const [receiptForm, setReceiptForm] = useState({ buyerName: "", taxCode: "", address: "", email: "" });
+  const [receiptSaving, setReceiptSaving] = useState(false);
+  const [receiptFeedback, setReceiptFeedback] = useState<{ ok: boolean; text: string } | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const checkoutFormRef = useRef<HTMLFormElement>(null);
   const embedInstanceRef = useRef<{ close: () => void } | null>(null);
   const orderRequestSeq = useRef(0);
   const region = regions.find((item) => item.id === regionId)!;
+  const regionLabel = regionId === "international" ? p.regionInternational : p.regionVietnam;
   const prices = new Intl.NumberFormat(region.locale, {
     style: "currency",
     currency: region.currency,
@@ -140,23 +150,48 @@ export default function CoinPricing() {
 
   useEffect(() => {
     let active = true;
-    void fetch("/api/site/config", { cache: "no-store" })
-      .then(async (res) => res.ok ? await res.json() as {
-        coinPackages?: CoinPackage[];
-        payments?: { internationalEnabled?: boolean; internationalSandbox?: boolean };
-      } : null)
-      .then((payload) => {
-        if (!active || !payload) return;
-        if (Array.isArray(payload.coinPackages) && payload.coinPackages.length > 0) {
-          setPackages(payload.coinPackages);
-        }
-        if (payload.payments) {
-          setIntlReady(Boolean(payload.payments.internationalEnabled));
-          setIntlSandbox(Boolean(payload.payments.internationalSandbox));
-        }
-      })
-      .catch(() => undefined);
-    return () => { active = false; };
+    const syncConfig = () => {
+      void import("@/lib/client/api-cache")
+        .then(({ fetchSiteConfigCached }) => fetchSiteConfigCached<{
+          coinPackages?: CoinPackage[];
+          visitor?: {
+            region?: RegionId;
+            allowRegionSwitch?: boolean;
+          };
+          payments?: { internationalEnabled?: boolean; internationalSandbox?: boolean };
+        }>())
+        .then((payload) => {
+          if (!active || !payload) return;
+          const nextPackages = Array.isArray(payload.coinPackages) && payload.coinPackages.length > 0
+            ? payload.coinPackages
+            : COIN_PACKAGES;
+          if (Array.isArray(payload.coinPackages) && payload.coinPackages.length > 0) {
+            setPackages(payload.coinPackages);
+          }
+          if (payload.visitor) {
+            const canSwitch = Boolean(payload.visitor.allowRegionSwitch);
+            setAllowRegionSwitch(canSwitch);
+            const enforcedRegion: RegionId = payload.visitor.region === "international" ? "international" : "vietnam";
+            if (!canSwitch) {
+              setRegionId(enforcedRegion);
+              const targetPacks = getCoinPackagesByRegion(nextPackages, enforcedRegion);
+              const preferred = targetPacks.find((item) => item.badge === "popular") ?? targetPacks[0];
+              if (preferred) setSelectedPackId(preferred.id);
+            }
+          }
+          if (payload.payments) {
+            setIntlReady(Boolean(payload.payments.internationalEnabled));
+            setIntlSandbox(Boolean(payload.payments.internationalSandbox));
+          }
+        })
+        .catch(() => undefined);
+    };
+    syncConfig();
+    window.addEventListener("labellab-account-changed", syncConfig);
+    return () => {
+      active = false;
+      window.removeEventListener("labellab-account-changed", syncConfig);
+    };
   }, []);
 
   const regionalPackages = getCoinPackagesByRegion(packages, regionId);
@@ -168,6 +203,7 @@ export default function CoinPricing() {
     ?? visiblePackages[0]
     ?? fallbackRegionPackages[0];
   const selectedPrice = prices.format(regionId === "vietnam" ? selectedPackage.vnd : selectedPackage.usd);
+  const selectedCoinsText = selectedPackage.coins.toLocaleString(numLocale);
 
   const createPaymentOrder = useCallback(async (pkg: CoinPackage, targetRegion: RegionId) => {
     if (!user) {
@@ -179,6 +215,7 @@ export default function CoinPricing() {
     setPaymentState("loading");
     setPaymentError("");
     setManualCheckHint("");
+    setReceiptFeedback(null);
     setDirectQr(null);
     setPolarCheckout(null);
     setCheckout(null);
@@ -202,16 +239,15 @@ export default function CoinPricing() {
       };
       if (seq !== orderRequestSeq.current) return;
       if (!response.ok || (!payload.qr && !payload.polar && !payload.checkout)) {
-        if (response.status === 403) throw new Error(targetRegion === "international" ? "Please sign in before purchasing coins." : "Bạn cần đăng nhập trước khi nạp coin.");
+        if (payload.error === "REGION_RESTRICTED") throw new Error(p.errRegionRestricted);
+        if (response.status === 403) throw new Error(p.errSignInRequired);
         if (payload.error === "PAYMENT_NOT_CONFIGURED") {
-          throw new Error(targetRegion === "international"
-            ? "International card checkout (Polar.sh) is being configured on the server."
-            : "Cổng thanh toán SePay chưa được cấu hình trên máy chủ.");
+          throw new Error(targetRegion === "international" ? p.errPolarNotConfigured : p.errSepayNotConfigured);
         }
-        if (payload.error === "POLAR_CHECKOUT_FAILED") throw new Error("Could not initialize Polar checkout session. Please try again.");
-        if (payload.error === "PAYMENT_ENV_MISMATCH") throw new Error("Cấu hình môi trường SePay (Sandbox/Production) chưa khớp với khóa merchant.");
-        if (payload.error === "PAYMENT_PUBLIC_URL_REQUIRED") throw new Error("Cần cấu hình URL HTTPS công khai để cổng thanh toán gọi webhook.");
-        throw new Error(targetRegion === "international" ? "Could not create checkout order. Please try again." : "Không thể tạo đơn thanh toán. Vui lòng thử lại.");
+        if (payload.error === "POLAR_CHECKOUT_FAILED") throw new Error(p.errPolarFailed);
+        if (payload.error === "PAYMENT_ENV_MISMATCH") throw new Error(p.errSepayMismatch);
+        if (payload.error === "PAYMENT_PUBLIC_URL_REQUIRED") throw new Error(p.errPublicUrlRequired);
+        throw new Error(p.errCreateOrderFailed);
       }
       setDirectQr(payload.qr ?? null);
       setPolarCheckout(payload.polar ?? null);
@@ -223,9 +259,9 @@ export default function CoinPricing() {
     } catch (error) {
       if (seq !== orderRequestSeq.current) return;
       setPaymentState("error");
-      setPaymentError(error instanceof Error ? error.message : "Không thể tạo đơn thanh toán.");
+      setPaymentError(error instanceof Error ? error.message : p.errCreateOrderFailed);
     }
-  }, [openAuth, user]);
+  }, [openAuth, p, user]);
 
   useEffect(() => {
     return () => {
@@ -251,8 +287,6 @@ export default function CoinPricing() {
       });
 
       embed.addEventListener("success", (event) => {
-        // Stay on the homepage without navigating away; close Polar's iframe
-        // and immediately poll D1 for webhook confirmation.
         event.preventDefault();
         setEmbedConfirmed(true);
         embed.close();
@@ -282,9 +316,9 @@ export default function CoinPricing() {
       });
     } catch {
       setEmbedOpening(false);
-      setPaymentError("Could not open inline checkout popup. You can use the direct Polar link below.");
+      setPaymentError(p.errEmbedOpenFailed);
     }
-  }, [embedOpening, pollOrderOnce]);
+  }, [embedOpening, p.errEmbedOpenFailed, pollOrderOnce]);
 
   function submitCheckout() {
     if (!checkout || !checkoutFormRef.current) return;
@@ -301,6 +335,31 @@ export default function CoinPricing() {
     }
   }
 
+  async function saveReceiptDetails() {
+    if (!paymentOrder || receiptSaving) return;
+    setReceiptSaving(true);
+    setReceiptFeedback(null);
+    try {
+      const response = await fetch(`/api/payments/orders/${encodeURIComponent(paymentOrder.id)}`, {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ receipt: receiptForm }),
+      });
+      if (!response.ok) {
+        throw new Error(p.receiptInvalid);
+      }
+      setReceiptFeedback({ ok: true, text: p.receiptSaved });
+    } catch (error) {
+      setReceiptFeedback({
+        ok: false,
+        text: error instanceof Error ? error.message : p.receiptSaveFailed,
+      });
+    } finally {
+      setReceiptSaving(false);
+    }
+  }
+
   async function checkPaymentNow() {
     if (!paymentOrder || checkingNow) return;
     setCheckingNow(true);
@@ -312,9 +371,7 @@ export default function CoinPricing() {
         if (updated.status === "paid") {
           window.dispatchEvent(new Event("labellab-account-changed"));
         } else if (updated.status === "pending") {
-          setManualCheckHint(regionId === "international"
-            ? "Payment not received yet — coins will credit automatically right after Polar confirms your card payment."
-            : "Hệ thống chưa nhận được giao dịch — coin sẽ tự cộng sau vài giây khi chuyển khoản xong.");
+          setManualCheckHint(regionId === "international" ? p.hintPendingPolar : p.hintPendingSepay);
         }
       }
     } finally {
@@ -333,16 +390,16 @@ export default function CoinPricing() {
   const isSandbox = Boolean(checkout?.action.includes("pay-sandbox.sepay.vn") || polarCheckout?.sandbox || (isPolar && intlSandbox));
 
   const statusText = isPaid
-    ? (isPolar ? "Paid · coins added" : "Đã thanh toán · đã cộng coin")
+    ? p.statusPaid
     : embedConfirmed
-      ? "Confirming payment…"
+      ? p.statusConfirming
       : isExpired
-        ? (isPolar ? "Session expired" : "Đơn đã hết hạn")
+        ? p.statusExpired
         : paymentState === "loading"
-          ? (isPolar ? "Preparing Polar checkout…" : "Đang tạo mã QR…")
+          ? (isPolar ? p.statusLoadingPolar : p.statusLoadingSepay)
           : paymentState === "ready"
-            ? (isPolar ? "Ready · Pay inline without leaving site" : "Chờ chuyển khoản · tự động cộng coin")
-            : (isPolar ? "Ready to checkout" : "Chưa tạo đơn");
+            ? (isPolar ? p.statusReadyPolar : p.statusReadySepay)
+            : (isPolar ? p.statusIdlePolar : p.statusIdleSepay);
 
   const statusClass = isPaid
     ? styles.statusPaid
@@ -370,23 +427,21 @@ export default function CoinPricing() {
             ref={closeButtonRef}
             className={styles.close}
             type="button"
-            aria-label="Close top-up panel"
+            aria-label={p.closeCheckoutAria}
             onClick={() => setCheckoutOpen(false)}
           >
             ×
           </button>
           <div className={styles.checkoutHeader}>
             <div>
-              <span className={styles.eyebrow}>{isPolar ? "International Top-Up · USD" : "Nạp coin nội địa"}</span>
-              <h3 id="coin-checkout-title">{isPolar ? `Top up ${selectedPackage.coins.toLocaleString("en-US")} coins` : `Nạp ${selectedPackage.coins.toLocaleString("en-US")} coins`}</h3>
+              <span className={styles.eyebrow}>{isPolar ? p.eyebrowPolar : p.eyebrowSepay}</span>
+              <h3 id="coin-checkout-title">{p.checkoutTitle(selectedCoinsText)}</h3>
               <p id="coin-checkout-description">
                 {isPolar
-                  ? `Pay securely with Visa, Mastercard, Apple Pay, or Google Pay via Polar${isSandbox ? " (Sandbox)" : ""}`
+                  ? p.descPolar(isSandbox)
                   : isDirectQr
-                    ? "Quét mã VietQR bằng app ngân hàng — coin tự cộng ngay sau khi chuyển khoản"
-                    : isSandbox
-                      ? "Thanh toán QR VietQR qua SePay (Test Mode)"
-                      : "Thanh toán QR VietQR qua SePay"}
+                    ? p.descSepayQr
+                    : p.descSepayGateway(isSandbox)}
               </p>
             </div>
             <Image src="/branding/LLCoin.svg" alt="" width={46} height={46} unoptimized />
@@ -400,12 +455,12 @@ export default function CoinPricing() {
                     <div className={styles.polarIconWrap}>
                       {isPaid ? <CheckCircle2 size={34} aria-hidden="true" /> : <CreditCard size={30} aria-hidden="true" />}
                     </div>
-                    <strong className={styles.polarBrand}>Choose method</strong>
-                    <div className={styles.polarMethodGrid} role="group" aria-label="Payment method">
+                    <strong className={styles.polarBrand}>{p.chooseMethod}</strong>
+                    <div className={styles.polarMethodGrid} role="group" aria-label={p.paymentMethodAria}>
                       {([
-                        { id: "gpay", label: "Google Pay", Icon: Smartphone },
-                        { id: "card", label: "Card", Icon: CreditCard },
-                        { id: "bank", label: "Bank", Icon: Landmark },
+                        { id: "gpay", label: p.methodGpay, Icon: Smartphone },
+                        { id: "card", label: p.methodCard, Icon: CreditCard },
+                        { id: "bank", label: p.methodBank, Icon: Landmark },
                       ] as const).map(({ id, label, Icon }) => (
                         <button
                           key={id}
@@ -425,24 +480,24 @@ export default function CoinPricing() {
                         </button>
                       ))}
                     </div>
-                    <span className={styles.polarSafe}><ShieldCheck size={13} aria-hidden="true" /> Inline Polar Checkout · No redirect</span>
+                    <span className={styles.polarSafe}><ShieldCheck size={13} aria-hidden="true" /> {p.polarSafe}</span>
                   </div>
-                  <strong>{isPaid ? "Payment confirmed!" : isSandbox ? "Polar Sandbox · Inline" : "Instant inline checkout"}</strong>
+                  <strong>{isPaid ? p.polarTitlePaid : isSandbox ? p.polarTitleSandbox : p.polarTitleReady}</strong>
                   <small>
                     {isPaid
-                      ? "Your coins have been credited to your account."
+                      ? p.polarSubPaid
                       : remainingMs !== null && !isExpired
-                        ? `Session valid for ${formatCountdown(remainingMs)}`
-                        : "Select a method above to open checkout right on this page."}
+                        ? p.polarSubCountdown(formatCountdown(remainingMs))
+                        : p.polarSubHint}
                   </small>
                 </>
               ) : directQr && !qrImageError ? (
                 <>
                   <div className={styles.qrFrame}>
-                    {!qrLoaded && <div className={styles.qrSkeleton} aria-hidden="true">Đang tải QR…</div>}
+                    {!qrLoaded && <div className={styles.qrSkeleton} aria-hidden="true">{p.qrLoading}</div>}
                     <Image
                       src={directQr.imageUrl}
-                      alt={`Mã QR thanh toán ${selectedPackage.coins} coins qua ${directQr.bankName}`}
+                      alt={p.qrAlt(selectedPackage.coins, directQr.bankName)}
                       width={204}
                       height={204}
                       unoptimized
@@ -451,109 +506,109 @@ export default function CoinPricing() {
                       onError={() => setQrImageError(true)}
                     />
                     {isPaid && (
-                      <div className={styles.qrOverlayPaid} aria-label="Đã thanh toán thành công">
+                      <div className={styles.qrOverlayPaid} aria-label={p.qrPaidAria}>
                         <CheckCircle2 size={44} aria-hidden="true" />
-                        <span>Đã cộng coin</span>
+                        <span>{p.qrPaidLabel}</span>
                       </div>
                     )}
                     {isExpired && !isPaid && (
-                      <div className={styles.qrOverlayExpired} aria-label="Mã QR đã hết hạn">
-                        <span>Mã đã hết hạn</span>
+                      <div className={styles.qrOverlayExpired} aria-label={p.qrExpiredAria}>
+                        <span>{p.qrExpiredLabel}</span>
                       </div>
                     )}
                   </div>
-                  <strong>{isPaid ? "Thanh toán thành công!" : `VietQR · ${directQr.bankName}`}</strong>
+                  <strong>{isPaid ? p.qrSuccessTitle : `VietQR · ${directQr.bankName}`}</strong>
                   <small>
                     {isPaid
-                      ? "Số dư coin đã được cập nhật vào tài khoản."
+                      ? p.qrSuccessSub
                       : remainingMs !== null && !isExpired
-                        ? `Quét trực tiếp bằng app ngân hàng · Hết hạn sau ${formatCountdown(remainingMs)}`
+                        ? p.qrCountdownSub(formatCountdown(remainingMs))
                         : isExpired
-                          ? "Bấm Tạo mã QR mới nếu bạn chưa chuyển khoản."
-                          : "Chỉ ghi nhận coin sau khi webhook SePay xác nhận thanh toán."}
+                          ? p.qrExpiredSub
+                          : p.qrWebhookSub}
                   </small>
                 </>
               ) : paymentState === "loading" ? (
                 <>
                   <div className={styles.qrFrame}>
-                    <div className={styles.qrSkeleton}>Đang tạo mã QR…</div>
+                    <div className={styles.qrSkeleton}>{p.qrCreating}</div>
                   </div>
-                  <strong>QR thanh toán SePay</strong>
-                  <small>Đang khởi tạo mã VietQR từ máy chủ…</small>
+                  <strong>{p.qrSepayTitle}</strong>
+                  <small>{p.qrInitializingSub}</small>
                 </>
               ) : (
                 <>
-                  <div className={styles.demoQr} aria-label="Khu vực QR thanh toán SePay">
+                  <div className={styles.demoQr} aria-label={p.qrAreaAria}>
                     <span>VIETQR</span>
                     <b>QR</b>
                   </div>
-                  <strong>{user ? "QR thanh toán SePay" : "Đăng nhập để hiện QR"}</strong>
-                  <small>Chỉ ghi nhận coin sau khi webhook SePay xác nhận thanh toán.</small>
+                  <strong>{user ? p.qrSepayTitle : p.qrSignInTitle}</strong>
+                  <small>{p.qrWebhookSub}</small>
                 </>
               )}
             </div>
 
             <dl className={styles.summary}>
               <div>
-                <dt>{isPolar ? "Coin pack" : "Gói coin"}</dt>
+                <dt>{p.summaryPack}</dt>
                 <dd>
-                  {selectedPackage.coins.toLocaleString("en-US")} coins
+                  {selectedCoinsText} coins
                   {selectedPackage.bonusPct ? ` (+${selectedPackage.bonusPct}%)` : ""}
                 </dd>
               </div>
-              <div><dt>{isPolar ? "Price" : "Số tiền"}</dt><dd>{selectedPrice}</dd></div>
+              <div><dt>{p.summaryPrice}</dt><dd>{selectedPrice}</dd></div>
               {isPolar ? (
                 <>
-                  <div><dt>Provider</dt><dd><Globe size={14} style={{ verticalAlign: "-2px", marginRight: 5 }} aria-hidden="true" />Polar.sh (USD)</dd></div>
-                  <div><dt>Methods</dt><dd>Card · Apple Pay · Google Pay</dd></div>
+                  <div><dt>{p.summaryProvider}</dt><dd><Globe size={14} style={{ verticalAlign: "-2px", marginRight: 5 }} aria-hidden="true" />Polar.sh (USD)</dd></div>
+                  <div><dt>{p.summaryMethods}</dt><dd>{p.summaryMethodsValue}</dd></div>
                   {paymentOrder?.orderCode && (
-                    <div><dt>Order ID</dt><dd className={styles.orderCode}>{paymentOrder.orderCode}</dd></div>
+                    <div><dt>{p.summaryOrderId}</dt><dd className={styles.orderCode}>{paymentOrder.orderCode}</dd></div>
                   )}
                 </>
               ) : directQr ? (
                 <>
-                  <div><dt>Ngân hàng</dt><dd>{directQr.bankName}</dd></div>
+                  <div><dt>{p.summaryBank}</dt><dd>{directQr.bankName}</dd></div>
                   <div>
-                    <dt>Số tài khoản</dt>
+                    <dt>{p.summaryAccountNo}</dt>
                     <dd className={styles.copyCell}>
                       <span className={styles.monoValue}>{directQr.accountNumber}</span>
                       <button
                         type="button"
                         className={styles.copyBtn}
-                        aria-label="Sao chép số tài khoản"
+                        aria-label={p.copyAccountAria}
                         onClick={() => void copyText("account", directQr.accountNumber)}
                       >
                         {copiedKey === "account" ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
-                        <span>{copiedKey === "account" ? "Đã chép" : "Chép"}</span>
+                        <span>{copiedKey === "account" ? p.copied : p.copy}</span>
                       </button>
                     </dd>
                   </div>
                   {directQr.accountOwner && (
-                    <div><dt>Chủ tài khoản</dt><dd>{directQr.accountOwner}</dd></div>
+                    <div><dt>{p.summaryAccountOwner}</dt><dd>{directQr.accountOwner}</dd></div>
                   )}
                   <div>
-                    <dt>Nội dung CK</dt>
+                    <dt>{p.summaryTransferContent}</dt>
                     <dd className={styles.copyCell}>
                       <span className={styles.orderCode}>{directQr.transferContent}</span>
                       <button
                         type="button"
                         className={styles.copyBtn}
-                        aria-label="Sao chép nội dung chuyển khoản"
+                        aria-label={p.copyContentAria}
                         onClick={() => void copyText("content", directQr.transferContent)}
                       >
                         {copiedKey === "content" ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
-                        <span>{copiedKey === "content" ? "Đã chép" : "Chép"}</span>
+                        <span>{copiedKey === "content" ? p.copied : p.copy}</span>
                       </button>
                     </dd>
                   </div>
                 </>
               ) : (
                 <>
-                  <div><dt>Phương thức</dt><dd>Quét QR ngân hàng</dd></div>
-                  {paymentOrder?.orderCode && <div><dt>Mã đơn</dt><dd className={styles.orderCode}>{paymentOrder.orderCode}</dd></div>}
+                  <div><dt>{p.summaryMethod}</dt><dd>{p.summaryMethodQr}</dd></div>
+                  {paymentOrder?.orderCode && <div><dt>{p.summaryOrderId}</dt><dd className={styles.orderCode}>{paymentOrder.orderCode}</dd></div>}
                 </>
               )}
-              <div><dt>{isPolar ? "Status" : "Trạng thái"}</dt><dd><span className={statusClass}>{statusText}</span></dd></div>
+              <div><dt>{p.summaryStatus}</dt><dd><span className={statusClass}>{statusText}</span></dd></div>
             </dl>
           </div>
 
@@ -568,7 +623,7 @@ export default function CoinPricing() {
                 onClick={() => setCheckoutOpen(false)}
               >
                 <CheckCircle2 size={18} aria-hidden="true" />
-                <span>{isPolar ? `Added ${selectedPackage.coins.toLocaleString("en-US")} coins · Close` : `Đã cộng ${selectedPackage.coins.toLocaleString("en-US")} coins · Đóng`}</span>
+                <span>{p.actionPaidClose(selectedCoinsText)}</span>
               </button>
             ) : isPolar && polarCheckout && paymentState === "ready" && !isExpired ? (
               <>
@@ -579,7 +634,7 @@ export default function CoinPricing() {
                   onClick={() => void openPolarEmbeddedCheckout(polarCheckout.url, paymentOrder?.id)}
                 >
                   <CreditCard size={16} aria-hidden="true" />
-                  <span>{embedOpening ? "Opening checkout…" : `Pay ${selectedPrice} now`}</span>
+                  <span>{embedOpening ? p.actionOpeningCheckout : p.actionPayNow(selectedPrice)}</span>
                 </button>
                 <button
                   type="button"
@@ -588,7 +643,7 @@ export default function CoinPricing() {
                   disabled={checkingNow}
                 >
                   <RefreshCw size={15} className={checkingNow ? styles.spin : undefined} aria-hidden="true" />
-                  <span>{checkingNow ? "Checking…" : "Check status"}</span>
+                  <span>{checkingNow ? p.actionChecking : p.actionCheckStatus}</span>
                 </button>
                 <a
                   href={polarCheckout.url}
@@ -596,7 +651,7 @@ export default function CoinPricing() {
                   rel="noopener noreferrer"
                   className={styles.fallbackLink}
                 >
-                  <span>Open in new tab</span>
+                  <span>{p.actionOpenNewTab}</span>
                   <ExternalLink size={13} aria-hidden="true" />
                 </a>
               </>
@@ -608,7 +663,7 @@ export default function CoinPricing() {
                   className={styles.secondaryButton}
                 >
                   <Download size={16} aria-hidden="true" />
-                  <span>Tải ảnh QR</span>
+                  <span>{p.actionDownloadQr}</span>
                 </a>
                 <button
                   type="button"
@@ -617,7 +672,7 @@ export default function CoinPricing() {
                   disabled={checkingNow}
                 >
                   <RefreshCw size={16} className={checkingNow ? styles.spin : undefined} aria-hidden="true" />
-                  <span>{checkingNow ? "Đang kiểm tra…" : "Tôi đã chuyển khoản"}</span>
+                  <span>{checkingNow ? p.actionChecking : p.actionTransferred}</span>
                 </button>
               </>
             ) : (
@@ -628,14 +683,14 @@ export default function CoinPricing() {
                 disabled={paymentState === "loading"}
               >
                 {paymentState === "loading"
-                  ? (isPolar ? "Preparing checkout…" : "Đang tạo mã QR…")
+                  ? (isPolar ? p.actionPreparingCheckout : p.qrCreating)
                   : isExpired
-                    ? (isPolar ? "Create new checkout" : "Tạo mã QR mới")
+                    ? (isPolar ? p.actionNewCheckout : p.actionNewQr)
                     : checkout && paymentState === "ready"
-                      ? "Mở QR thanh toán"
+                      ? p.actionOpenQr
                       : user
-                        ? (isPolar ? `Continue to Polar (${selectedPrice})` : "Tạo mã QR thanh toán")
-                        : (isPolar ? "Sign in to buy coins" : "Đăng nhập để nạp coin")}
+                        ? (isPolar ? p.actionContinuePolar(selectedPrice) : p.actionCreateQr)
+                        : p.actionSignInToBuy}
               </button>
             )}
             {paymentState === "ready" && checkout && (
@@ -654,17 +709,59 @@ export default function CoinPricing() {
             )}
           </div>
 
+          {!isPolar && paymentOrder && (
+            <details className={styles.receiptBox}>
+              <summary>{p.receiptSummary}</summary>
+              <div className={styles.receiptGrid}>
+                <input
+                  type="text"
+                  placeholder={p.receiptBuyerPlaceholder}
+                  value={receiptForm.buyerName}
+                  onChange={(e) => { setReceiptForm((prev) => ({ ...prev, buyerName: e.target.value })); setReceiptFeedback(null); }}
+                />
+                <input
+                  type="text"
+                  placeholder={p.receiptTaxPlaceholder}
+                  value={receiptForm.taxCode}
+                  onChange={(e) => { setReceiptForm((prev) => ({ ...prev, taxCode: e.target.value })); setReceiptFeedback(null); }}
+                />
+                <input
+                  type="email"
+                  placeholder={p.receiptEmailPlaceholder}
+                  value={receiptForm.email}
+                  onChange={(e) => { setReceiptForm((prev) => ({ ...prev, email: e.target.value })); setReceiptFeedback(null); }}
+                />
+                <input
+                  type="text"
+                  placeholder={p.receiptAddressPlaceholder}
+                  value={receiptForm.address}
+                  onChange={(e) => { setReceiptForm((prev) => ({ ...prev, address: e.target.value })); setReceiptFeedback(null); }}
+                />
+              </div>
+              <div className={styles.receiptActions}>
+                <span className={receiptFeedback ? (receiptFeedback.ok ? styles.receiptStatus : styles.receiptError) : styles.marketCurrency}>
+                  {receiptFeedback ? receiptFeedback.text : p.receiptHint}
+                </span>
+                <button
+                  type="button"
+                  className={styles.receiptSaveBtn}
+                  disabled={receiptSaving}
+                  onClick={() => void saveReceiptDetails()}
+                >
+                  {receiptSaving ? p.receiptSaving : p.receiptSave}
+                </button>
+              </div>
+            </details>
+          )}
+
           <div className={styles.notice}>
-            <strong>{isPolar ? "Payment policy" : "Chính sách giao dịch"}</strong>
-            <p>
-              {isPolar
-                ? "Coins are internal studio credits, non-transferable and verified automatically via signed Polar webhooks. Taxes (VAT/Sales Tax) are handled by Polar as Merchant of Record."
-                : "Coin là credit nội bộ, không quy đổi tiền mặt, không chuyển nhượng. Vui lòng giữ nguyên số tiền và nội dung chuyển khoản để hệ thống cộng coin tự động."}
-            </p>
+            <strong>{p.policyHeading}</strong>
+            <p>{isPolar ? p.policyPolar : p.policySepay}</p>
             <div>
-              <Link href="/legal/terms">{isPolar ? "Terms" : "Điều khoản"}</Link>
-              <Link href="/legal/refund">{isPolar ? "Refunds" : "Hoàn tiền"}</Link>
-              <Link href="/legal/privacy">{isPolar ? "Privacy" : "Bảo mật"}</Link>
+              <Link href={`/legal/terms?lang=${locale}`}>{p.linkTerms}</Link>
+              <Link href={`/legal/refund?lang=${locale}`}>{p.linkRefund}</Link>
+              <Link href={`/legal/privacy?lang=${locale}`}>{p.linkPrivacy}</Link>
+              <Link href={`/legal/complaints?lang=${locale}`}>{p.linkComplaints}</Link>
             </div>
           </div>
         </section>
@@ -677,44 +774,54 @@ export default function CoinPricing() {
     <article className={`home-card ${styles.card}`} aria-labelledby="coin-pricing-title">
       <div className={styles.headingRow}>
         <div className={styles.titleBlock}>
-          <h2 id="coin-pricing-title">Coin packages</h2>
-          <p>10 coins = 1 standard 2K render · Choose your region.</p>
+          <h2 id="coin-pricing-title">{p.title}</h2>
+          <p>{regionId === "international" ? p.subtitleInternational : p.subtitleVietnam}</p>
         </div>
         <Image className={styles.coinArt} src="/branding/LLCoin.svg" alt="" width={56} height={56} />
       </div>
 
-      <div className={styles.markets} role="group" aria-label="Pricing region">
-        {regions.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            aria-pressed={regionId === item.id}
-            onClick={() => {
-              setRegionId(item.id);
-              const nextPacks = getCoinPackagesByRegion(packages, item.id);
-              const preferred = nextPacks.find((p) => p.badge === "popular") ?? nextPacks[0];
-              if (preferred) setSelectedPackId(preferred.id);
-            }}
-          >
-            <span className={styles.marketLabel}>{item.label}</span>
-            <small className={styles.marketCurrency}>
-              {item.id === "international" && !intlReady ? "USD" : item.currency}
-            </small>
-          </button>
-        ))}
-      </div>
+      {allowRegionSwitch ? (
+        <div className={styles.markets} role="group" aria-label={p.regionSwitchAria}>
+          {regions.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              aria-pressed={regionId === item.id}
+              onClick={() => {
+                setRegionId(item.id);
+                const nextPacks = getCoinPackagesByRegion(packages, item.id);
+                const preferred = nextPacks.find((pack) => pack.badge === "popular") ?? nextPacks[0];
+                if (preferred) setSelectedPackId(preferred.id);
+              }}
+            >
+              <span className={styles.marketLabel}>
+                {item.id === "international" ? p.regionInternational : p.regionVietnam}
+              </span>
+              <small className={styles.marketCurrency}>
+                {item.id === "international" && !intlReady ? "USD" : item.currency}
+              </small>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className={styles.marketSingle} aria-label={p.activeCurrencyAria}>
+          <span>{regionId === "international" ? p.singleInternationalTitle : p.singleVietnamTitle}</span>
+          <small>{regionId === "international" ? p.singleInternationalSub : p.singleVietnamSub}</small>
+        </div>
+      )}
 
-      <div className={styles.packs} role="group" aria-label={`${region.label} coin packages`}>
+      <div className={styles.packs} role="group" aria-label={p.packsAria(regionLabel)}>
         {visiblePackages.map((item) => {
           const price = prices.format(regionId === "vietnam" ? item.vnd : item.usd);
+          const coinsText = item.coins.toLocaleString(numLocale);
           const isSelected = selectedPackage.id === item.id;
           const badgeLabel = item.badge === "popular"
-            ? `Popular · +${item.bonusPct ?? 10}%`
+            ? p.badgePopular(item.bonusPct ?? 10)
             : item.badge === "best"
-              ? `Best · +${item.bonusPct ?? 20}%`
+              ? p.badgeBest(item.bonusPct ?? 20)
               : item.bonusPct
-                ? `+${item.bonusPct}% bonus`
-                : item.tier ?? "Starter";
+                ? p.badgeBonus(item.bonusPct)
+                : p.badgeStarter;
           const badgeTone = item.badge === "popular"
             ? styles.badgePopular
             : item.badge === "best"
@@ -728,7 +835,7 @@ export default function CoinPricing() {
               className={`${styles.pack} ${item.badge === "popular" ? styles.packPopular : ""}`}
               type="button"
               aria-pressed={isSelected}
-              aria-label={`${item.coins.toLocaleString("en-US")} coins${item.bonusPct ? `, +${item.bonusPct}% bonus` : ""}, ${price}`}
+              aria-label={p.packAria(coinsText, item.bonusPct ?? 0, price)}
               onClick={() => {
                 setSelectedPackId(item.id);
                 setCheckoutOpen(true);
@@ -749,7 +856,7 @@ export default function CoinPricing() {
               <span className={`${styles.packBadge} ${badgeTone}`}>{badgeLabel}</span>
               <span className={styles.coinRow}>
                 <Image src="/branding/LLCoin.svg" alt="" width={18} height={18} />
-                <strong>{item.coins.toLocaleString("en-US")}</strong>
+                <strong>{coinsText}</strong>
               </span>
               <strong className={styles.price}>{price}</strong>
             </button>

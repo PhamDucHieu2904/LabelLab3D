@@ -1,7 +1,8 @@
 "use client";
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, Download, Pencil, RefreshCw, Search, SlidersHorizontal, Wallet, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Pencil, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Wallet, X } from "lucide-react";
 import { downloadCsv, formatDate, formatMoney, formatNumber } from "@/lib/admin/commerce";
+import { vietnamYearOf, type AnnualTaxSummary } from "@/lib/legal/policies";
 import { CoinValue } from "./OverviewPanel";
 import s from "./AdminWorkspace.module.css";
 
@@ -20,6 +21,10 @@ type DbOrder = {
   expiresAt: string;
   createdAt: string;
   updatedAt: string;
+  receiptBuyerName?: string | null;
+  receiptTaxCode?: string | null;
+  receiptAddress?: string | null;
+  receiptEmail?: string | null;
 };
 
 type DbLedger = {
@@ -120,6 +125,7 @@ export default function CommercePanel() {
   const [ledgerData, setLedgerData] = useState<DbLedger[]>([]);
   const [users, setUsers] = useState<DbUserLite[]>([]);
   const [packs, setPacks] = useState<LivePack[]>([]);
+  const [taxSummary, setTaxSummary] = useState<AnnualTaxSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -138,11 +144,18 @@ export default function CommercePanel() {
     try {
       const res = await fetch("/api/admin/commerce", { credentials: "same-origin", cache: "no-store" });
       if (!res.ok) throw new Error("Không thể tải dữ liệu giao dịch từ D1.");
-      const payload = await res.json() as { orders?: DbOrder[]; ledger?: DbLedger[]; users?: DbUserLite[]; packs?: LivePack[] };
+      const payload = await res.json() as {
+        orders?: DbOrder[];
+        ledger?: DbLedger[];
+        users?: DbUserLite[];
+        packs?: LivePack[];
+        taxSummary?: AnnualTaxSummary;
+      };
       setOrdersData(payload.orders ?? []);
       setLedgerData(payload.ledger ?? []);
       setUsers(payload.users ?? []);
       setPacks(payload.packs ?? []);
+      setTaxSummary(payload.taxSummary ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không thể tải dữ liệu.");
     } finally {
@@ -272,16 +285,60 @@ export default function CommercePanel() {
     void postAction({ action: "save_packs", packs: updatedPacks }, "Đã lưu bảng giá lên D1 — đồng bộ ngay với trang chủ!");
   }
 
+  function exportTaxReconciliationCsv() {
+    const year = taxSummary?.year ?? vietnamYearOf(new Date().toISOString());
+    const rate = taxSummary?.usdToVndRate ?? 25500;
+    const paidYearOrders = ordersData.filter((o) => o.status === "paid" && vietnamYearOf(o.createdAt) === year);
+    downloadCsv(
+      `hypermockup-doi-soat-thue-${year}.csv`,
+      [
+        "Thời gian (UTC+7)",
+        "Mã đơn hàng",
+        "Kênh thanh toán",
+        "Mã giao dịch cổng",
+        "Tiền tệ",
+        "Số tiền gốc",
+        `Quy đổi VNĐ ước tính (${rate} đ/USD)`,
+        "Số Coin",
+        "Tài khoản mua",
+        "Tên/Đơn vị biên nhận",
+        "MST người mua",
+        "Địa chỉ biên nhận",
+        "Email biên nhận",
+      ],
+      paidYearOrders.map((o) => {
+        const isVnd = o.currency === "VND";
+        const rawAmount = isVnd ? o.amount : (o.amount / 100).toFixed(2);
+        const vndEstimated = isVnd ? o.amount : Math.round((o.amount / 100) * rate);
+        return [
+          formatDate(o.createdAt),
+          o.orderCode,
+          o.provider === "polar" ? "Polar.sh (Quốc tế)" : "SePay VietQR (Việt Nam)",
+          o.providerOrderId ?? "",
+          o.currency,
+          rawAmount,
+          vndEstimated,
+          o.coins,
+          o.userEmail ?? o.userId,
+          o.receiptBuyerName ?? "",
+          o.receiptTaxCode ?? "",
+          o.receiptAddress ?? "",
+          o.receiptEmail ?? "",
+        ];
+      }),
+    );
+  }
+
   function exportData() {
     if (tab === "ledger") {
       downloadCsv(
-        "labellab-so-coin.csv",
+        "hypermockup-so-coin.csv",
         ["Mã", "Người dùng", "Email", "Thời gian", "Biến động", "Loại", "Tham chiếu", "Số dư sau GD"],
         ledger.map((e) => [e.id, e.userName ?? e.userId, e.userEmail ?? "", formatDate(e.createdAt), e.amount, e.kind, e.reference, e.balance]),
       );
     } else {
       downloadCsv(
-        "labellab-giao-dich.csv",
+        "hypermockup-giao-dich.csv",
         ["Mã đơn", "Người dùng", "Email", "Thời gian", "Tiền tệ", "Số tiền", "Coin", "Trạng thái", "Mã GD ngân hàng"],
         orders.map((o) => [o.orderCode, o.userName ?? o.userId, o.userEmail ?? "", formatDate(o.createdAt), o.currency, o.currency === "VND" ? o.amount : (o.amount / 100).toFixed(2), o.coins, ORDER_STATUS_LABELS[o.status] ?? o.status, o.providerOrderId ?? ""]),
       );
@@ -336,28 +393,124 @@ export default function CommercePanel() {
           </div>
 
           {tab === "orders" ? (
-            <div className={s.stats}>
-              <article className={s.stat}>
-                <div className={s.statTop}>Doanh thu VNĐ<Wallet size={17} /></div>
-                <div className={s.statValue}>{formatMoney(revenueVn, "vn")}</div>
-                <span className={s.subtle}>SePay VietQR đã xác nhận</span>
-              </article>
-              <article className={s.stat}>
-                <div className={s.statTop}>Doanh thu USD<Wallet size={17} /></div>
-                <div className={s.statValue}>{formatMoney(revenueUsd, "international")}</div>
-                <span className={s.subtle}>Cổng quốc tế</span>
-              </article>
-              <article className={s.stat}>
-                <div className={s.statTop}>Coin đã nạp</div>
-                <div className={s.statValue}>{formatNumber(paidCoins)}</div>
-                <span className={s.subtle}>{paidOrdersCount} đơn thành công</span>
-              </article>
-              <article className={s.stat}>
-                <div className={s.statTop}>Đơn đang chờ</div>
-                <div className={s.statValue}>{orders.filter((o) => o.status === "pending").length}</div>
-                <span className={s.subtle}>{orders.length} đơn trong bộ lọc</span>
-              </article>
-            </div>
+            <>
+              <div className={s.stats}>
+                <article className={s.stat}>
+                  <div className={s.statTop}>Doanh thu VNĐ<Wallet size={17} /></div>
+                  <div className={s.statValue}>{formatMoney(revenueVn, "vn")}</div>
+                  <span className={s.subtle}>SePay VietQR đã xác nhận</span>
+                </article>
+                <article className={s.stat}>
+                  <div className={s.statTop}>Doanh thu USD<Wallet size={17} /></div>
+                  <div className={s.statValue}>{formatMoney(revenueUsd, "international")}</div>
+                  <span className={s.subtle}>Polar.sh quốc tế</span>
+                </article>
+                <article className={s.stat}>
+                  <div className={s.statTop}>Coin đã nạp</div>
+                  <div className={s.statValue}>{formatNumber(paidCoins)}</div>
+                  <span className={s.subtle}>{paidOrdersCount} đơn thành công</span>
+                </article>
+                <article className={s.stat}>
+                  <div className={s.statTop}>Đơn đang chờ</div>
+                  <div className={s.statValue}>{orders.filter((o) => o.status === "pending").length}</div>
+                  <span className={s.subtle}>{orders.length} đơn trong bộ lọc</span>
+                </article>
+              </div>
+
+              {taxSummary && (
+                <section
+                  className={s.panel}
+                  style={{
+                    marginBottom: 18,
+                    padding: "16px 20px",
+                    borderColor:
+                      taxSummary.level === "exceeded"
+                        ? "#f04438"
+                        : taxSummary.level === "warning"
+                          ? "#f79009"
+                          : undefined,
+                  }}
+                  aria-label="Theo dõi tự động ngưỡng miễn thuế 1 tỷ đồng mỗi năm"
+                >
+                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <ShieldCheck
+                          size={17}
+                          style={{
+                            color:
+                              taxSummary.level === "exceeded"
+                                ? "#b42318"
+                                : taxSummary.level === "warning"
+                                  ? "#b54708"
+                                  : "#067647",
+                          }}
+                          aria-hidden="true"
+                        />
+                        <strong>
+                          Theo dõi tự động ngưỡng miễn thuế năm {taxSummary.year} (1 tỷ đồng/năm · NĐ 141/2026/NĐ-CP)
+                        </strong>
+                        <span
+                          className={s.status}
+                          data-status={
+                            taxSummary.level === "exceeded"
+                              ? "failed"
+                              : taxSummary.level === "warning"
+                                ? "pending"
+                                : "paid"
+                          }
+                        >
+                          {taxSummary.level === "exceeded"
+                            ? "Đã vượt 1 tỷ · Bắt buộc kê khai & HĐĐT"
+                            : taxSummary.level === "warning"
+                              ? "Sắp chạm ngưỡng 1 tỷ"
+                              : "Trong ngưỡng miễn thuế GTGT & TNCN"}
+                        </span>
+                      </div>
+                      <p className={s.subtle} style={{ margin: "6px 0 0", fontSize: 13 }}>
+                        Tổng ước tính năm {taxSummary.year}: <strong>{formatMoney(taxSummary.totalEstimatedVnd, "vn")}</strong> / 1.000.000.000 ₫ ({taxSummary.percentOfThreshold}%)
+                        {" · "}SePay: <strong>{formatMoney(taxSummary.sepayVnd, "vn")}</strong>
+                        {" + "}Polar.sh: <strong>{formatMoney(taxSummary.polarUsd, "international")}</strong> (~{formatMoney(taxSummary.polarVndEstimated, "vn")} ở tỷ giá {formatNumber(taxSummary.usdToVndRate)} đ/USD)
+                        {" · "}Còn lại trước mốc 1 tỷ: <strong>{formatMoney(taxSummary.remainingToThresholdVnd, "vn")}</strong>
+                      </p>
+                    </div>
+                    <button type="button" className={s.secondary} onClick={exportTaxReconciliationCsv}>
+                      <Download size={15} aria-hidden="true" />
+                      Xuất CSV đối soát thuế {taxSummary.year}
+                    </button>
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 12,
+                      height: 8,
+                      borderRadius: 999,
+                      background: "rgba(161, 46, 86, 0.12)",
+                      overflow: "hidden",
+                    }}
+                    role="progressbar"
+                    aria-valuenow={Math.min(100, taxSummary.percentOfThreshold)}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label="Tỷ lệ doanh thu năm so với ngưỡng 1 tỷ đồng"
+                  >
+                    <div
+                      style={{
+                        width: `${Math.min(100, Math.max(taxSummary.totalEstimatedVnd > 0 ? 1 : 0, taxSummary.percentOfThreshold))}%`,
+                        height: "100%",
+                        borderRadius: 999,
+                        background:
+                          taxSummary.level === "exceeded"
+                            ? "#d92d20"
+                            : taxSummary.level === "warning"
+                              ? "#f79009"
+                              : "#12b76a",
+                        transition: "width .25s ease",
+                      }}
+                    />
+                  </div>
+                </section>
+              )}
+            </>
           ) : (
             <div className={s.inline} style={{ marginBottom: 18 }}>
               <span className={s.subtle}>{ledger.length} biến động thực tế từ D1 · Tổng chênh lệch</span>
@@ -555,6 +708,14 @@ export default function CommercePanel() {
                 <div><dt>Số tiền</dt><dd>{formatMoney(modal.order.currency === "VND" ? modal.order.amount : modal.order.amount / 100, modal.order.currency === "VND" ? "vn" : "international")}</dd></div>
                 <div><dt>Coin</dt><dd><CoinValue value={modal.order.coins} /></dd></div>
                 <div><dt>Mã GD ngân hàng</dt><dd>{modal.order.providerOrderId || "—"}</dd></div>
+                {(modal.order.receiptBuyerName || modal.order.receiptTaxCode || modal.order.receiptEmail || modal.order.receiptAddress) && (
+                  <>
+                    <div><dt>Biên nhận · Tên/Đơn vị</dt><dd>{modal.order.receiptBuyerName || "—"}</dd></div>
+                    <div><dt>Biên nhận · MST</dt><dd>{modal.order.receiptTaxCode || "—"}</dd></div>
+                    <div><dt>Biên nhận · Email</dt><dd>{modal.order.receiptEmail || "—"}</dd></div>
+                    <div><dt>Biên nhận · Địa chỉ</dt><dd>{modal.order.receiptAddress || "—"}</dd></div>
+                  </>
+                )}
               </dl>
               <div className={s.formGrid} style={{ marginTop: 20 }}>
                 <label className={`${s.field} ${s.fullWidth}`}>Trạng thái

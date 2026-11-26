@@ -1,9 +1,11 @@
 import { requireAdmin } from "@/lib/server/admin";
+import { buildAntiCheatReport } from "@/lib/server/anticheat";
 import { nowIso, randomId } from "@/lib/server/db";
 import { readEmailConfig } from "@/lib/server/email";
 import { readGoogleOAuthConfig } from "@/lib/server/google-oauth";
 import { assertSameOrigin, errorResponse, json } from "@/lib/server/http";
 import { readPolarConfig } from "@/lib/server/polar";
+import { currentVnDay, getWorkerRequestReport } from "@/lib/server/request-meter";
 import { readSepayConfig, readSepayQrConfig } from "@/lib/server/sepay";
 import { ensureSiteTables, getLiveSiteSettings, sanitizeSiteSettings, writeConfigJson } from "@/lib/server/site-config";
 
@@ -20,8 +22,10 @@ export async function GET(request: Request) {
     const { env } = await requireAdmin();
     const db = await ensureSiteTables(env);
     const origin = new URL(request.url).origin;
+    const today = currentVnDay();
+    const monthStart = `${today.slice(0, 7)}-01`;
 
-    const [auditRows, lockRows, rejectedPayRows, settings] = await Promise.all([
+    const [auditRows, lockRows, rejectedPayRows, settings, antiCheat, workerQuota] = await Promise.all([
       db.prepare(`SELECT a.id,a.action,a.target_type AS targetType,a.target_id AS targetId,a.metadata_json AS metadataJson,a.created_at AS createdAt,
         u.name AS actorName,u.email AS actorEmail
         FROM audit_events a LEFT JOIN users u ON u.id=a.actor_user_id
@@ -35,6 +39,8 @@ export async function GET(request: Request) {
         id: string; provider: string; providerEventId: string; status: string; createdAt: string;
       }>(),
       getLiveSiteSettings(env),
+      buildAntiCheatReport(env, 300).catch(() => null),
+      getWorkerRequestReport(env, { fromDay: monthStart, toDay: today, today }).catch(() => null),
     ]);
 
     const qrCfg = readSepayQrConfig(env);
@@ -48,7 +54,7 @@ export async function GET(request: Request) {
         id: "d1",
         name: "Cơ sở dữ liệu Cloudflare D1",
         connected: Boolean(env.DB),
-        detail: "labellab3d-production · Đồng bộ trực tiếp",
+        detail: "HyperMockup D1 · Đồng bộ trực tiếp",
       },
       {
         id: "sepay-vn",
@@ -98,6 +104,8 @@ export async function GET(request: Request) {
         activeLocks: (lockRows.results ?? []).filter((r) => r.lockedUntil && Date.parse(r.lockedUntil) > Date.now()),
         rejectedPaymentEvents: rejectedPayRows.results ?? [],
       },
+      antiCheat,
+      workerQuota,
       integrations,
       settings,
     });

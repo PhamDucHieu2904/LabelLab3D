@@ -1,0 +1,77 @@
+.banner {
+  position: fixed;
+  right: 18px;
+  bottom: 54px;
+  z-index: 180;
+  width: min(410px, calc(100vw - 28px));
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 18px;
+  background: rgba(255, 249, 251, 0.96);
+  color: #421f31;
+  box-shadow: 0 18px 50px rgba(72, 16, 40, 0.24);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.title {
+  display: block;
+  margin-bottom: 5px;
+  color: #361726;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.copy {
+  margin: 0 0 12px;
+  color: #6b4557;
+}
+
+.copy a {
+  color: #a12e56;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.essentialBtn,
+.acceptBtn {
+  min-height: 36px;
+  padding: 6px 13px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.essentialBtn {
+  border: 1px solid rgba(161, 46, 86, 0.24);
+  background: #fff;
+  color: #7c2449;
+}
+.essentialBtn:hover { background: #fdf1f5; }
+
+.acceptBtn {
+  border: 0;
+  background: #b52b5b;
+  color: #fff;
+}
+.acceptBtn:hover { background: #962049; }
+
+@media (max-width: 560px) {
+  .banner {
+    left: 14px;
+    right: 14px;
+    bottom: 14px;
+    width: auto;
+  }
+}

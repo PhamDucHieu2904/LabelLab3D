@@ -7,6 +7,7 @@ import {
   type QualityPreference,
   type QualityRuntimeReport,
 } from "@/lib/mockup/quality-tier";
+import { useLocale } from "./LocaleProvider";
 import styles from "./ViewportDisplayRail.module.css";
 
 interface Props {
@@ -43,6 +44,8 @@ export default function ViewportDisplayRail({
   onToggleStyle,
   onChangeQuality,
 }: Props) {
+  const { t } = useLocale();
+  const vp = t.studio.viewport;
   const [qualityOpen, setQualityOpen] = useState(false);
   const qualityWrapRef = useRef<HTMLDivElement>(null);
 
@@ -95,7 +98,7 @@ export default function ViewportDisplayRail({
           className={styles.railBtn}
           aria-pressed={!studio}
           aria-label="Scene 1"
-          title="Scene 1 · Ambient showcase"
+          title={vp.scene1Title}
           disabled={disabled}
           onClick={() => onSwitchSceneMode("website")}
         >
@@ -107,7 +110,7 @@ export default function ViewportDisplayRail({
           className={styles.railBtn}
           aria-pressed={studio}
           aria-label="Scene 2"
-          title="Scene 2 · White studio floor"
+          title={vp.scene2Title}
           disabled={disabled}
           onClick={() => onSwitchSceneMode("studio")}
         >
@@ -125,12 +128,8 @@ export default function ViewportDisplayRail({
             className={styles.railBtn}
             role="switch"
             aria-checked={whiteStyle}
-            aria-label="White preview style"
-            title={
-              whiteStyle
-                ? "Style: White · Click to switch to Pink"
-                : "Style: Pink · Click to switch to White"
-            }
+            aria-label={vp.styleWhite}
+            title={whiteStyle ? vp.styleToggleToPink : vp.styleToggleToWhite}
             disabled={disabled}
             onClick={onToggleStyle}
           >
@@ -138,7 +137,7 @@ export default function ViewportDisplayRail({
               className={`${styles.styleDot} ${whiteStyle ? styles.styleDotWhite : styles.styleDotPink}`}
               aria-hidden="true"
             />
-            <span className={styles.microLabel}>{whiteStyle ? "White" : "Pink"}</span>
+            <span className={styles.microLabel}>{whiteStyle ? vp.styleWhite : vp.stylePink}</span>
           </button>
         </>
       )}
@@ -152,7 +151,7 @@ export default function ViewportDisplayRail({
           className={`${styles.railBtn} ${styles.qualityBtn}`}
           aria-haspopup="menu"
           aria-expanded={qualityOpen}
-          aria-label={`3D preview graphics quality (${qualityPreference})`}
+          aria-label={vp.graphicsQuality}
           title={qualityTooltip}
           disabled={disabled}
           onClick={() => setQualityOpen((prev) => !prev)}
@@ -166,10 +165,10 @@ export default function ViewportDisplayRail({
             className={styles.qualityPopover}
             data-tone={visualTone}
             role="menu"
-            aria-label="3D preview graphics quality"
+            aria-label={vp.graphicsQuality}
           >
             <div className={styles.popoverHeader}>
-              <strong>Graphics quality</strong>
+              <strong>{vp.graphicsQuality}</strong>
               {qualityReport && (
                 <span className={styles.popoverBadge}>
                   {qualityReport.effectiveTier.toUpperCase()} · {qualityReport.idleMsaa}× MSAA
@@ -180,9 +179,25 @@ export default function ViewportDisplayRail({
               {QUALITY_PREFERENCE_OPTIONS.map((opt) => {
                 const selected = qualityPreference === opt.id;
                 const label =
-                  opt.id === "auto" && effectiveTierLabel
-                    ? `Auto (${effectiveTierLabel})`
-                    : opt.shortLabel;
+                  opt.id === "auto"
+                    ? vp.qualityAuto(effectiveTierLabel ?? undefined)
+                    : opt.id === "low"
+                      ? vp.qualityLow
+                      : opt.id === "medium"
+                        ? vp.qualityMedium
+                        : opt.id === "high"
+                          ? vp.qualityHigh
+                          : vp.qualityUltra;
+                const description =
+                  opt.id === "auto"
+                    ? vp.qualityDescAuto
+                    : opt.id === "low"
+                      ? vp.qualityDescLow
+                      : opt.id === "medium"
+                        ? vp.qualityDescMedium
+                        : opt.id === "high"
+                          ? vp.qualityDescHigh
+                          : vp.qualityDescUltra;
                 return (
                   <button
                     key={opt.id}
@@ -197,7 +212,7 @@ export default function ViewportDisplayRail({
                   >
                     <span className={styles.optionText}>
                       <strong>{label}</strong>
-                      <small>{opt.description}</small>
+                      <small>{description}</small>
                     </span>
                     <span className={styles.optionCheck} aria-hidden="true">
                       {selected && <Check size={14} />}

@@ -1,7 +1,16 @@
+import { computeAnnualTaxSummary, vietnamYearOf, type AnnualTaxOrderRow } from "@/lib/legal/policies";
 import { requireAdmin } from "@/lib/server/admin";
 import { nowIso, randomId } from "@/lib/server/db";
 import { assertSameOrigin, errorResponse, json } from "@/lib/server/http";
-import { defaultLiveCoinPackages, ensureSiteTables, getLiveCoinPackages, sanitizeCoinPackages, writeConfigJson } from "@/lib/server/site-config";
+import { ensureLegalTables } from "@/lib/server/legal";
+import {
+  defaultLiveCoinPackages,
+  ensureSiteTables,
+  getLiveCoinPackages,
+  getLiveSiteSettings,
+  sanitizeCoinPackages,
+  writeConfigJson,
+} from "@/lib/server/site-config";
 import { appendLedgerEntry } from "@/lib/server/wallet";
 
 export const runtime = "nodejs";
@@ -11,12 +20,22 @@ export async function GET() {
   try {
     const { env } = await requireAdmin();
     const db = await ensureSiteTables(env);
-    const [ordersRes, ledgerRes, usersRes, packs] = await Promise.all([
+    await ensureLegalTables(env);
+    const currentVnYear = vietnamYearOf(nowIso());
+    const yearStartIso = new Date(Date.UTC(currentVnYear, 0, 1) - 7 * 3_600_000).toISOString();
+
+    const [ordersRes, yearPaidRes, ledgerRes, usersRes, packs, settings] = await Promise.all([
       db.prepare(`SELECT po.id,po.order_code AS orderCode,po.user_id AS userId,u.name AS userName,u.email AS userEmail,
         po.provider,po.package_coins AS coins,po.amount_minor AS amount,po.currency,po.status,
-        po.provider_order_id AS providerOrderId,po.expires_at AS expiresAt,po.created_at AS createdAt,po.updated_at AS updatedAt
-        FROM payment_orders po LEFT JOIN users u ON u.id=po.user_id
+        po.provider_order_id AS providerOrderId,po.expires_at AS expiresAt,po.created_at AS createdAt,po.updated_at AS updatedAt,
+        r.buyer_name AS receiptBuyerName,r.tax_code AS receiptTaxCode,r.address AS receiptAddress,r.email AS receiptEmail
+        FROM payment_orders po
+        LEFT JOIN users u ON u.id=po.user_id
+        LEFT JOIN order_receipts r ON r.order_id=po.id
         ORDER BY po.created_at DESC LIMIT 500`).all(),
+      db.prepare(`SELECT currency,amount_minor AS amount,status,created_at AS createdAt
+        FROM payment_orders
+        WHERE status='paid' AND created_at>=?`).bind(yearStartIso).all<AnnualTaxOrderRow>(),
       db.prepare(`SELECT cl.id,cl.user_id AS userId,u.name AS userName,u.email AS userEmail,
         cl.amount,cl.kind,cl.reference,cl.balance,cl.created_at AS createdAt
         FROM coin_ledger cl LEFT JOIN users u ON u.id=cl.user_id
@@ -25,12 +44,20 @@ export async function GET() {
         FROM users u LEFT JOIN wallets w ON w.user_id=u.id
         ORDER BY u.created_at DESC LIMIT 500`).all(),
       getLiveCoinPackages(env),
+      getLiveSiteSettings(env),
     ]);
+
+    const taxSummary = computeAnnualTaxSummary(yearPaidRes.results ?? [], {
+      year: currentVnYear,
+      usdToVndRate: settings.usdToVndRate,
+    });
+
     return json({
       orders: ordersRes.results ?? [],
       ledger: ledgerRes.results ?? [],
       users: usersRes.results ?? [],
       packs,
+      taxSummary,
     });
   } catch (error) {
     return errorResponse(error);
@@ -75,20 +102,21 @@ export async function POST(request: Request) {
         throw new Error("INVALID_INPUT");
       }
       const order = await db.prepare(
-        "SELECT id,user_id AS userId,order_code AS orderCode,package_coins AS coins,amount_minor AS amount,currency,status FROM payment_orders WHERE id=?",
-      ).bind(orderId).first<{ id: string; userId: string; orderCode: string; coins: number; amount: number; currency: string; status: string }>();
+        "SELECT id,user_id AS userId,provider,order_code AS orderCode,package_coins AS coins,amount_minor AS amount,currency,status FROM payment_orders WHERE id=?",
+      ).bind(orderId).first<{ id: string; userId: string; provider: string; orderCode: string; coins: number; amount: number; currency: string; status: string }>();
       if (!order) throw new Error("NOT_FOUND");
       if (order.status === nextStatus) return json({ ok: true });
 
       const now = nowIso();
+      const providerKey = order.provider === "polar" ? "polar" : "sepay";
       if (nextStatus === "paid" && order.status !== "paid") {
         await appendLedgerEntry(env, {
           userId: order.userId,
           amount: order.coins,
           kind: "purchase",
-          reference: `sepay:${order.orderCode}`,
+          reference: `${providerKey}:${order.orderCode}`,
           idempotencyKey: `payment:${order.id}`,
-          metadata: { provider: "sepay", source: "admin_manual_confirm", actorId: actor.id, reason },
+          metadata: { provider: providerKey, source: "admin_manual_confirm", actorId: actor.id, reason },
         });
       } else if (nextStatus === "refunded" && order.status === "paid") {
         await appendLedgerEntry(env, {

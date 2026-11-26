@@ -19,6 +19,8 @@ export type CoinPackage = {
  */
 export const DEFAULT_RENDER_COIN_COST = 10;
 export const DEFAULT_DIELINE_COIN_COST = 20;
+export const DEFAULT_SHARE_COIN_COST = 20;
+export const DEFAULT_PROJECT_EXTEND_COIN_COST = 10;
 export const WELCOME_BONUS_COINS = 20;
 
 export const RENDER_COST_MULTIPLIERS = {

@@ -6,7 +6,7 @@ Ngày: 23/10/2026. Tài liệu mô tả code hiện tại; chưa thay thế các
 
 `npm install`, `npm run dev`, mở http://127.0.0.1:3005. `/` là trang editor-first kèm collection/materials; `/studio` ẩn nội dung marketing hỗ trợ. `npm run build` rồi `npm start` cho production local cùng port.
 
-Stack: Next.js App Router 16.2.6, React/React DOM 19.3.0, TypeScript, raw Three.js 0.180.0, Lucide. Không dùng Unity WebGL và không tích hợp backend thương mại ở phase này. Model/material runtime được chọn lọc từ project web mẫu, branding UI là Labellab.
+Stack: Next.js App Router 16.2.6, React/React DOM 19.3.0, TypeScript, raw Three.js 0.180.0, Lucide. Không dùng source 3D WebGL và không tích hợp backend thương mại ở phase này. Model/material runtime được chọn lọc từ project web mẫu, branding UI là Labellab.
 
 ## 2. Cấu trúc chính
 
@@ -25,11 +25,11 @@ Stack: Next.js App Router 16.2.6, React/React DOM 19.3.0, TypeScript, raw Three.
 
 ## 3. Hành vi và model
 
-Mặc định chọn `basil-strawberry`: chai 290 ml bản website tối ưu (`glass-290-basil-web.glb`), label dâu thật, cap vàng và liquid hồng. Các mẫu `can-mango`, `pet-aloe` được resolve từ snapshot catalog cùng appearance/label tương ứng; năm hình dáng lon còn lại dùng GLB web Vinut nguyên trạng với label trống để người dùng upload artwork. Runtime không nhận arbitrary remote model URL từ query.
+Mặc định chọn `basil-strawberry`: chai 290 ml bản website tối ưu (`glass-290-basil-web.glb`), label dâu thật, cap vàng và liquid hồng. Các mẫu `can-mango`, `pet-aloe` được resolve từ snapshot catalog cùng appearance/label tương ứng; năm hình dáng lon còn lại dùng GLB web HyperMockup nguyên trạng với label trống để người dùng upload artwork. Runtime không nhận arbitrary remote model URL từ query.
 
 Website mode dùng nền `#D53660` tùy chỉnh được, halo và grid động; motion `showcase` nghiêng/xoay mặc định. Idle dừng motion. Studio mode tắt motion, giữ upright, thêm sàn trắng và grid phối cảnh fade về trắng ở 20 m theo contract asset hiện tại; glass dimensionsMeters khoảng 0.18 m và appMetersPerSourceUnit 0.1; cần kiểm tra units cho mỗi model mới. Mỗi mode giữ cùng model/artwork/material settings.
 
-Model và material contract của ba display đã publish cùng sáu hình học lon giữ đúng phiên bản website của project VINUT. Basil dùng web GLB/web slots, không tự override sang High geometry/slots/optical buffers/HDRI; helper High còn trong source chỉ phục vụ tương thích, không phải mặc định. PNG capture sử dụng runtime rồi composite nền/halo và watermark ở canvas 2D. Chưa có bằng chứng trong tài liệu này rằng màu, refraction và alpha hoàn toàn tương đương Unity HDRP; cần visual QA đối chiếu trên nhiều GPU/trình duyệt.
+Model và material contract của ba display đã publish cùng sáu hình học lon giữ đúng phiên bản website của project HyperMockup. Basil dùng web GLB/web slots, không tự override sang High geometry/slots/optical buffers/HDRI; helper High còn trong source chỉ phục vụ tương thích, không phải mặc định. PNG capture sử dụng runtime rồi composite nền/halo và watermark ở canvas 2D. Chưa có bằng chứng trong tài liệu này rằng màu, refraction và alpha hoàn toàn tương đương source 3D HDRP; cần visual QA đối chiếu trên nhiều GPU/trình duyệt.
 
 Điều chỉnh có trong UI: màu nước/nắp, label offset -50..50%, label roughness/metalness 0..1, camera preset, zoom/reset, scene mode, màu nền, grid/highlight, frame/resolution. Upload thay baseColorMap của label theo UV có sẵn, chưa có crop editor hay kiểm tra print-safe area đầy đủ.
 
@@ -65,7 +65,7 @@ Browser QA cần kiểm tra: cả 3 display scenes và 6 hình học lon, mode r
 
 ## 8. Bản cuối và bằng chứng QA
 
-UI thực tế: Mona Sans cho UI/body, Changa One cho display heading và Luckiest Guy cho wordmark/accent; editor theo style Vinut cũ với canvas hồng toàn nền, rail công cụ dọc và một panel kính blur theo ngữ cảnh thay cho workbench ba khung. Rail gồm Models, Artwork, Scene, Materials và Export; nhãn scene hiển thị là Scene 1/Scene 2, motion vẫn Website/Idle. Camera front/three-quarter cùng zoom/reset; không có focal-length/speed control. Berry icon trong grid được người dùng cho phép. Studio matte pass riêng giữ white #FFFFFF, grid fade 12–20 m cùng fade ink ở 8% mép viewport; product/contact shadow không bị fade theo mép.
+UI thực tế: Mona Sans cho UI/body, Changa One cho display heading và Luckiest Guy cho wordmark/accent; editor theo style HyperMockup cũ với canvas hồng toàn nền, rail công cụ dọc và một panel kính blur theo ngữ cảnh thay cho workbench ba khung. Rail gồm Models, Artwork, Scene, Materials và Export; nhãn scene hiển thị là Scene 1/Scene 2, motion vẫn Website/Idle. Camera front/three-quarter cùng zoom/reset; không có focal-length/speed control. Berry icon trong grid được người dùng cho phép. Studio matte pass riêng giữ white #FFFFFF, grid fade 12–20 m cùng fade ink ở 8% mép viewport; product/contact shadow không bị fade theo mép.
 
 Đợt trước hiệu chỉnh Web-only, agent chính xác nhận Chromium CUA: 3 model, upload WEBP, color picker, refresh preferences, project restore, hai mode, tải Studio PNG 819×1024 và Website PNG 2048×1152. Website export gồm grid/halo/background, không gồm UI chrome. Các chiều rộng 375/390/768/1024/1440 không horizontal overflow. Ảnh chụp: `docs/screenshots/labellab-website.jpg` và `docs/screenshots/labellab-studio.jpg`.
 
@@ -73,9 +73,9 @@ Chưa xác nhận cross-browser/GPU matrix, WebGL context loss, screen reader, h
 
 ## 9. Hiệu chỉnh model về phiên bản website tối ưu
 
-Quy tắc cho mọi model bổ sung sau này: lấy model và material contract đã tối ưu từ project web VINUT (`D:\program project\3d display product website`), giữ cùng geometry/slots/UV/sampler/appearance. Không thay bằng bản Label Lab PC/Unity High. Đối chiếu asset nguồn và kiểm tra tải/render trên web trước khi đưa vào catalog.
+Quy tắc cho mọi model bổ sung sau này: lấy model và material contract đã tối ưu từ project web HyperMockup (`D:\program project\3d display product website`), giữ cùng geometry/slots/UV/sampler/appearance. Không thay bằng bản Label Lab PC/source 3D High. Đối chiếu asset nguồn và kiểm tra tải/render trên web trước khi đưa vào catalog.
 
-Theo yêu cầu người dùng, ba display mẫu và sáu hình học lon dùng nguyên asset/material contracts website đã publish hoặc export từ VINUT. Basil mặc định là `glass-290-basil-web.glb`; bỏ lựa chọn High nhầm ở prototype trước. Năm lon mới có label trống, poster riêng và được cho phép upload artwork. Bản web-only đã pass typecheck/lint/tests/verify-assets/build. Inventory Chromium chỉ có các GLB web và runtime decoder; không có High GLB/buffers/HDRI. Các kiểm tra upload/responsive rộng hơn ở mục 8 thuộc đợt trước hiệu chỉnh; chưa chạy lại toàn bộ ma trận. Chưa công bố FPS đo được hoặc bảo đảm hiệu năng trên mọi GPU. Chi tiết hash và poster nằm trong `docs/ASSET_MIGRATION.md`.
+Theo yêu cầu người dùng, ba display mẫu và sáu hình học lon dùng nguyên asset/material contracts website đã publish hoặc export từ HyperMockup. Basil mặc định là `glass-290-basil-web.glb`; bỏ lựa chọn High nhầm ở prototype trước. Năm lon mới có label trống, poster riêng và được cho phép upload artwork. Bản web-only đã pass typecheck/lint/tests/verify-assets/build. Inventory Chromium chỉ có các GLB web và runtime decoder; không có High GLB/buffers/HDRI. Các kiểm tra upload/responsive rộng hơn ở mục 8 thuộc đợt trước hiệu chỉnh; chưa chạy lại toàn bộ ma trận. Chưa công bố FPS đo được hoặc bảo đảm hiệu năng trên mọi GPU. Chi tiết hash và poster nằm trong `docs/ASSET_MIGRATION.md`.
 
 
 Ảnh bản web-only: docs/screenshots/labellab-basil-web.png và docs/screenshots/labellab-basil-web-export.png.
@@ -105,7 +105,7 @@ QA: lint, typecheck, 76 tests, verify-assets và production build pass. Chromium
 
 Model `pet-330-energy` dùng GLB Web do người dùng cung cấp, giữ geometry/UV nguồn và thêm root scale về mét. Library > PET có 330 ml Bottle, mặc định Energy drink / Orange màu #FFD600, nắp/nhãn trắng, optics tùy chỉnh. Properties > Liquid thêm Sparkling 0–100% trên model có volume được hiệu chỉnh; mặc định 51.6%, reset cùng nhóm Liquid. Giá trị được validate, lưu preferences/project và bộ nhớ riêng từng model. Energy có thêm preset Orange; tổng thư viện 121 màu.
 
-Đã đối chiếu prefab PET330, script hạt bọt, shader và preset tăng lực của Label Lab Unity. Bọt sphere instance giữ tỉ lệ cầu, có viền Fresnel và glint, màu theo nước; số lượng tối đa 300 theo đường cong gốc. Bọt nổi trong nước, chừa khoảng cách vách/mặt nước, loại vùng nhãn. Ràng buộc đường nổi từ tam giác nguồn tránh lọt ra ngoài cổ/vai lõm; không sử dụng các hạt trắng phẳng dán lên vỏ. Reduced motion giữ bọt tĩnh, xuất PNG đóng băng cùng trạng thái cho mọi tile. Web dùng đường nổi thẳng đứng và PET optics hiện có, không phải bản port pixel-identical của HDRP.
+Đã đối chiếu prefab PET330, script hạt bọt, shader và preset tăng lực của Label Lab source 3D. Bọt sphere instance giữ tỉ lệ cầu, có viền Fresnel và glint, màu theo nước; số lượng tối đa 300 theo đường cong gốc. Bọt nổi trong nước, chừa khoảng cách vách/mặt nước, loại vùng nhãn. Ràng buộc đường nổi từ tam giác nguồn tránh lọt ra ngoài cổ/vai lõm; không sử dụng các hạt trắng phẳng dán lên vỏ. Reduced motion giữ bọt tĩnh, xuất PNG đóng băng cùng trạng thái cho mọi tile. Web dùng đường nổi thẳng đứng và PET optics hiện có, không phải bản port pixel-identical của HDRP.
 
 QA: lint, typecheck, 79 tests, verify-assets và production build pass. Test dùng tam giác Water thật của GLB để kiểm tra containment, kích thước cầu, chuyển động nổi và 0%/100%; catalog test xác nhận buffer/hash/slots/UV và persistence. Chromium kiểm tra Sparkling 0% = 0 hạt, reset 51.6% = 135 hạt, 100% = 300 hạt, đổi model giữ giá trị 73%, upload/xóa artwork, xuất/tải PNG transparent 1024 px. Poster lấy từ ảnh export thực. Ảnh: `artifacts/screenshots/pet-330-energy-studio.jpg`. Chưa chạy ma trận GPU/cross-browser hoặc benchmark FPS.
 

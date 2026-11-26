@@ -25,7 +25,7 @@ export const NATA_PET_OPTICS = Object.freeze({
   jellyFadeEnd: 0.024,
 });
 
-/** Unity's artistic vivid scattering is exposure-independent; keep its hue without HDRP EV100 gain. */
+/** Artistic vivid scattering is exposure-independent; keep its hue without HDRP EV100 gain. */
 export function nataScatteringColor(juice: THREE.Color): THREE.Color {
   const hsl = juice.getHSL({ h: 0, s: 0, l: 0 });
   const saturation = hsl.s < 0.01 ? hsl.s : hsl.s + (1 - hsl.s) * NATA_PET_OPTICS.saturationBoost;

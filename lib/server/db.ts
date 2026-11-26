@@ -2,7 +2,17 @@ export interface D1Result<T = unknown> { success: boolean; meta?: Record<string,
 export interface D1Statement { bind(...values: unknown[]): D1Statement; first<T = unknown>(column?: string): Promise<T | null>; all<T = unknown>(): Promise<D1Result<T>>; run(): Promise<D1Result>; }
 export interface D1Database { prepare(query: string): D1Statement; batch(statements: D1Statement[]): Promise<D1Result[]>; }
 
-export type AppEnv = { DB?: D1Database; [key: string]: unknown };
+export interface R2ObjectBodyLike {
+  arrayBuffer(): Promise<ArrayBuffer>;
+  httpMetadata?: { contentType?: string };
+}
+export interface R2BucketLike {
+  get(key: string): Promise<R2ObjectBodyLike | null>;
+  put(key: string, value: ArrayBuffer | Uint8Array, options?: { httpMetadata?: { contentType?: string } }): Promise<unknown>;
+  delete(key: string | string[]): Promise<void>;
+}
+
+export type AppEnv = { DB?: D1Database; SHARE_BUCKET?: R2BucketLike; [key: string]: unknown };
 
 export function requireDb(env: AppEnv): D1Database {
   if (!env.DB) throw new Error("D1 database binding DB is required");

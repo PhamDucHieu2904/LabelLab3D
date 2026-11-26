@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { getProviders, SessionProvider, signIn } from "next-auth/react";
 import {
   ArrowLeft,
@@ -21,10 +22,14 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+import type { UiMessages } from "@/lib/i18n/messages";
+import { fetchAccountMeCached } from "@/lib/client/api-cache";
+import { useLocale } from "./LocaleProvider";
 import styles from "./AuthDialog.module.css";
 
 type AuthMode = "login" | "register" | "forgot";
-type Field = "name" | "email" | "code" | "password";
+type InputField = "name" | "email" | "code" | "password";
+type Field = InputField | "consent";
 type FieldErrors = Partial<Record<Field, string>>;
 type OpenAuth = (mode?: AuthMode) => void;
 export type AccountUser = {
@@ -39,52 +44,34 @@ type AccountContextValue = { user: AccountUser | null; refresh: () => Promise<vo
 const AuthContext = createContext<OpenAuth | null>(null);
 const AccountContext = createContext<AccountContextValue | null>(null);
 
-const copy = {
-  login: {
-    title: "Login",
-    description: "",
-    action: "Login",
-  },
-  register: {
-    title: "Create account",
-    description: "",
-    action: "Create account",
-  },
-  forgot: {
-    title: "Reset your password",
-    description: "Send a 6-digit code to your email, then set a new password.",
-    action: "Reset password",
-  },
-} as const;
-
-function mapServerError(code: string | undefined, mode: AuthMode): string {
+function mapServerError(code: string | undefined, mode: AuthMode, a: UiMessages["auth"]): string {
   switch (code) {
     case "INVALID_CREDENTIALS":
-      return "The email or password is incorrect.";
+      return a.errInvalidCredentials;
     case "EMAIL_EXISTS":
-      return "This email is already registered. Try logging in instead.";
+      return a.errEmailExists;
     case "INVALID_CODE":
-      return "The 6-digit verification code is incorrect.";
+      return a.errInvalidCode;
     case "CODE_EXPIRED":
-      return "The verification code has expired. Please request a new code.";
+      return a.errCodeExpired;
     case "CODE_TOO_MANY_ATTEMPTS":
-      return "Too many incorrect code attempts. Please request a new code.";
+      return a.errCodeTooMany;
     case "VERIFICATION_COOLDOWN":
-      return "Please wait a moment before requesting another code.";
+      return a.errCooldown;
     case "AUTH_RATE_LIMIT":
-      return "Too many attempts. Please wait a bit before trying again.";
+      return a.errRateLimit;
     case "EMAIL_NOT_CONFIGURED":
-      return "Email verification service is not configured on the server yet.";
+      return a.errEmailNotConfigured;
     case "EMAIL_SEND_FAILED":
-      return "Could not send the verification email. Please try again in a moment.";
+      return a.errEmailSendFailed;
     case "REGISTRATIONS_DISABLED":
-      return "New account registrations are currently paused.";
+      return a.errRegistrationsDisabled;
+    case "CONSENT_REQUIRED":
+      return a.errConsentRequired;
     case "INVALID_INPUT":
-      return mode === "login"
-        ? "Please check your email and password."
-        : "Use a valid email, 6-digit code, and a 12+ character password with letters and numbers.";
+      return mode === "login" ? a.errInvalidInputLogin : a.errInvalidInputOther;
     default:
-      return "Account access could not be completed. Please try again.";
+      return a.errGeneric;
   }
 }
 
@@ -101,6 +88,7 @@ export function useAccount(): AccountContextValue {
 }
 
 export function AuthDialogProvider({ children }: { children: ReactNode }) {
+  const { t } = useLocale();
   const [initialMode, setInitialMode] = useState<AuthMode | null>(null);
   const [user, setUser] = useState<AccountUser | null>(null);
   const [oauthError, setOauthError] = useState("");
@@ -120,9 +108,8 @@ export function AuthDialogProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const response = await fetch("/api/account/me", { credentials: "same-origin", cache: "no-store" });
-      const payload = await response.json() as { user?: AccountUser | null };
-      setUser(payload.user ?? null);
+      const payload = await fetchAccountMeCached<{ user?: AccountUser | null }>();
+      setUser(payload?.user ?? null);
     } catch { setUser(null); }
   }, []);
 
@@ -138,17 +125,17 @@ export function AuthDialogProvider({ children }: { children: ReactNode }) {
     const frame = requestAnimationFrame(() => {
       const url = new URL(window.location.href);
       if (!url.searchParams.has("error")) return;
-      setOauthError("Google sign-in could not be completed. Please try again.");
+      setOauthError(t.auth.googleOauthFailed);
       setInitialMode("login");
       // Consume the provider's error without displaying raw query text.
       url.searchParams.delete("error");
       window.history.replaceState(window.history.state, "", url);
     });
     return () => cancelAnimationFrame(frame);
-  }, []);
+  }, [t.auth.googleOauthFailed]);
 
   return (
-    <SessionProvider>
+    <SessionProvider refetchOnWindowFocus={false} refetchInterval={0}>
       <AuthContext.Provider value={openAuth}>
         <AccountContext.Provider value={{ user, refresh }}>
           {children}
@@ -164,6 +151,7 @@ function AuthDialog({ initialMode, initialGoogleError, onDismiss }: {
   initialGoogleError: string;
   onDismiss: () => void;
 }) {
+  const { t } = useLocale();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const backdropPress = useRef(false);
   const [mode, setMode] = useState(initialMode);
@@ -179,8 +167,6 @@ function AuthDialog({ initialMode, initialGoogleError, onDismiss }: {
     if (!dialog.open) dialog.showModal();
     dialog.querySelector<HTMLElement>(initialGoogleError ? '[role="alert"]' : "h2")?.focus({ preventScroll: true });
     return () => {
-      // Removing the element releases the native modal. Calling close() here
-      // would queue a close event during React Strict Mode's effect replay.
       document.documentElement.style.overflow = previousOverflow;
     };
   }, [initialGoogleError]);
@@ -242,7 +228,7 @@ function AuthDialog({ initialMode, initialGoogleError, onDismiss }: {
         <button
           type="button"
           className={styles.close}
-          aria-label="Close account dialog"
+          aria-label={t.auth.closeAria}
           onClick={() => dialogRef.current?.close()}
         >
           <X size={20} aria-hidden="true" />
@@ -274,7 +260,10 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
   onSwitchMode: (mode: AuthMode, email: string) => void;
   onAuthenticated: () => void;
 }) {
+  const { locale, t } = useLocale();
+  const a = t.auth;
   const [values, setValues] = useState({ name: "", email: initialEmail, code: "", password: "" });
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState("");
   const [googleError, setGoogleError] = useState(initialGoogleError);
@@ -291,7 +280,11 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
   const errorRef = useRef<HTMLDivElement>(null);
   const googleErrorRef = useRef<HTMLDivElement>(null);
   const fieldId = useId();
-  const content = copy[mode];
+  const content = mode === "login"
+    ? { title: a.loginTitle, description: "", action: a.loginAction }
+    : mode === "register"
+      ? { title: a.registerTitle, description: "", action: a.registerAction }
+      : { title: a.forgotTitle, description: a.forgotDescription, action: a.forgotAction };
 
   useEffect(() => {
     formActive.current = true;
@@ -308,6 +301,14 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
 
   const continueWithGoogle = async () => {
     if (googlePending.current) return;
+    if (mode === "register" && !consentAccepted) {
+      setErrors((current) => ({
+        ...current,
+        consent: a.consentRequiredError,
+      }));
+      formRef.current?.querySelector<HTMLInputElement>('[name="legalConsent"]')?.focus();
+      return;
+    }
     googlePending.current = true;
     setGoogleBusy(true);
     setSubmitError("");
@@ -317,15 +318,13 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
       const providers = await getProviders();
       if (!formActive.current) return;
       if (!providers?.google) {
-        setGoogleError("Google sign-in is not available yet. Please try again later.");
+        setGoogleError(a.googleUnavailable);
       } else {
-        // NextAuth starts the server-verified OAuth flow with CSRF, PKCE and
-        // state checks. Verified Google sign-ins also issue a D1 account session.
         await signIn("google", { callbackUrl: window.location.href });
         redirecting = true;
       }
     } catch {
-      setGoogleError("Unable to connect to Google sign-in. Please try again.");
+      setGoogleError(a.googleConnectError);
     } finally {
       googlePending.current = false;
       if (formActive.current && !redirecting) {
@@ -335,28 +334,28 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
     }
   };
 
-  const validate = (field: Field, value: string): string | undefined => {
-    if (field === "name" && !value.trim()) return "Enter your name.";
+  const validate = (field: InputField, value: string): string | undefined => {
+    if (field === "name" && !value.trim()) return a.valNameRequired;
     if (field === "email") {
-      if (!value.trim()) return "Enter your email address.";
+      if (!value.trim()) return a.valEmailRequired;
       if (!formRef.current?.querySelector<HTMLInputElement>('[name="email"]')?.validity.valid) {
-        return "Enter a valid email address.";
+        return a.valEmailInvalid;
       }
     }
     if (field === "code") {
-      if (!/^\d{6}$/.test(value.trim())) return "Enter the 6-digit code sent to your email.";
+      if (!/^\d{6}$/.test(value.trim())) return a.valCodeInvalid;
     }
     if (field === "password") {
-      if (!value) return "Enter your password.";
+      if (!value) return a.valPasswordRequired;
       if (mode !== "login") {
         if (value.length < 12 || !/[A-Za-z]/.test(value) || !/\d/.test(value)) {
-          return "Use at least 12 characters with letters and numbers.";
+          return a.valPasswordWeak;
         }
       }
     }
   };
 
-  const update = (field: Field, value: string) => {
+  const update = (field: InputField, value: string) => {
     setValues((current) => ({ ...current, [field]: value }));
     setSubmitError("");
     setGoogleError("");
@@ -392,7 +391,7 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
       setCooldown(Number(payload.cooldownSeconds) || 60);
     } catch (error) {
       if (!formActive.current) return;
-      setSubmitError(mapServerError(error instanceof Error ? error.message : undefined, mode));
+      setSubmitError(mapServerError(error instanceof Error ? error.message : undefined, mode, a));
       requestAnimationFrame(() => errorRef.current?.focus());
     } finally {
       if (formActive.current) setSendBusy(false);
@@ -403,7 +402,7 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
     event.preventDefault();
     if (googleBusy || submitBusy) return;
     setGoogleError("");
-    const fields: Field[] = mode === "register"
+    const fields: InputField[] = mode === "register"
       ? ["name", "email", "code", "password"]
       : mode === "forgot"
         ? ["email", "code", "password"]
@@ -413,10 +412,13 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
       const error = validate(field, values[field]);
       if (error) nextErrors[field] = error;
     }
+    if (mode === "register" && !consentAccepted) {
+      nextErrors.consent = a.consentRequiredError;
+    }
     setErrors(nextErrors);
-    const firstInvalid = fields.find((field) => nextErrors[field]);
+    const firstInvalid = [...fields, ...(mode === "register" ? (["consent"] as const) : [])].find((field) => nextErrors[field]);
     if (firstInvalid) {
-      const targetName = firstInvalid === "code" ? "verificationCode" : firstInvalid;
+      const targetName = firstInvalid === "code" ? "verificationCode" : firstInvalid === "consent" ? "legalConsent" : firstInvalid;
       formRef.current?.querySelector<HTMLInputElement>(`[name="${targetName}"]`)?.focus();
       return;
     }
@@ -430,7 +432,14 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
           ? "/api/account/password/reset"
           : "/api/account/login";
       const body = mode === "register"
-        ? { name: values.name.trim(), email: values.email.trim(), password: values.password, verificationCode: values.code.trim() }
+        ? {
+            name: values.name.trim(),
+            email: values.email.trim(),
+            password: values.password,
+            verificationCode: values.code.trim(),
+            acceptedTerms: consentAccepted,
+            acceptedPrivacy: consentAccepted,
+          }
         : mode === "forgot"
           ? { email: values.email.trim(), password: values.password, verificationCode: values.code.trim() }
           : { email: values.email.trim(), password: values.password };
@@ -444,7 +453,7 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
       if (!response.ok) throw new Error(payload.error || "REQUEST_FAILED");
       onAuthenticated();
     } catch (error) {
-      setSubmitError(mapServerError(error instanceof Error ? error.message : undefined, mode));
+      setSubmitError(mapServerError(error instanceof Error ? error.message : undefined, mode, a));
       requestAnimationFrame(() => errorRef.current?.focus());
     } finally {
       setSubmitBusy(false);
@@ -457,7 +466,7 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
         <h2 className="sr-only" ref={headingRef} tabIndex={-1} id={titleId}>{content.title}</h2>
       ) : (
         <div className={styles.intro}>
-          <span className={styles.eyebrow}>LET’S GET YOU BACK IN</span>
+          <span className={styles.eyebrow}>{a.forgotEyebrow}</span>
           <h2 ref={headingRef} tabIndex={-1} id={titleId}>{content.title}</h2>
           <p id={descriptionId}>{content.description}</p>
         </div>
@@ -478,7 +487,7 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
                 <path fill="#FBBC05" d="M10.53 28.59A14.41 14.41 0 0 1 9.75 24c0-1.59.27-3.13.78-4.59l-7.98-6.19A23.87 23.87 0 0 0 0 24c0 3.87.93 7.53 2.56 10.78l7.97-6.19Z" />
                 <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.91-5.8l-7.73-6c-2.15 1.45-4.92 2.3-8.18 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48Z" />
               </svg>
-              <span>{googleBusy ? "Connecting to Google…" : "Continue with Google"}</span>
+              <span>{googleBusy ? a.googleConnecting : a.googleContinue}</span>
             </button>
             {googleError && (
               <div ref={googleErrorRef} className={styles.serviceError} role="alert" tabIndex={-1}>
@@ -486,19 +495,19 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
                 <p>{googleError}</p>
               </div>
             )}
-            <div className={styles.divider}><span>or continue with email</span></div>
+            <div className={styles.divider}><span>{a.dividerEmail}</span></div>
           </div>
         )}
         {mode === "register" && (
           <div className={styles.field}>
-            <label htmlFor={`${fieldId}-name`}>Your name</label>
+            <label htmlFor={`${fieldId}-name`}>{a.nameLabel}</label>
             <input
               id={`${fieldId}-name`}
               name="name"
               autoComplete="name"
               required
               value={values.name}
-              placeholder="Your display name"
+              placeholder={a.namePlaceholder}
               aria-invalid={Boolean(errors.name)}
               aria-describedby={errors.name ? `${fieldId}-name-error` : undefined}
               onChange={(event) => update("name", event.target.value)}
@@ -507,7 +516,7 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
           </div>
         )}
         <div className={styles.field}>
-          <label htmlFor={`${fieldId}-email`}>Email address</label>
+          <label htmlFor={`${fieldId}-email`}>{a.emailLabel}</label>
           <input
             id={`${fieldId}-email`}
             name="email"
@@ -518,7 +527,7 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
             inputMode="email"
             required
             value={values.email}
-            placeholder="you@example.com"
+            placeholder={a.emailPlaceholder}
             aria-invalid={Boolean(errors.email)}
             aria-describedby={errors.email ? `${fieldId}-email-error` : undefined}
             onChange={(event) => update("email", event.target.value)}
@@ -528,7 +537,7 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
         {needsCode && (
           <div className={`${styles.field} ${styles.verificationField}`}>
             <div className={styles.labelRow}>
-              <label htmlFor={`${fieldId}-verification`}>Email verification code</label>
+              <label htmlFor={`${fieldId}-verification`}>{a.codeLabel}</label>
               <button
                 type="button"
                 className={styles.textButton}
@@ -536,12 +545,12 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
                 onClick={() => void sendCode()}
               >
                 {sendBusy
-                  ? "Sending…"
+                  ? a.sending
                   : cooldown > 0
-                    ? `Resend in ${cooldown}s`
+                    ? a.resendIn(cooldown)
                     : verificationSentTo
-                      ? "Resend code"
-                      : "Send code"}
+                      ? a.resendCode
+                      : a.sendCode}
               </button>
             </div>
             <input
@@ -553,7 +562,7 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
               pattern="[0-9]{6}"
               required
               value={values.code}
-              placeholder="Enter 6-digit code"
+              placeholder={a.codePlaceholder}
               aria-invalid={Boolean(errors.code)}
               aria-describedby={errors.code ? `${fieldId}-code-error` : undefined}
               onChange={(event) => update("code", event.target.value.replace(/\D/g, "").slice(0, 6))}
@@ -562,19 +571,17 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
               <p className={styles.fieldError} id={`${fieldId}-code-error`}>{errors.code}</p>
             ) : (
               <p className={styles.hint}>
-                {verificationSentTo
-                  ? `We sent a 6-digit code to ${verificationSentTo}. Check Spam if you don’t see it.`
-                  : "Click Send code to receive a 6-digit verification code by email."}
+                {verificationSentTo ? a.codeSentHint(verificationSentTo) : a.codePromptHint}
               </p>
             )}
           </div>
         )}
         <div className={styles.field}>
           <div className={styles.labelRow}>
-            <label htmlFor={`${fieldId}-password`}>{mode === "forgot" ? "New password" : "Password"}</label>
+            <label htmlFor={`${fieldId}-password`}>{mode === "forgot" ? a.newPasswordLabel : a.passwordLabel}</label>
             {mode === "login" && (
               <button type="button" className={styles.textButton} onClick={() => onSwitchMode("forgot", values.email)}>
-                Forgot password?
+                {a.forgotPasswordLink}
               </button>
             )}
           </div>
@@ -587,7 +594,7 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
               required
               minLength={mode !== "login" ? 12 : undefined}
               value={values.password}
-              placeholder={mode === "login" ? "Enter your password" : mode === "forgot" ? "Create a new password" : "Create a password"}
+              placeholder={mode === "login" ? a.passwordLoginPlaceholder : mode === "forgot" ? a.passwordForgotPlaceholder : a.passwordRegisterPlaceholder}
               aria-invalid={Boolean(errors.password)}
               aria-describedby={errors.password ? `${fieldId}-password-error`
                 : mode !== "login" ? `${fieldId}-password-hint` : undefined}
@@ -596,7 +603,7 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
             <button
               type="button"
               className={styles.passwordToggle}
-              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-label={showPassword ? a.hidePasswordAria : a.showPasswordAria}
               aria-pressed={showPassword}
               aria-controls={`${fieldId}-password`}
               onClick={() => setShowPassword((shown) => !shown)}
@@ -606,9 +613,43 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
           </div>
           {errors.password && <p className={styles.fieldError} id={`${fieldId}-password-error`}>{errors.password}</p>}
           {mode !== "login" && !errors.password && (
-            <p className={styles.hint} id={`${fieldId}-password-hint`}>Use at least 12 characters with letters and numbers.</p>
+            <p className={styles.hint} id={`${fieldId}-password-hint`}>{a.passwordHint}</p>
           )}
         </div>
+        {mode === "register" && (
+          <div className={styles.consentWrap}>
+            <label className={styles.consentLabel}>
+              <input
+                type="checkbox"
+                name="legalConsent"
+                checked={consentAccepted}
+                aria-invalid={Boolean(errors.consent)}
+                aria-describedby={errors.consent ? `${fieldId}-consent-error` : undefined}
+                onChange={(event) => {
+                  setConsentAccepted(event.target.checked);
+                  if (errors.consent) setErrors((current) => ({ ...current, consent: undefined }));
+                  setSubmitError("");
+                }}
+              />
+              <span>
+                {a.consentPrefix}
+                <Link href={`/legal/terms?lang=${locale}`} target="_blank" rel="noopener noreferrer">{a.consentTerms}</Link>
+                {a.consentAnd}
+                <Link href={`/legal/privacy?lang=${locale}`} target="_blank" rel="noopener noreferrer">{a.consentPrivacy}</Link>
+                {a.consentSuffix}
+              </span>
+            </label>
+            {errors.consent && <p className={styles.fieldError} id={`${fieldId}-consent-error`}>{errors.consent}</p>}
+          </div>
+        )}
+        {mode === "login" && (
+          <p className={styles.legalFootNote}>
+            {a.loginLegalPrefix}
+            <Link href={`/legal/terms?lang=${locale}`} target="_blank" rel="noopener noreferrer">{a.loginLegalTerms}</Link>
+            {" & "}
+            <Link href={`/legal/privacy?lang=${locale}`} target="_blank" rel="noopener noreferrer">{a.loginLegalPrivacy}</Link>.
+          </p>
+        )}
         {submitError && (
           <div ref={errorRef} className={styles.serviceError} role="alert" tabIndex={-1}>
             <CircleAlert size={18} aria-hidden="true" />
@@ -616,19 +657,19 @@ function AuthForm({ mode, initialEmail, initialGoogleError, titleId, description
           </div>
         )}
         <button type="submit" className={styles.submit} disabled={googleBusy || submitBusy}>
-          <span>{submitBusy ? "Please wait…" : content.action}</span><ArrowRight size={19} aria-hidden="true" />
+          <span>{submitBusy ? a.pleaseWait : content.action}</span><ArrowRight size={19} aria-hidden="true" />
         </button>
       </form>
       <div className={styles.footer}>
         {mode === "forgot" ? (
           <button type="button" className={styles.backButton} onClick={() => onSwitchMode("login", values.email)}>
-            <ArrowLeft size={17} aria-hidden="true" /> Back to login
+            <ArrowLeft size={17} aria-hidden="true" /> {a.backToLogin}
           </button>
         ) : (
           <>
-            <span>{mode === "login" ? "New to HyperMockup?" : "Already have an account?"}</span>
+            <span>{mode === "login" ? a.newToBrand : a.alreadyHaveAccount}</span>
             <button type="button" className={styles.textButton} onClick={() => onSwitchMode(mode === "login" ? "register" : "login", values.email)}>
-              {mode === "login" ? "Create an account" : "Login"}
+              {mode === "login" ? a.createAccountLink : a.loginLink}
             </button>
           </>
         )}

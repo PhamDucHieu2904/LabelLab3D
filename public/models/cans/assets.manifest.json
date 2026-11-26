@@ -1,6 +1,5 @@
 {
   "schemaVersion": 1,
-  "generator": "Blender 5.2.2 LTS / export-web-cans.py",
   "upAxis": "Y",
   "frontAxis": "+Z",
   "unit": "meter",
@@ -9,7 +8,6 @@
     {
       "id": "can-330",
       "src": "/models/cans/can-330.glb",
-      "sourceFile": "330ml Can Model.blend",
       "sourceSha256": "186782c90bc924347a3e75a9557422f07e6a22ac4c9d18600de95d23cbe1b10e",
       "volumeMl": 330,
       "label": "330 ml",
@@ -22,7 +20,7 @@
       "triangleCount": 29000,
       "sourceBaseTriangleCount": 7298,
       "subdivisionLevel": 1,
-      "bytes": 126500,
+      "bytes": 126420,
       "materialSlots": {
         "body": [
           "aluminum-body"
@@ -123,7 +121,7 @@
         "seam": "rear",
         "wrapS": "repeat"
       },
-      "labelOffsetMeters": 8e-05,
+      "labelOffsetMeters": 0.00008,
       "sidedness": "single-sided outward surfaces; label is an open wrap over opaque body",
       "compression": "draco",
       "uncompressedBytes": 969536,
@@ -133,13 +131,12 @@
         "texcoord": 12,
         "generic": 12
       },
-      "sha256": "34584a3635d8027497e5fe53c911469a36a493951ced72673d84d24bff7c531a",
+      "sha256": "d01999d1781f24eb61b35e32029efde7ec35d43505c70067aca8ebdf85277388",
       "sourceUnchanged": true
     },
     {
       "id": "can-180",
       "src": "/models/cans/can-180.glb",
-      "sourceFile": "Can 180ml.blend",
       "sourceSha256": "511c4b582c0967833c522ca90224d6acb342954cb07937ec04e2600d1717254a",
       "volumeMl": 180,
       "label": "180 ml",
@@ -152,7 +149,7 @@
       "triangleCount": 25992,
       "sourceBaseTriangleCount": 6546,
       "subdivisionLevel": 1,
-      "bytes": 115308,
+      "bytes": 115232,
       "materialSlots": {
         "body": [
           "aluminum-body"
@@ -253,7 +250,7 @@
         "seam": "rear",
         "wrapS": "repeat"
       },
-      "labelOffsetMeters": 8e-05,
+      "labelOffsetMeters": 0.00008,
       "sidedness": "single-sided outward surfaces; label is an open wrap over opaque body",
       "compression": "draco",
       "uncompressedBytes": 871568,
@@ -263,13 +260,12 @@
         "texcoord": 12,
         "generic": 12
       },
-      "sha256": "9b3bca8715f2f506cb538359a00220f4c41050f313e6ecb25ce4a9295bf6ab4c",
+      "sha256": "a781f5df8e7af7249ae96962c562b68719d546190c2859fb2179a9abefb360f9",
       "sourceUnchanged": true
     },
     {
       "id": "can-250-short",
       "src": "/models/cans/can-250-short.glb",
-      "sourceFile": "Can 250ml short Model.blend",
       "sourceSha256": "9f0b6ba35bd813b0d219a98d5576732ce437a15ddb4a453d49da0b6f36c21d71",
       "volumeMl": 250,
       "label": "250 ml · Short",
@@ -282,7 +278,7 @@
       "triangleCount": 28008,
       "sourceBaseTriangleCount": 7050,
       "subdivisionLevel": 1,
-      "bytes": 125964,
+      "bytes": 125888,
       "materialSlots": {
         "body": [
           "aluminum-body"
@@ -383,7 +379,7 @@
         "seam": "rear",
         "wrapS": "repeat"
       },
-      "labelOffsetMeters": 8e-05,
+      "labelOffsetMeters": 0.00008,
       "sidedness": "single-sided outward surfaces; label is an open wrap over opaque body",
       "compression": "draco",
       "uncompressedBytes": 939892,
@@ -393,13 +389,12 @@
         "texcoord": 12,
         "generic": 12
       },
-      "sha256": "c53d8d2db39467fafc5bf053510d1a722a0c5a03d26807e4b664ee801a96aad2",
+      "sha256": "b0221a8afe13b589a5f7feaf0420a0d5fffe297b401f0af0f8c6d8b559c14657",
       "sourceUnchanged": true
     },
     {
       "id": "can-250",
       "src": "/models/cans/can-250.glb",
-      "sourceFile": "Can 250ml.blend",
       "sourceSha256": "efc3b30c84a90517084bef647979fe91010b7aadad36c10b7cfe2ae12bd33048",
       "volumeMl": 250,
       "label": "250 ml · Slim",
@@ -412,7 +407,7 @@
       "triangleCount": 29040,
       "sourceBaseTriangleCount": 7306,
       "subdivisionLevel": 1,
-      "bytes": 132184,
+      "bytes": 122160,
       "materialSlots": {
         "body": [
           "aluminum-body"
@@ -513,7 +508,7 @@
         "seam": "rear",
         "wrapS": "repeat"
       },
-      "labelOffsetMeters": 8e-05,
+      "labelOffsetMeters": 0.00008,
       "sidedness": "single-sided outward surfaces; label is an open wrap over opaque body",
       "compression": "draco",
       "uncompressedBytes": 982940,
@@ -523,13 +518,12 @@
         "texcoord": 12,
         "generic": 12
       },
-      "sha256": "46307936719ba802e35f7015fe7f7ca37d24b1992ba727ae03dfad0276fe93d3",
+      "sha256": "ef02442acbf133a9c03e6bd370ad1047b0c687e7464fdc94f379f4ade3ae5d1a",
       "sourceUnchanged": true
     },
     {
       "id": "can-320",
       "src": "/models/cans/can-320.glb",
-      "sourceFile": "Can 320ml.blend",
       "sourceSha256": "9b7b84ad177bd1d02d27758c444286b6a9bb0269fede9d1f26cf4bfdf8be60b0",
       "volumeMl": 320,
       "label": "320 ml",
@@ -542,7 +536,7 @@
       "triangleCount": 30928,
       "sourceBaseTriangleCount": 7778,
       "subdivisionLevel": 1,
-      "bytes": 167516,
+      "bytes": 126992,
       "materialSlots": {
         "body": [
           "aluminum-body"
@@ -643,7 +637,7 @@
         "seam": "rear",
         "wrapS": "repeat"
       },
-      "labelOffsetMeters": 8e-05,
+      "labelOffsetMeters": 0.00008,
       "sidedness": "single-sided outward surfaces; label is an open wrap over opaque body",
       "compression": "draco",
       "uncompressedBytes": 1068016,
@@ -653,13 +647,12 @@
         "texcoord": 12,
         "generic": 12
       },
-      "sha256": "43efc229a646bba2f74a44e56183aa80f92f6111b383ba4d4b9ab6357b372f6d",
+      "sha256": "7023c45dec75cb7eec27fa9282815e2f011754d67ff0f38d7eb56913bcab153f",
       "sourceUnchanged": true
     },
     {
       "id": "can-500",
       "src": "/models/cans/can-500.glb",
-      "sourceFile": "Can 500ml.blend",
       "sourceSha256": "3cec9cd2ae5ff6d008879fa542926bd95389f9a52a7e82fdcbf1c833d7e6cb9a",
       "volumeMl": 500,
       "label": "500 ml",
@@ -672,7 +665,7 @@
       "triangleCount": 30216,
       "sourceBaseTriangleCount": 7602,
       "subdivisionLevel": 1,
-      "bytes": 127588,
+      "bytes": 127512,
       "materialSlots": {
         "body": [
           "aluminum-body"
@@ -773,7 +766,7 @@
         "seam": "rear",
         "wrapS": "repeat"
       },
-      "labelOffsetMeters": 8e-05,
+      "labelOffsetMeters": 0.00008,
       "sidedness": "single-sided outward surfaces; label is an open wrap over opaque body",
       "compression": "draco",
       "uncompressedBytes": 1007644,
@@ -783,7 +776,7 @@
         "texcoord": 12,
         "generic": 12
       },
-      "sha256": "14817c2a509bf5c357462be4ab54fee6f0296aa9c70f7d846110882b26a86c1b",
+      "sha256": "41882567f1e6a6a26f193d3d9caad7315105a1a475336567fe3026a876446c33",
       "sourceUnchanged": true
     }
   ]

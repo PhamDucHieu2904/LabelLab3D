@@ -97,7 +97,7 @@ test('bounds clamp finite numeric values and reject coercion or nonfinite data',
   assert.equal(invalid.grid, true);
 });
 
-test('artwork offset restores the full Unity sweep including fine positioning', () => {
+test('artwork offset restores the full authored sweep including fine positioning', () => {
   const storage = memory();
   for (const labelOffset of [-100, -75.5, 0, 75.5, 100]) {
     savePreferences({ ...defaults, labelOffset }, storage);
@@ -178,5 +178,91 @@ test('legacy saved projects retain native optics and user label/color choices', 
   const oldCan = parsePreferences({ modelId: 'can-320' });
   assert.equal(oldCan.bodyMetalness, 1);
   assert.equal(oldCan.bodyRoughness, .22);
+  assert.equal(oldCan.metalness, 0);
+  assert.equal(oldCan.roughness, .15);
+});
+
+test('all 6 studio & nature HDRI presets and Studio Spotlight config validate, sanitize, and persist cleanly', () => {
+  const THREE = require('three');
+  const {
+    ENVIRONMENT_PRESET_IDS,
+    DEFAULT_ENVIRONMENT_PRESET_ID,
+    STUDIO_ENVIRONMENT_PRESETS,
+    DEFAULT_SPOT_LIGHT,
+    buildEnvironmentPresetTexture,
+    normalizeEnvironmentPresetId,
+    sanitizeSpotLightConfig,
+  } = loadSource(path.resolve(__dirname, '../../lib/mockup/environment-presets'));
+
+  assert.equal(STUDIO_ENVIRONMENT_PRESETS.length, 6);
+  assert.equal(DEFAULT_ENVIRONMENT_PRESET_ID, 'studio-original');
+  assert.equal(STUDIO_ENVIRONMENT_PRESETS[0].id, 'studio-original');
+  assert.equal(STUDIO_ENVIRONMENT_PRESETS[0].source, 'exr');
+  assert.equal(STUDIO_ENVIRONMENT_PRESETS[0].exrSrc, '/environments/studio-softbox.exr');
+  assert.equal(normalizeEnvironmentPresetId('golden-hour'), DEFAULT_ENVIRONMENT_PRESET_ID);
+  assert.equal(normalizeEnvironmentPresetId('invalid-hdri'), DEFAULT_ENVIRONMENT_PRESET_ID);
+
+  for (const id of ENVIRONMENT_PRESET_IDS) {
+    const restored = parsePreferences({ environment: id });
+    assert.equal(restored.environment, id);
+    if (id === 'studio-original') continue;
+
+    const tex = buildEnvironmentPresetTexture(id);
+    assert.equal(tex.image.width, 384);
+    assert.equal(tex.image.height, 192);
+    const data = tex.image.data;
+    let upperSum = 0;
+    let upperSamples = 0;
+    let peak = 0;
+    for (let y = 0; y < 192; y++) {
+      for (let x = 0; x < 384; x += 8) {
+        const idx = (y * 384 + x) * 4;
+        const r = THREE.DataUtils.fromHalfFloat(data[idx]);
+        const g = THREE.DataUtils.fromHalfFloat(data[idx + 1]);
+        const b = THREE.DataUtils.fromHalfFloat(data[idx + 2]);
+        assert.ok(Number.isFinite(r) && r >= 0 && Number.isFinite(g) && g >= 0 && Number.isFinite(b) && b >= 0, `${id} finite non-negative HDR`);
+        const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        if (lum > peak) peak = lum;
+        if (y >= 115) {
+          upperSum += lum;
+          upperSamples++;
+        }
+      }
+    }
+    const upperAvg = upperSum / upperSamples;
+    assert.ok(
+      upperAvg >= 0.6 && upperAvg <= 1.55,
+      `${id} upper dome stays in balanced brushed-silver range (0.6..1.55), got ${upperAvg.toFixed(2)}`,
+    );
+    assert.ok(peak >= 2.5, `${id} retains true HDR specular highlights (peak=${peak.toFixed(2)})`);
+    tex.dispose();
+  }
+  assert.equal(parsePreferences({ environment: '../bad' }).environment, DEFAULT_ENVIRONMENT_PRESET_ID);
+
+  // Studio Spotlight defaults, clamping, hostile input rejection, and round-trip persistence
+  assert.deepEqual(parsePreferences({}).spotLight, DEFAULT_SPOT_LIGHT);
+  const clamped = sanitizeSpotLightConfig({
+    enabled: true,
+    intensity: 99,
+    azimuthDeg: -999,
+    elevationDeg: 2,
+    color: 'javascript:alert(1)',
+    softness: 5,
+  });
+  assert.equal(clamped.enabled, true);
+  assert.equal(clamped.intensity, 3);
+  assert.equal(clamped.azimuthDeg, -180);
+  assert.equal(clamped.elevationDeg, 10);
+  assert.equal(clamped.color, '#ffffff');
+  assert.equal(clamped.softness, 1);
+
+  const storage = memory();
+  const withSpot = {
+    ...defaults,
+    environment: 'studio-original',
+    spotLight: { enabled: true, intensity: 1.85, azimuthDeg: -38, elevationDeg: 40, color: '#ffe2b8', softness: 0.62 },
+  };
+  assert.equal(savePreferences(withSpot, storage), true);
+  assert.deepEqual(loadPreferences(storage).spotLight, withSpot.spotLight);
 });
 

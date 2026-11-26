@@ -236,7 +236,7 @@ export function createBasilBottleMaterialContext(root: THREE.Object3D, asset: Pr
         worldToNative.copy(drawUniforms.basilHighNativeToScene.value).invert();
         camera.getWorldPosition(worldCamera); drawUniforms.basilHighCameraNative.value.copy(worldCamera).applyMatrix4(worldToNative);
         drawUniforms.basilHighSceneToClip.value.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-        // Unity projects a point .25 world units beyond the ray exit. Convert that
+        // Project a point .25 world units beyond the ray exit. Convert that
         // distance with the same optical frame, including viewer normalization.
         const frameElements = drawUniforms.basilHighNativeToScene.value.elements;
         drawUniforms.basilHighBackgroundDistance.value = .25 * Math.hypot(frameElements[0], frameElements[1], frameElements[2]) / opticalDistanceScale;

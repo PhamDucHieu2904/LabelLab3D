@@ -1,7 +1,11 @@
+import { headers } from "next/headers";
+import { CURRENT_POLICY_VERSION, resolveMarketAccess } from "@/lib/legal/policies";
 import { nowIso, randomId, requireDb } from "@/lib/server/db";
 import { env, sessionUser, json, errorResponse, assertSameOrigin } from "@/lib/server/http";
+import { recordLegalConsent, saveOrderReceipt } from "@/lib/server/legal";
 import { getPaymentProvider } from "@/lib/server/payment-provider";
 import { createPolarCheckoutSession, readPolarConfig } from "@/lib/server/polar";
+import { consumeRateLimit } from "@/lib/server/rate-limit";
 import { buildSepayQrImageUrl, generateOrderCode, readSepayConfig, readSepayQrConfig } from "@/lib/server/sepay";
 import { getLiveCoinPackages } from "@/lib/server/site-config";
 
@@ -14,10 +18,36 @@ export async function POST(request: Request) {
     const user = await sessionUser();
     if (!user) throw new Error("FORBIDDEN");
     const runtimeEnv = await env();
-    const body = await request.json().catch(() => ({})) as { coins?: unknown; packageId?: unknown; region?: unknown };
+    const body = (await request.json().catch(() => ({}))) as {
+      coins?: unknown;
+      packageId?: unknown;
+      region?: unknown;
+      receipt?: unknown;
+    };
     const coins = Number(body.coins);
     const packageId = typeof body.packageId === "string" ? body.packageId.trim() : "";
     const region = body.region === "international" ? "international" : "vietnam";
+
+    const reqHeaders = await headers();
+    const countryHeader = reqHeaders.get("cf-ipcountry") ?? reqHeaders.get("x-vercel-ip-country") ?? "VN";
+    const ip =
+      reqHeaders.get("cf-connecting-ip")
+      ?? reqHeaders.get("x-forwarded-for")?.split(",")[0]?.trim()
+      ?? null;
+    const market = resolveMarketAccess(countryHeader, user.role === "admin");
+
+    if (region === "international" && !market.allowInternationalCheckout) {
+      throw new Error("REGION_RESTRICTED");
+    }
+
+    const withinOrderLimit = await consumeRateLimit(runtimeEnv, {
+      namespace: "payment-order",
+      key: user.id,
+      limit: 20,
+      windowMinutes: 15,
+    });
+    if (!withinOrderLimit) throw new Error("AUTH_RATE_LIMIT");
+
     const livePackages = await getLiveCoinPackages(runtimeEnv);
     const regionalPackages = livePackages.filter((pkg) => pkg.enabled && (!pkg.region || pkg.region === region));
     const selected = packageId
@@ -60,6 +90,14 @@ export async function POST(request: Request) {
         id, user.id, "polar", code, selected.coins, amountCents, "USD", "pending", session.checkoutId, expiresAt, now, now,
       ).run();
 
+      await recordLegalConsent(runtimeEnv, {
+        userId: user.id,
+        consentType: "checkout",
+        ip,
+        policyVersion: CURRENT_POLICY_VERSION,
+        metadata: { orderId: id, orderCode: code, provider: "polar", currency: "USD", country: market.country },
+      });
+
       return json({
         mode: "polar_checkout",
         order: { id, orderCode: code, coins: selected.coins, amount: amountCents, currency: "USD", status: "pending", expiresAt },
@@ -83,6 +121,17 @@ export async function POST(request: Request) {
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
         id, user.id, "sepay", code, selected.coins, selected.vnd, "VND", "pending", null, expiresAt, now, now,
       ).run();
+
+      if (body.receipt) {
+        await saveOrderReceipt(runtimeEnv, { orderId: id, userId: user.id, receipt: body.receipt });
+      }
+      await recordLegalConsent(runtimeEnv, {
+        userId: user.id,
+        consentType: "checkout",
+        ip,
+        policyVersion: CURRENT_POLICY_VERSION,
+        metadata: { orderId: id, orderCode: code, provider: "sepay", currency: "VND", country: market.country },
+      });
 
       return json({
         mode: "direct_qr",
@@ -119,6 +168,17 @@ export async function POST(request: Request) {
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
       id, user.id, "sepay", code, selected.coins, selected.vnd, "VND", "pending", null, expiresAt, now, now,
     ).run();
+
+    if (body.receipt) {
+      await saveOrderReceipt(runtimeEnv, { orderId: id, userId: user.id, receipt: body.receipt });
+    }
+    await recordLegalConsent(runtimeEnv, {
+      userId: user.id,
+      consentType: "checkout",
+      ip,
+      policyVersion: CURRENT_POLICY_VERSION,
+      metadata: { orderId: id, orderCode: code, provider: "sepay", currency: "VND", country: market.country },
+    });
 
     return json({
       mode: "gateway",

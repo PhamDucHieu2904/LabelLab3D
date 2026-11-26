@@ -6,6 +6,7 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { OutputShader } from 'three/examples/jsm/shaders/OutputShader.js';
 import { publicUrl } from '../public-url';
@@ -21,9 +22,17 @@ import { createEnergyDrinkBubbles, type EnergyBubbleEffect } from '../viewer/ene
 import { setBottleBackdrop } from '../viewer/bottle-backdrop';
 import { setBasilHighBackdrop } from '../viewer/basil-bottle-materials';
 import { isBasilHighAsset, basilHighPresentation } from '../viewer/basil-presentation';
-import { authoredMockupCameraFrame, fitMockupCamera, mockupCameraDirection, mockupOrbitBounds, mockupShowcaseBounds, normalizeMockupAspect, unityMockupCameraFocus } from './camera';
-import { UNITY_CAMERA_SMOOTH_TIME, unityCameraDestination, unitySmoothDamp, unitySmoothDampAngle, type UnityCameraPresetId } from './unity-camera-presets';
+import { authoredMockupCameraFocus, authoredMockupCameraFrame, fitMockupCamera, mockupCameraDirection, mockupOrbitBounds, mockupShowcaseBounds, normalizeMockupAspect } from './camera';
+import { STUDIO_CAMERA_SMOOTH_TIME, studioCameraDestination, smoothDamp, smoothDampAngle, type StudioCameraPresetId } from './camera-presets';
 import { updateMockupProductDepthRange } from './depth-range';
+import {
+  buildEnvironmentPresetTexture,
+  getStudioEnvironmentPreset,
+  normalizeEnvironmentPresetId,
+  sanitizeSpotLightConfig,
+  type EnvironmentPresetId,
+  type StudioSpotLightConfig,
+} from './environment-presets';
 import { MOCKUP_FOCAL_FOV } from './focal-length';
 import { centeredMockupCrop, createMockupCaptureGate, createMockupTiles, encodeMockupCanvasPng, flipMockupPixels, mockupAbortError, mockupCaptureSize } from './capture';
 import { disposeMockupDetachedTextures, neutralizeMockupLabelArtwork } from './appearance';
@@ -235,6 +244,18 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   const shadowKeyLight = lights[0] instanceof THREE.DirectionalLight ? lights[0] : null;
   const shadowFillLight = lights[1] instanceof THREE.DirectionalLight ? lights[1] : null;
   const shadowHemiLight = lights[2] instanceof THREE.HemisphereLight ? lights[2] : null;
+  // Optional user-controlled Studio Spotlight + paired LTC RectAreaLight softbox face.
+  // The RectAreaLight gives a true physical area specular reflection on horizontal metallic
+  // lids/caps (lifting dark EXR tops into bright brushed silver) with scale-invariant solid angle!
+  RectAreaLightUniformsLib.init();
+  let spotLightConfig: StudioSpotLightConfig = sanitizeSpotLightConfig(options.spotLight);
+  const studioSpotLight = new THREE.SpotLight('#ffffff', 0, 0, THREE.MathUtils.degToRad(36), spotLightConfig.softness, 0);
+  studioSpotLight.visible = false;
+  scene.add(studioSpotLight);
+  scene.add(studioSpotLight.target);
+  const studioAreaLight = new THREE.RectAreaLight('#ffffff', 0, 0.35, 0.35);
+  studioAreaLight.visible = false;
+  scene.add(studioAreaLight);
   let shadowMapDirty = false;
   let currentShadowMapSize = 0;
   const shadowKeyBasePosition = new THREE.Vector3();
@@ -287,8 +308,59 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     if (tier === 'medium') return Math.min(cap, 1024);
     return Math.min(cap, 2048);
   };
+  const syncStudioSpotLight = () => {
+    if (!spotLightConfig.enabled || spotLightConfig.intensity <= 0.001) {
+      studioSpotLight.visible = false;
+      studioSpotLight.intensity = 0;
+      studioAreaLight.visible = false;
+      studioAreaLight.intensity = 0;
+      return;
+    }
+    const bounds = currentSubjectBounds();
+    const radius = Math.max(0.04, currentSubjectRadius() || 0.12);
+    const center = bounds ? bounds.getCenter(new THREE.Vector3()) : new THREE.Vector3(0, 0, 0);
+    const az = THREE.MathUtils.degToRad(spotLightConfig.azimuthDeg);
+    const el = THREE.MathUtils.degToRad(spotLightConfig.elevationDeg);
+    const dirX = Math.sin(az) * Math.cos(el);
+    const dirY = Math.sin(el);
+    const dirZ = Math.cos(az) * Math.cos(el);
+    const targetY = center.y + radius * 0.16;
+
+    const spotDist = radius * 4.2;
+    studioSpotLight.color.set(spotLightConfig.color);
+    studioSpotLight.intensity = spotLightConfig.intensity * 0.85;
+    studioSpotLight.angle = THREE.MathUtils.degToRad(36);
+    studioSpotLight.penumbra = spotLightConfig.softness;
+    studioSpotLight.decay = 0;
+    studioSpotLight.distance = 0;
+    studioSpotLight.position.set(
+      center.x + dirX * spotDist,
+      center.y + dirY * spotDist,
+      center.z + dirZ * spotDist,
+    );
+    studioSpotLight.target.position.set(center.x, targetY, center.z);
+    studioSpotLight.target.updateMatrixWorld();
+    studioSpotLight.visible = true;
+
+    // Scale-invariant LTC area light colocated on the spotlight boom for real broad metallic reflections.
+    const areaDist = radius * 2.85;
+    studioAreaLight.color.set(spotLightConfig.color);
+    studioAreaLight.width = radius * 4.6;
+    studioAreaLight.height = radius * 3.8;
+    studioAreaLight.intensity = spotLightConfig.intensity * 1.45;
+    studioAreaLight.position.set(
+      center.x + dirX * areaDist,
+      center.y + dirY * areaDist,
+      center.z + dirZ * areaDist,
+    );
+    studioAreaLight.lookAt(center.x, targetY, center.z);
+    studioAreaLight.visible = true;
+  };
   const syncProceduralStudioLighting = (forceShadowSize?: number) => {
+    syncStudioSpotLight();
     const isPackaging = Boolean(procedural && !active);
+    const usingPresetEnv = settings === DEFAULT_VIEWER_PRESENTATION;
+    const activeEnvPreset = getStudioEnvironmentPreset(environmentPresetId);
     if (!isPackaging) {
       renderer.shadowMap.enabled = false;
       if (shadowKeyLight) shadowKeyLight.castShadow = false;
@@ -303,7 +375,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         }
         if (light instanceof THREE.DirectionalLight) light.target.position.set(0, 0, 0);
       });
-      scene.environmentIntensity = settings.environment.intensity;
+      scene.environmentIntensity = usingPresetEnv ? activeEnvPreset.intensity : settings.environment.intensity;
       shadowMapDirty = false;
       return;
     }
@@ -314,7 +386,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
 
     renderer.shadowMap.enabled = true;
     studioGround.setDynamicShadowActive(true);
-    scene.environmentIntensity = 0.68;
+    scene.environmentIntensity = usingPresetEnv ? activeEnvPreset.packagingIntensity : 0.68;
 
     if (shadowKeyLight) {
       shadowKeyLight.color.set('#fffdf8');
@@ -398,7 +470,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     toFov: number;
     startedAt: number;
     duration: number;
-    unity?: {
+    authored?: {
       yaw: number; pitch: number; distance: number;
       toYaw: number; toPitch: number;
       yawVelocity: number; pitchVelocity: number; distanceVelocity: number; fovVelocity: number;
@@ -409,6 +481,8 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   let dirty = true;
   let lastTime = performance.now();
   let lastDraw = 0;
+  let environmentPresetId: EnvironmentPresetId = normalizeEnvironmentPresetId(options.environmentPreset);
+  const presetPmremCache = new Map<EnvironmentPresetId, THREE.WebGLRenderTarget>();
   let environmentTarget: THREE.WebGLRenderTarget | null = null;
   let environmentRevision = 0;
   let previewTarget: THREE.WebGLRenderTarget | null = null;
@@ -635,7 +709,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       backdropRegion.width / backdropRegion.fullWidth, backdropRegion.height / backdropRegion.fullHeight);
     else region.set(0, 0, 1, 1);
     // Each live/thumbnail/export camera needs precision at its current distance,
-    // including every frame while a Unity view is still moving. active.bounds
+    // including every frame while an authored preset view is still moving. active.bounds
     // already includes the authored front yaw; only its animated parent remains.
     const subjectBounds = currentSubjectBounds();
     if (subjectBounds) {
@@ -816,7 +890,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     try {
       renderTo(thumbnailLinear, thumbnailOutput, thumbnailCamera, true, thumbnailBackdrop, thumbnailOptions.paintBackground);
     } finally {
-      renderer.setRenderTarget(previousTarget); renderer.setViewport(previousViewport);
+      renderer.setViewport(previousViewport); renderer.setRenderTarget(previousTarget);
     }
     thumbnailAt = now;
     thumbnailBusy = true;
@@ -991,17 +1065,17 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     if (transitionAtFrame) {
       const transition = transitionAtFrame;
       let complete = false;
-      if (transition.unity) {
-        const state = transition.unity;
-        const yaw = unitySmoothDampAngle(state.yaw, state.toYaw, state.yawVelocity, UNITY_CAMERA_SMOOTH_TIME, dt);
-        const pitch = unitySmoothDampAngle(state.pitch, state.toPitch, state.pitchVelocity, UNITY_CAMERA_SMOOTH_TIME, dt);
-        const distance = unitySmoothDamp(state.distance, transition.toPosition.distanceTo(transition.toTarget), state.distanceVelocity, UNITY_CAMERA_SMOOTH_TIME, dt);
-        const lens = unitySmoothDamp(camera.fov, transition.toFov, state.fovVelocity, UNITY_CAMERA_SMOOTH_TIME, dt);
+      if (transition.authored) {
+        const state = transition.authored;
+        const yaw = smoothDampAngle(state.yaw, state.toYaw, state.yawVelocity, STUDIO_CAMERA_SMOOTH_TIME, dt);
+        const pitch = smoothDampAngle(state.pitch, state.toPitch, state.pitchVelocity, STUDIO_CAMERA_SMOOTH_TIME, dt);
+        const distance = smoothDamp(state.distance, transition.toPosition.distanceTo(transition.toTarget), state.distanceVelocity, STUDIO_CAMERA_SMOOTH_TIME, dt);
+        const lens = smoothDamp(camera.fov, transition.toFov, state.fovVelocity, STUDIO_CAMERA_SMOOTH_TIME, dt);
         state.yaw = yaw.value; state.yawVelocity = yaw.velocity;
         state.pitch = pitch.value; state.pitchVelocity = pitch.velocity;
         state.distance = distance.value; state.distanceVelocity = distance.velocity; state.fovVelocity = lens.velocity;
         for (const axis of ['x', 'y', 'z'] as const) {
-          const pan = unitySmoothDamp(controls.target[axis], transition.toTarget[axis], state.targetVelocity[axis], UNITY_CAMERA_SMOOTH_TIME, dt);
+          const pan = smoothDamp(controls.target[axis], transition.toTarget[axis], state.targetVelocity[axis], STUDIO_CAMERA_SMOOTH_TIME, dt);
           controls.target[axis] = pan.value; state.targetVelocity[axis] = pan.velocity;
         }
         const yawRadians = THREE.MathUtils.degToRad(state.yaw), pitchRadians = THREE.MathUtils.degToRad(state.pitch);
@@ -1100,7 +1174,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     const subjectRadius = currentSubjectRadius();
     if (!subjectBounds) return;
     const isProcedural = Boolean(procedural && !active);
-    const authored = !isProcedural && preset?.startsWith('view-') ? unityCameraDestination(preset as UnityCameraPresetId) : undefined;
+    const authored = !isProcedural && preset?.startsWith('view-') ? studioCameraDestination(preset as StudioCameraPresetId) : undefined;
     if (authored) targetFov = authored.fieldOfView;
     const direction = isProcedural && preset === 'three-quarter'
       ? new THREE.Vector3(Math.sin(Math.PI / 5) * Math.cos(0.46), Math.sin(0.46), Math.cos(Math.PI / 5) * Math.cos(0.46))
@@ -1111,11 +1185,11 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     const tilted = animation.mode === 'showcase' || Math.abs(product.rotation.x) + Math.abs(product.rotation.z) > 0.00001;
     const bounds = tilted ? mockupShowcaseBounds(subjectBounds, animation.mode === 'showcase' ? rest : product.quaternion) : mockupOrbitBounds(subjectBounds);
     const authoredFrame = authored && active && active.asset.cameraFraming === 'bounds'
-      ? authoredMockupCameraFrame(active.bounds, active.asset, preset as UnityCameraPresetId, aspect) : undefined;
+      ? authoredMockupCameraFrame(active.bounds, active.asset, preset as StudioCameraPresetId, aspect) : undefined;
     const nextDistance = authoredFrame?.distanceMetres ?? (authored ? authored.distanceMetres : fitMockupCamera(bounds, direction, aspect, targetFov, isProcedural ? 0.72 : 0.8));
     const ratio = preset ? 1 : camera.position.distanceTo(controls.target) / Math.max(fitDistance, 0.0001);
     fitDistance = nextDistance;
-    const nextTarget = authoredFrame?.target ?? (authored && active ? unityMockupCameraFocus(active.bounds, active.asset.src) : subjectBounds.getCenter(new THREE.Vector3()));
+    const nextTarget = authoredFrame?.target ?? (authored && active ? authoredMockupCameraFocus(active.bounds, active.asset.src) : subjectBounds.getCenter(new THREE.Vector3()));
     const nextPosition = nextTarget.clone().addScaledVector(direction, nextDistance * Math.min(6, Math.max(0.45, ratio)));
     controls.minDistance = Math.max(subjectRadius * 0.65, nextDistance * 0.25);
     controls.maxDistance = nextDistance * 6;
@@ -1127,14 +1201,14 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       camera.updateProjectionMatrix();
     }
     if (animate && (preset || Math.abs(targetFov - camera.fov) > 0.001)) {
-      const prior = cameraTransition?.unity;
+      const prior = cameraTransition?.authored;
       const relative = camera.position.clone().sub(controls.target);
       cameraTransition = {
         fromPosition: camera.position.clone(), fromTarget: controls.target.clone(),
         toPosition: nextPosition, toTarget: nextTarget,
         fromFov: camera.fov, toFov: targetFov,
         startedAt: performance.now(), duration: transitionDuration,
-        ...(authored ? { unity: {
+        ...(authored ? { authored: {
           yaw: THREE.MathUtils.radToDeg(Math.atan2(relative.x, relative.z)),
           pitch: THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(relative.y / Math.max(relative.length(), 0.000001), -1, 1))),
           distance: relative.length(), toYaw: authored.yawDegrees, toPitch: authored.pitchDegrees,
@@ -1245,8 +1319,70 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     capacity, acquireUrl: prefetch.acquireUrl, warmup,
     onChange(ready, pending) { host.dataset.labelPoolReady = String(ready); host.dataset.labelPoolPending = String(pending); },
   });
+  const disposePresetPmremCache = () => {
+    for (const target of presetPmremCache.values()) target.dispose();
+    presetPmremCache.clear();
+  };
   const loadEnvironment = async () => {
     const thisRevision = ++environmentRevision;
+    // Standard Studio & Packaging scenes use the curated 6-preset environment selector:
+    // 'studio-original' loads the authored studio-softbox.exr (cached in PMREM),
+    // while the other 5 presets build instant lightweight 384×192 linear-HDR textures.
+    if (settings === DEFAULT_VIEWER_PRESENTATION) {
+      const preset = getStudioEnvironmentPreset(environmentPresetId);
+      let target = presetPmremCache.get(preset.id);
+      if (!target) {
+        if (preset.source === 'exr' && preset.exrSrc) {
+          let sourceTexture: THREE.DataTexture | null = null;
+          let ownsTexture = false;
+          try {
+            const url = publicUrl(preset.exrSrc);
+            let cached = cachedEnvironmentData.get(url);
+            if (!cached) {
+              cached = (/\.exr(?:\?|$)/i.test(preset.exrSrc) ? new EXRLoader() : new HDRLoader()).loadAsync(url)
+                .catch(error => { cachedEnvironmentData.delete(url); throw error; });
+              cachedEnvironmentData.set(url, cached);
+            }
+            sourceTexture = await cached;
+          } catch {
+            sourceTexture = buildEnvironmentPresetTexture('studio-bright');
+            ownsTexture = true;
+          }
+          if (disposed || thisRevision !== environmentRevision) {
+            if (ownsTexture) sourceTexture.dispose();
+            return;
+          }
+          try {
+            const uploadTexture = ownsTexture ? sourceTexture : sourceTexture.clone();
+            if (!ownsTexture) uploadTexture.needsUpdate = true;
+            try {
+              target = pmrem.fromEquirectangular(uploadTexture);
+              presetPmremCache.set(preset.id, target);
+            } finally {
+              uploadTexture.dispose();
+            }
+          } finally {
+            if (ownsTexture) sourceTexture.dispose();
+          }
+        } else {
+          const sourceTexture = buildEnvironmentPresetTexture(preset.id);
+          try {
+            target = pmrem.fromEquirectangular(sourceTexture);
+            presetPmremCache.set(preset.id, target);
+          } finally {
+            sourceTexture.dispose();
+          }
+        }
+      }
+      if (disposed || thisRevision !== environmentRevision || !target) return;
+      scene.environment = target.texture;
+      scene.environmentIntensity = procedural && !active ? preset.packagingIntensity : preset.intensity;
+      scene.environmentRotation.set(0, preset.rotationY, 0);
+      host.dataset.environment = preset.id;
+      requestRender();
+      return;
+    }
+
     let sourceTexture: THREE.DataTexture | null = null;
     let ownsTexture = false;
     try {
@@ -1574,6 +1710,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         studioGround.setRadius(candidate.radius);
         syncProceduralStudioLighting();
         lights.forEach((light, index) => light.position.set(...settings.lights[index].position).multiplyScalar(candidate!.radius));
+        syncStudioSpotLight();
         if (changingModel) fit(sceneMode === 'studio' ? 'view-4' : animation.mode === 'showcase' ? 'front' : 'view-1'); else requestRender();
         // The shared pool prepared textures and shaders against the ready studio
         // environment before commit. Render that revision before capture becomes ready.
@@ -1614,7 +1751,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       host.dataset.motionMode = 'off';
     }
     // Exiting the web showcase returns its tilted object to the idle pose.
-    // Subsequent Unity views change the camera only, as ProductCameraOrbit does.
+    // Subsequent preset views change the camera only.
     if (wasAnimated) { product.quaternion.identity(); pose.identity(); targetPose.identity(); }
     returnFrom = null; lastInputAt = -Infinity;
     controls.maxPolarAngle = Math.PI - 0.04;
@@ -1843,6 +1980,8 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   const restoredContext = () => {
     if (disposed) return;
     contextLost = false; controls.enabled = true;
+    disposePresetPmremCache();
+    environmentTarget?.dispose(); environmentTarget = null;
     environmentReady = loadEnvironment();
     const next = queuedSelection ?? desired; queuedSelection = null;
     if (next) select(next.asset, next.appearance, next.frontYaw);
@@ -2007,6 +2146,21 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       resetAdaptiveBudget();
       resize();
       if (procedural && !active) syncProceduralStudioLighting();
+      requestRender();
+    },
+    setEnvironment(next) {
+      if (disposed) return;
+      const normalized = normalizeEnvironmentPresetId(next);
+      if (normalized === environmentPresetId && scene.environment && settings === DEFAULT_VIEWER_PRESENTATION) return;
+      environmentPresetId = normalized;
+      cancelIdleRefine();
+      environmentReady = loadEnvironment();
+    },
+    setSpotLight(next) {
+      if (disposed) return;
+      spotLightConfig = sanitizeSpotLightConfig(next);
+      syncStudioSpotLight();
+      cancelIdleRefine();
       requestRender();
     },
     setBackground,
@@ -2311,8 +2465,9 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         captureCamera.clearViewOffset();
         stitched.width = 1; stitched.height = 1; tileCanvas.width = 1; tileCanvas.height = 1;
         if (!disposed) {
-          renderer.setRenderTarget(previousTarget); renderer.setViewport(previousViewport); renderer.setScissor(previousScissor);
-          renderer.setScissorTest(previousScissorTest); renderer.setClearColor(previousClearColor, previousClearAlpha);
+          renderer.setViewport(previousViewport); renderer.setScissor(previousScissor);
+          renderer.setScissorTest(previousScissorTest); renderer.setRenderTarget(previousTarget);
+          renderer.setClearColor(previousClearColor, previousClearAlpha);
           controls.enabled = previousControls && !contextLost;
           if (procedural && !active) syncProceduralStudioLighting();
           lastTime = performance.now();
@@ -2351,7 +2506,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       controls.removeEventListener('start', onControlsStart); controls.removeEventListener('end', onControlsEnd); controls.removeEventListener('change', onControlsChange); controls.dispose();
       detachProcedural();
       discard(active); active = null; discard(cached); cached = null; [...candidates].forEach(discard);
-      prefetch.dispose(); previewTarget?.dispose(); idlePreviewTarget?.dispose(); environmentTarget?.dispose();
+      prefetch.dispose(); previewTarget?.dispose(); idlePreviewTarget?.dispose(); environmentTarget?.dispose(); disposePresetPmremCache();
       thumbnailLinear?.dispose(); thumbnailOutput?.dispose();
       thumbnailCanvas = null; thumbnailScratch.width = 1; thumbnailScratch.height = 1;
       studioMatteTarget?.dispose();
@@ -2363,6 +2518,8 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       previewBackdrop.dispose(); thumbnailBackdrop.dispose(); captureBackdrop.dispose();
       studioGround.dispose();
       shadowKeyLight?.shadow.map?.dispose();
+      studioSpotLight.dispose();
+      studioAreaLight.dispose();
       neckExport.dispose(); outputQuad.dispose(); outputMaterial.dispose(); accumQuad.dispose(); accumMaterial.dispose(); pmrem.dispose(); draco.dispose(); basis.dispose();
       disposePaperBackingCapture(renderer);
       renderer.dispose(); canvas.remove();

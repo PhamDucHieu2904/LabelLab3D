@@ -10,7 +10,7 @@ Increasing overlap or feathering the final image does not supply missing optical
 
 1. Freeze the existing camera crop, pose and background.
 2. Project conservative product bounds into the export frame, adding a clear border. Crop only empty canvas; retain one source pixel per export pixel.
-3. Generate that entire optical source using bounded native transmission tiles. Existing Vinut water/seed capture hooks remain active. Temporarily retain transmissive meshes in the render list even in empty guard tiles, so Three cannot reuse a stale source.
+3. Generate that entire optical source using bounded native transmission tiles. Existing HyperMockup water/seed capture hooks remain active. Temporarily retain transmissive meshes in the render list even in empty guard tiles, so Three cannot reuse a stale source.
 4. Copy the resolved linear native cores directly into a GPU atlas without tone mapping, resizing or an additional full-frame depth/MSAA buffer. Generate one mip pyramid after the last copy.
 5. Render beauty tiles using the same atlas. Transform each tile's projected exit UV into atlas coordinates. Roughness references the full export width.
 6. Crop/stitch the beauty cores and encode the requested PNG dimensions. Restore materials, culling, GPU bindings, input and preview state in cleanup, including failures and cancellation.

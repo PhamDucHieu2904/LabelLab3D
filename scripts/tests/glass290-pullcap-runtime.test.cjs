@@ -60,7 +60,7 @@ test('pull-cap seed metadata produces one metric-correct hydrated layer through 
   for(let j=0;j<3;j++){
    const r=1/Math.hypot(...seed[['inverseX','inverseY','inverseZ'][j]]);
    const outer=Math.hypot(...values.slice(j*4,j*4+3));
-   assert.ok(Math.abs((outer-r)*.1-.0008321520913910748)<1e-8,'hydrated thickness must match Unity in metres');
+   assert.ok(Math.abs((outer-r)*.1-.0008321520913910748)<1e-8,'hydrated thickness must match authored spec in metres');
    assert.ok(Math.abs(ratios.array[i*3+j]-r/(r+metadata.gelThicknessNative))<1e-6);
   }
  }

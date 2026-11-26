@@ -25,7 +25,7 @@ Cần kiểm tra thêm orbit grazing-angle/depth fade ở nhiều camera, resour
 
 ### Xác nhận sau hiệu chỉnh Web-only
 
-Agent chính xác nhận typecheck/lint/8 tests (3 catalog/resolver + 5 preferences)/verify-assets (12 assets)/build đều pass. Chromium switch cả ba model cho thấy chỉ studio-softbox.exr và glass-290-basil-web.glb/can-330.glb/pet-500-short-label.glb; không tải High GLB/buffers/HDRI. Cả ba ready ở Website/Studio, console không lỗi/cảnh báo. PNG Basil Web Studio 1024×1024 đã tải và kiểm tra trực quan sản phẩm/grid/watermark. SHA256 cả ba GLB trùng source VINUT (Basil 424312 bytes, can 126500 bytes, PET 1128836 bytes).
+Agent chính xác nhận typecheck/lint/8 tests (3 catalog/resolver + 5 preferences)/verify-assets (12 assets)/build đều pass. Chromium switch cả ba model cho thấy chỉ studio-softbox.exr và glass-290-basil-web.glb/can-330.glb/pet-500-short-label.glb; không tải High GLB/buffers/HDRI. Cả ba ready ở Website/Studio, console không lỗi/cảnh báo. PNG Basil Web Studio 1024×1024 đã tải và kiểm tra trực quan sản phẩm/grid/watermark. SHA256 cả ba GLB trùng source HyperMockup (Basil 424312 bytes, can 126500 bytes, PET 1128836 bytes).
 
 Bằng chứng mới: `docs/screenshots/labellab-basil-web.png`, `docs/screenshots/labellab-basil-web-export.png`. Các kiểm tra upload WEBP/color picker/preferences/project restore/responsive và PNG portrait/landscape ghi phía trên là đợt kiểm tra rộng hơn trước hiệu chỉnh, không được hiểu là toàn bộ đã rerun. Không có benchmark FPS hoặc audit cross-browser/GPU/context loss/screen reader/commercial.
 

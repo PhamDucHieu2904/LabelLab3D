@@ -82,7 +82,7 @@ export function createSceneResourceLoader(plan: SceneResourcePlan, options: Opti
         attempts.set(source, (attempts.get(source) ?? 0) + 1);
         const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 20000);
         controller.signal.addEventListener('abort', () => clearTimeout(timeout), { once: true });
-        const requestUrl = options.cacheKey ? `${source}${source.includes('?') ? '&' : '?'}vinut-release=${encodeURIComponent(options.cacheKey)}` : source;
+        const requestUrl = options.cacheKey ? `${source}${source.includes('?') ? '&' : '?'}asset-release=${encodeURIComponent(options.cacheKey)}` : source;
         void fetchFile(requestUrl, { signal: controller.signal, credentials: 'same-origin', cache: 'force-cache', priority: 'low' })
           .then(async response => {
             if (!response.ok || response.headers.get('content-type')?.includes('text/html')) throw new Error('Resource unavailable');

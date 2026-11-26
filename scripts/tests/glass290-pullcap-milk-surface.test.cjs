@@ -56,7 +56,7 @@ test('pull-cap Milk uses a stable cream reservoir shader instead of dark PBR und
     };
     water.material.onBeforeCompile(shader, {});
     assert.match(shader.fragmentShader, /gl_FragColor\s*=\s*vec4\s*\(\s*diffuse\s*,\s*1\.0\s*\)/,
-      'Milk should use a stable cream reservoir output like the Unity reference');
+      'Milk should use a stable cream reservoir output like the authored reference');
     assert.equal(water.material.side, THREE.FrontSide);
   } finally {
     context.dispose?.(); water.geometry.dispose(); water.material.dispose();

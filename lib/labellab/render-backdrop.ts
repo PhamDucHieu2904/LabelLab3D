@@ -1,4 +1,4 @@
-import { loadStyleGridTile } from './style-background';
+import { loadStyleGridTile, SCENE_THEME_BACKGROUNDS } from './style-background';
 import { centeredMockupCrop } from '../mockup/capture';
 import type { ScenePreferences } from './preferences';
 
@@ -39,7 +39,7 @@ export function snapshotRenderBackdrop(host: HTMLElement, settings: ScenePrefere
 export function paintRenderBackdrop(context: CanvasRenderingContext2D, width: number, height: number, state: ReturnType<typeof snapshotRenderBackdrop>) {
   if (state.transparent) return;
   context.save();
-  context.fillStyle = state.sceneMode === 'studio' || state.style === 'white' ? '#ffffff' : state.background;
+  context.fillStyle = state.sceneMode === 'studio' ? '#ffffff' : SCENE_THEME_BACKGROUNDS[state.style];
   context.fillRect(0, 0, width, height);
   if (state.sceneMode === 'studio') { context.restore(); return; }
   context.scale(width / state.crop.width, height / state.crop.height);

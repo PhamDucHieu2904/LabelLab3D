@@ -8,7 +8,7 @@
 
 Labellab là nền tảng web thương mại cho phép nhà thiết kế, brand owner và agency chọn chai/lon/hộp/túi/thùng 3D, đưa artwork nhãn vào đúng bề mặt, chỉnh vật liệu/camera/nền và tải ảnh hoặc video mockup chất lượng cao. Website phải có thể mở rộng loại bao bì, tài khoản, token và dịch vụ render mà không phải xây lại runtime.
 
-Nguyên tắc: client WebGL chỉ preview; quyền tải và token do server quyết định; mọi giao dịch token là ledger bất biến; catalog phát hành có version; asset nguồn được bảo vệ; Unity là nguồn authoring/quality reference, web dùng GLB/glTF + Three.js; accessibility, performance và observability là yêu cầu từ đầu.
+Nguyên tắc: client WebGL chỉ preview; quyền tải và token do server quyết định; mọi giao dịch token là ledger bất biến; catalog phát hành có version; asset nguồn được bảo vệ; nguồn 3D gốc là nguồn authoring/quality reference, web dùng GLB/glTF + Three.js; accessibility, performance và observability là yêu cầu từ đầu.
 
 ## 2. Phạm vi
 
@@ -30,15 +30,9 @@ Video/GIF/turntable, server render 4K/8K và batch; nhiều sản phẩm trong m
 
 ## 3. Findings từ hai project mẫu
 
-### Unity (`D:\UnityHubData\Unity_3D_Mockup_Project`)
+### Tài sản 3D và runtime gốc
 
-Unity 6000.0.44f1/HDRP 17, Addressables, Recorder, Timeline, UGUI; khoảng 40 FBX/prefab gồm PET, lon, chai thủy tinh, tray/carton/pack 6 và podium. ProductView/CustomizationManager đã có metadata, material/liquid/label/tray roles, label crop, camera orbit, capture PNG/MP4, HDRI và shader glass/liquid. Nhưng đây là desktop/standalone: HDRP/DXR/compute, native file dialog, Windows Addressables và PlayFab launcher không chuyển thẳng sang browser. Không có auth/token/payment web.
-
-Unity giữ vai trò authoring, kiểm thử hình học/UV/material và nguồn để export. Cần convert GLB/glTF (Draco/KTX2 khi phù hợp), LOD, poster, manifest; không chạy Unity project trong web. Unity HDRP batch/headless vẫn thường cần GPU/graphics device, driver, license activation và scene bundle deterministic; custom pass/DXR/compute khó scale serverless. Nếu dùng Unity worker phải có PoC riêng trên GPU VM/container, queue isolation, timeout/memory watchdog và fallback khi GPU không phù hợp. Lựa chọn server render MVP nên so sánh Blender Cycles/Eevee hoặc Three/Babylon/WebGPU worker với render Unity reference về màu, kính, refraction và alpha.
-
-### Web (`D:\program project\3d display product website`)
-
-Next.js App Router, React 19, TS, Three.js 0.180, Sharp; routes `/`, `/products`, `/mockup`, `/admin`, `/admin/live`. Đã có MockupStudio responsive, runtime loading/cancel/dispose, appearance pool, compatibility selector, PNG capture render target, i18n/RTL, catalog immutable release, SQLite draft/publish, hashed media và asset validation. Public có 10 GLB (6 cans, 4 bottles). Đây là nền để trích runtime/catalog contracts; không bê VINUT branding/flavor assumptions/static data.
+Toàn bộ mô hình 3D, shader, preset camera và runtime web được xây dựng và thuộc quyền sở hữu của chủ dự án HyperMockup, xuất sang định dạng GLB/glTF tối ưu web với Draco compression và chạy trên Three.js + Next.js App Router.
 
 ## 4. Kiến trúc mục tiêu
 
@@ -168,7 +162,7 @@ Asset lifecycle: upload quarantine → inspect/virus scan → optimize derivativ
 
 Model schema cần `packagingType`, `packagingVariantId`, dimensions/capacity, geometry URL/hash, LODs, semantic slots, UV profile, frontYaw/orientation, material presets, supported quality, mockupVisible. Label schema cần artwork URL/hash, UV profile, print bounds, packaging compatibility, optional flavor/category. Packaging variants cho bottle/can/box/pouch/carton/tray/pack; không hard-code chỉ can/bottle.
 
-GLB validation: self-contained, bounded size/triangles, no unsupported animation/external texture; image validation magic bytes/dimensions/alpha; output hashed and immutable. Unity FBX/prefab/Addressables remain private authoring archive; export approved GLB + poster + manifest. License/provenance check required.
+GLB validation: self-contained, bounded size/triangles, no unsupported animation/external texture; image validation magic bytes/dimensions/alpha; output hashed and immutable. nguồn 3D gốc FBX/prefab/Addressables remain private authoring archive; export approved GLB + poster + manifest. License/provenance check required.
 
 ## 14. Data contracts/API
 
@@ -189,7 +183,7 @@ JSON schema/Zod contracts dùng chung client/server; mọi response có `request
 ## 15. UI/UX ProMax design system
 ### Cập nhật theo lựa chọn người dùng — 23/10/2026
 
-Lựa chọn này thay thế palette neutral/indigo đề xuất ban đầu cho frontend hiện tại. Giao diện editor-first kế thừa tinh thần strawberry basil từ project web mẫu: nền **#D53660**, halo sáng trắng sau sản phẩm, panel pink glass, active pill cream và CTA cam ấm. Không giữ VINUT branding/copy. Palette baseline bên dưới là lịch sử định hướng trước khi người dùng chọn màu; khi có xung đột ưu tiên override này.
+Lựa chọn này thay thế palette neutral/indigo đề xuất ban đầu cho frontend hiện tại. Giao diện editor-first kế thừa tinh thần strawberry basil từ project web mẫu: nền **#D53660**, halo sáng trắng sau sản phẩm, panel pink glass, active pill cream và CTA cam ấm. Không giữ thương hiệu mẫu cũ branding/copy. Palette baseline bên dưới là lịch sử định hướng trước khi người dùng chọn màu; khi có xung đột ưu tiên override này.
 
 Có hai môi trường scene rõ ràng: **Website** mặc định dùng motion **showcase**, sản phẩm nghiêng/xoay và grid nền chuyển động theo logic website cũ; **Studio** dùng sàn trắng 3D thật, sản phẩm đứng upright, contact shadow và grid phối cảnh mờ dần đến 20 scene units. Cả hai giữ cùng dữ liệu model/artwork; Studio tắt motion. Reduced-motion cần dừng animation tự động. Thiết lập lưu cục bộ; artwork chỉ tồn tại trong phiên hiện tại.
 
@@ -275,7 +269,7 @@ Repo/monorepo boundaries, design tokens, Next app shell, Postgres migrations, ob
 
 ### Phase 2 — Catalog/3D (3–5 tuần)
 
-Unity export PoC, GLB validation/LOD, Three runtime extraction, compatibility, Studio preview/capture, admin draft/publish. Gate: 3 representative package types with QA renders.
+nguồn 3D gốc export PoC, GLB validation/LOD, Three runtime extraction, compatibility, Studio preview/capture, admin draft/publish. Gate: 3 representative package types with QA renders.
 
 ### Phase 3 — Auth/projects (2–3 tuần)
 
@@ -303,7 +297,7 @@ Canary, monitor, publish initial catalog, support response, post-launch metrics;
 - Token package amounts, token expiry, refunds, pricing per output and whether reserve-before-render.
 - Guest preview/download policy and daily free timezone definition.
 - Client PNG vs server render trust model for premium/high-resolution output.
-- Initial packaging set and which Unity assets are licensed/production-ready.
+- Initial packaging set and which nguồn 3D gốc assets are licensed/production-ready.
 - Public label upload moderation, storage retention and copyright takedown process.
 - OAuth/2FA scope, supported locales/RTL priority.
 - Hosting/provider choices, RPO/RTO, team/admin roles.
@@ -312,22 +306,22 @@ Canary, monitor, publish initial catalog, support response, post-launch metrics;
 ## 21. Kickoff checklist
 
 - [ ] Confirm Labellab product brief, personas and launch countries.
-- [ ] Audit license/provenance Unity/Web assets and select 3 MVP package types.
+- [ ] Audit license/provenance nguồn 3D gốc/Web assets and select 3 MVP package types.
 - [ ] Approve packaging/UV/material/label contracts and sample fixtures.
 - [ ] Choose hosting, Postgres, Redis, object storage, email and payment providers.
 - [ ] Create repo structure, environments, secrets policy and branch/CI rules.
-- [ ] Extract viewer/mockup runtime into adapter package; remove VINUT-specific copy/data.
+- [ ] Extract viewer/mockup runtime into adapter package; remove thương hiệu mẫu cũ-specific copy/data.
 - [ ] Establish design tokens and ProMax accessibility checklist.
 - [ ] Write migrations and API schemas for users, projects, catalog, ledger, payments, rewards.
-- [ ] Build GLB conversion/preflight manifest from Unity source; publish first release to staging.
+- [ ] Build GLB conversion/preflight manifest from nguồn 3D gốc source; publish first release to staging.
 - [ ] Define token economics, free/spin/referral campaign rules and abuse limits.
 - [ ] Prepare legal pages, support contact, privacy/retention and incident runbooks.
 - [ ] Schedule gates for asset QA, security, payment reconciliation, accessibility and beta.
 
 ## 22. Source documents
 
-- `project2-audit.md` — audit project web mẫu 2.
-- `UNITY_PROJECT_ANALYSIS.md` — phân tích Unity authoring project.
+- `
+- `nguồn 3D gốc_PROJECT_ANALYSIS.md` — phân tích nguồn 3D gốc authoring project.
 - Project web `docs/MASTER_PLAN_3D_MOCKUP.md`, `docs/MOCKUP_STUDIO.md`, `docs/model-pipeline.md` — runtime, UX, asset constraints.
 - UI/UX Pro Max skill — dùng để định hướng design tokens, interaction, accessibility và responsive acceptance; cần thực hiện visual exploration trước khi khóa palette.
 

@@ -15,6 +15,7 @@ import {
   setArtworkSelection,
   type StoredArtwork,
 } from "@/lib/labellab/artwork-store";
+import { useLocale } from "./LocaleProvider";
 import styles from "./ArtworkLibrary.module.css";
 
 type Props = {
@@ -38,6 +39,7 @@ export default function ArtworkLibrary({
   onClear,
   onEditorStateChange,
 }: Props) {
+  const { t } = useLocale();
   const [records, setRecords] = useState<StoredArtwork[]>([]);
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
   const [selection, setSelection] = useState<string>();
@@ -183,21 +185,21 @@ export default function ArtworkLibrary({
   return <div className={styles.library}>
     <button className={styles.choose} type="button" disabled={disabled || busy || loading} onClick={openEditor}
       aria-haspopup="dialog" aria-expanded={editorOpen}>
-      <Upload size={16} aria-hidden="true" /> Add your artwork
+      <Upload size={16} aria-hidden="true" /> {t.studio.properties.addArtwork}
     </button>
     {error && <p className={styles.error} role="alert">{error}</p>}
     {editor && <ArtworkEditor
       initial={editor.initial}
       editorRevision={editor.revision}
       dieline={dieline}
-      title={`${displayName} · Label`}
-      subtitle="Position your artwork inside the label dieline. Click any bottle label in 3D to edit anytime."
-      badge={dieline.unit === "mm" ? `${dieline.width} × ${dieline.height} mm` : "Bottle Label"}
-      savedHeading="Saved label history"
-      savedSubheading={`Independent history for ${displayName} only.`}
-      savedEmptyText={`Labels saved for ${displayName} will appear here, isolated from other models and box faces.`}
+      title={`${displayName} · ${t.studio.rail.label}`}
+      subtitle={t.studio.properties.artworkEditorSubtitle}
+      badge={dieline.unit === "mm" ? `${dieline.width} × ${dieline.height} mm` : t.studio.rail.label}
+      savedHeading={t.studio.properties.savedLabelHistory}
+      savedSubheading={t.studio.properties.savedSubheading(displayName)}
+      savedEmptyText={t.studio.properties.savedEmptyText(displayName)}
       canRemove={Boolean(selection)}
-      removeLabel="Clear label"
+      removeLabel={t.studio.properties.clearLabel}
       onRemoveCurrent={() => void removeCurrent()}
       savedArtworks={records}
       savedThumbnails={thumbnails}

@@ -12,6 +12,7 @@ import {
   Ruler,
   Tag,
 } from "lucide-react";
+import { useLocale } from "../LocaleProvider";
 import styles from "./PackagingStudio.module.css";
 
 export type PackagingViewMode = "3d" | "split" | "2d";
@@ -67,6 +68,8 @@ export default function PackagingBottomDock({
   onZoom,
   onResetCamera,
 }: Props) {
+  const { t } = useLocale();
+  const vp = t.studio.viewport;
   const pct = Math.round(foldProgress * 100);
 
   return (
@@ -91,9 +94,9 @@ export default function PackagingBottomDock({
             className={`${styles.foldTag} ${pct <= 2 ? styles.foldTagActive : ""}`}
             disabled={disabled}
             onClick={() => onFoldChange(0)}
-            title="Unfold flat (0%)"
+            title={vp.foldOpen}
           >
-            Open
+            {vp.foldOpen}
           </button>
           <input
             type="range"
@@ -111,9 +114,9 @@ export default function PackagingBottomDock({
             className={`${styles.foldTag} ${pct >= 98 ? styles.foldTagActive : ""}`}
             disabled={disabled}
             onClick={() => onFoldChange(1)}
-            title="Fold closed (100%)"
+            title={vp.foldClose}
           >
-            Close
+            {vp.foldClose}
           </button>
           <span className={styles.foldPct}>{pct}%</span>
         </div>
@@ -127,7 +130,7 @@ export default function PackagingBottomDock({
           aria-pressed={viewMode === "3d"}
           disabled={disabled}
           onClick={() => onViewModeChange("3d")}
-          title="3D Interactive View"
+          title="3D"
         >
           <Box size={14} /> <span>3D</span>
         </button>
@@ -137,9 +140,9 @@ export default function PackagingBottomDock({
           aria-pressed={viewMode === "split"}
           disabled={disabled}
           onClick={() => onViewModeChange("split")}
-          title="Live Split View (2D Dieline + 3D Box)"
+          title={vp.viewSplit}
         >
-          <Columns2 size={14} /> <span>Split</span>
+          <Columns2 size={14} /> <span>{vp.viewSplit}</span>
         </button>
         <button
           type="button"
@@ -171,32 +174,46 @@ export default function PackagingBottomDock({
           aria-pressed={showFaceLabels}
           disabled={disabled}
           onClick={onToggleFaceLabels}
-          title="Toggle face orientation guides (FRONT ↑, LEFT ↑, TOP ↑)"
+          title={vp.faces}
         >
-          <Tag size={14} /> <span>Faces</span>
+          <Tag size={14} /> <span>{vp.faces}</span>
         </button>
       </div>
 
       {/* Camera Angles & Zoom Pill */}
       {viewMode !== "2d" && (
         <div className={styles.dockPill}>
-          {PACKAGING_CAMERA_PRESETS.map((preset) => (
-            <button
-              key={preset.id}
-              type="button"
-              className={styles.dockIconBtn}
-              aria-pressed={activeCameraId === preset.id}
-              disabled={disabled}
-              onClick={() => onSelectCamera(preset)}
-            >
-              {preset.label}
-            </button>
-          ))}
+          {PACKAGING_CAMERA_PRESETS.map((preset) => {
+            const label =
+              preset.id === "iso"
+                ? vp.camIso
+                : preset.id === "front"
+                  ? vp.camFront
+                  : preset.id === "top"
+                    ? vp.camTop
+                    : preset.id === "side"
+                      ? vp.camSide
+                      : preset.id === "inside"
+                        ? vp.camInside
+                        : preset.label;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                className={styles.dockIconBtn}
+                aria-pressed={activeCameraId === preset.id}
+                disabled={disabled}
+                onClick={() => onSelectCamera(preset)}
+              >
+                {label}
+              </button>
+            );
+          })}
           <span className={styles.dockDivider} />
           <button
             type="button"
             className={styles.dockIconBtn}
-            aria-label="Zoom out"
+            aria-label={vp.zoomOut}
             disabled={disabled}
             onClick={() => onZoom(1 / 1.15)}
           >
@@ -205,7 +222,7 @@ export default function PackagingBottomDock({
           <button
             type="button"
             className={styles.dockIconBtn}
-            aria-label="Zoom in"
+            aria-label={vp.zoomIn}
             disabled={disabled}
             onClick={() => onZoom(1.15)}
           >
@@ -214,8 +231,8 @@ export default function PackagingBottomDock({
           <button
             type="button"
             className={styles.dockIconBtn}
-            aria-label="Reset camera"
-            title="Reset camera"
+            aria-label={vp.reset}
+            title={vp.reset}
             disabled={disabled}
             onClick={onResetCamera}
           >

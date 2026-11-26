@@ -43,7 +43,7 @@ const scenes = [
 ];
 
 for (const [id, displayId, webUrl] of scenes) {
-  test(`${id} uses the published Vinut web asset and appearance without overrides`, () => {
+  test(`${id} uses the published web asset with blank label artwork and calibrated liquid/cap optics`, () => {
     const model = LAB_MODELS.find(item => item.id === id);
     const display = publishedCatalog.displays3d.find(item => item.id === displayId);
     const sourceModel = publishedCatalog.models3d.find(item => item.id === display.modelId);
@@ -51,11 +51,18 @@ for (const [id, displayId, webUrl] of scenes) {
     assert.ok(model);
     assert.ok(published);
     assert.equal(model.asset.src, webUrl);
-    assert.deepEqual(model.asset, published.asset);
-    const expectedAppearance = id === 'basil-strawberry'
-      ? { ...published.appearance, slots: { ...published.appearance.slots, cap: { ...(published.appearance.slots?.cap ?? {}), color: '#c0c0c0' } } }
-      : published.appearance;
-    assert.deepEqual(model.appearance, expectedAppearance);
+    assert.deepEqual(model.asset.materialSlots, published.asset.materialSlots);
+    assert.equal(model.asset.volumeMl, published.asset.volumeMl);
+    assert.equal(model.appearance.slots.label.baseColorMap, undefined, 'all studio models start with blank label artwork');
+    if (id === 'can-mango') {
+      assert.deepEqual(model.appearance.slots.label, { metalness: 0, roughness: 0.15, clearcoat: 0.35 });
+    } else {
+      assert.equal(model.appearance.slots.label.color, '#ffffff');
+      assert.deepEqual(model.appearance.slots.liquid, published.appearance.slots.liquid);
+    }
+    if (id === 'basil-strawberry') {
+      assert.equal(model.appearance.slots.cap.color, '#c0c0c0');
+    }
     assert.equal(model.frontYaw, sourceModel.mockupFrontYaw ?? 0);
     assert.equal(isBasilHighAsset(model.asset), false, 'Web scenes must not activate the High optics/HDRI pipeline');
     assert.equal(fs.existsSync(path.join(root, 'public', webUrl)), true);
@@ -65,7 +72,7 @@ for (const [id, displayId, webUrl] of scenes) {
 test('290 ml family keeps the Label Lab PC order and selects index 0', () => {
   const family = LAB_MODEL_FAMILIES.find(item => item.id === 'glass-290-rotate-cap');
   assert.ok(family);
-  assert.equal(family.name, '290 ml Bottle');
+  assert.equal(family.name, 'Glass - 290 mL');
   assert.deepEqual(getOrderedFamilyVariants(family).map(item => [item.label, item.order]), [
     ['Basil', 0],
     ['Chia', 1],
@@ -125,8 +132,9 @@ test('320 ml bottle keeps existing Nata media and persistent selection alongside
   const model = LAB_MODELS.find(item => item.id === 'pet-nata-watermelon');
   assert.equal(model.appearance.slots.liquid.color, '#ff4430');
   assert.equal(model.appearance.slots.label.textureOffsetX, 0.03);
+  assert.equal(model.appearance.slots.label.baseColorMap, undefined, '320 ml PET starts with blank label');
   const crypto = require('node:crypto');
-  for (const url of [model.asset.src, model.poster, model.appearance.slots.label.baseColorMap]) {
+  for (const url of [model.asset.src, model.poster.split('?')[0]]) {
     const media = publishedCatalog.media.find(item => item.url === url);
     const bytes = fs.readFileSync(path.join(root, 'public', url));
     assert.equal(bytes.length, media.bytes, url);
@@ -175,15 +183,35 @@ test('searches match variant names while preserving one packaging card and categ
   assert.deepEqual(filterLabModelFamilies(' Chia ').map(item => item.id), ['glass-290-rotate-cap', 'glass-290-pull-cap']);
   assert.deepEqual(filterLabModelFamilies('strawberry').map(item => item.id), ['glass-290-rotate-cap']);
   assert.deepEqual(filterLabModelFamilies('290 ml').map(item => item.id), ['glass-290-rotate-cap', 'glass-290-pull-cap']);
-  assert.deepEqual(filterLabModelFamilies('MILK').map(item => item.id), ['glass-300-milk', 'glass-485-milk', 'glass-290-rotate-cap', 'glass-290-pull-cap', 'glass-280-latte']);
+  assert.deepEqual(filterLabModelFamilies('MILK').map(item => item.id), ['glass-280-latte', 'glass-290-rotate-cap', 'glass-290-pull-cap', 'glass-300-milk', 'glass-485-milk']);
   assert.deepEqual(filterLabModelFamilies('Latte').map(item => item.id), ['glass-280-latte']);
   for (const query of ['full label', 'short label']) {
     assert.deepEqual(filterLabModelFamilies(query, 'glass').map(item => item.id), ['glass-280-latte']);
   }
   assert.equal(filterLabModelFamilies('Chia', 'can').length, 0);
-  assert.deepEqual(filterLabModelFamilies('', 'pet').map(item => item.id), ['pet-320-nata', 'pet-500-short-label', 'pet-350-juice', 'pet-330-energy', 'pet-1000-juice', 'pet-1500-juice', 'pet-325-juice']);
+  assert.deepEqual(filterLabModelFamilies('', 'pet').map(item => item.id), ['pet-320-nata', 'pet-325-juice', 'pet-330-energy', 'pet-350-juice', 'pet-500-short-label', 'pet-1000-juice', 'pet-1500-juice']);
   assert.equal(getLabModelFamily(undefined), undefined);
   assert.equal(getLabModelFamily('not-a-web-model'), undefined);
+});
+
+test('all models use blank labels, unified category-volume names, grouped order, and lightweight WebP thumbnails', () => {
+  const categoryOrder = { glass: 0, can: 1, pet: 2, pp: 3 };
+  let lastCatRank = -1;
+  for (const family of LAB_MODEL_FAMILIES) {
+    const rank = categoryOrder[family.category];
+    assert.ok(rank >= lastCatRank, `families must be grouped by category: ${family.name}`);
+    lastCatRank = rank;
+    assert.match(family.name, /^(Glass|Can|PET|PP) - \d+(\.\d+)? (mL|L)( .+)?$/, `unified naming format: ${family.name}`);
+  }
+  for (const model of LAB_MODELS) {
+    assert.equal(model.appearance.slots?.label?.baseColorMap, undefined, `${model.id} must start with blank label`);
+    const relPoster = model.poster.split('?')[0].replace(/^\/+/, '');
+    assert.ok(relPoster.endsWith('.webp'), `${model.id} poster must be WebP`);
+    const posterBytes = fs.readFileSync(path.join(root, 'public', relPoster));
+    assert.equal(posterBytes.subarray(0, 4).toString('ascii'), 'RIFF', `${model.id} valid RIFF header`);
+    assert.equal(posterBytes.subarray(8, 12).toString('ascii'), 'WEBP', `${model.id} valid WEBP signature`);
+    assert.ok(posterBytes.length > 500 && posterBytes.length < 60000, `${model.id} lightweight WebP (${posterBytes.length} bytes)`);
+  }
 });
 
 for (const [id,volume,type,color] of [['pet-320-full-nata',320,'nata-de-coco','#ff4430'],['pet-1000-juice',1000,'fruit-juice','#E8B64F']]) {

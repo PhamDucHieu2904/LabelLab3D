@@ -8,6 +8,7 @@ export const ADMIN_SECTIONS = [
   { key: "content", title: "Nội dung", group: "Quản lý", icon: "content" },
   { key: "promotions", title: "Sự kiện & ưu đãi", group: "Quản lý", icon: "promotions" },
   { key: "releases", title: "Phát hành", group: "Hệ thống", icon: "releases" },
+  { key: "legal", title: "Pháp lý & thuế", group: "Hệ thống", icon: "legal" },
   { key: "activity", title: "Nhật ký & an ninh", group: "Hệ thống", icon: "activity" },
   { key: "settings", title: "Cài đặt", group: "Hệ thống", icon: "settings" },
 ] as const;

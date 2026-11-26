@@ -42,7 +42,7 @@ export interface ProductAsset {
   sparkling?: boolean;
   /** Euler correction in radians for assets that do not use glTF's +Y-up convention. */
   orientation?: Vector3Tuple;
-  /** Use measured bounds when authored Unity camera distances are too tight for this asset. */
+  /** Use measured bounds when authored preset camera distances are too tight for this asset. */
   cameraFraming?: 'bounds';
 }
 

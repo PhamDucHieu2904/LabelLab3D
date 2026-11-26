@@ -63,6 +63,10 @@ export function createRefractionAtlas(renderer: THREE.WebGLRenderer, rect: Pixel
         (tile.renderHeight - tile.cropY - tile.height) / tile.renderHeight,
         tile.width / tile.renderWidth, tile.height / tile.renderHeight);
       target.texture.generateMipmaps = final;
+      // Set the tile rect directly on the render target (physical atlas pixels)
+      // rather than renderer.setViewport(), which multiplies by devicePixelRatio
+      // and mutates the renderer's main canvas viewport.
+      target.viewport.set(tile.x, rect.height - tile.y - tile.height, tile.width, tile.height);
       renderer.setRenderTarget(target);
       if (!validated) {
         const gl = renderer.getContext();
@@ -71,7 +75,6 @@ export function createRefractionAtlas(renderer: THREE.WebGLRenderer, rect: Pixel
         }
         validated = true;
       }
-      renderer.setViewport(tile.x, rect.height - tile.y - tile.height, tile.width, tile.height);
       const autoClear = renderer.autoClear;
       try { renderer.autoClear = false; quad.render(renderer); }
       finally { renderer.autoClear = autoClear; }

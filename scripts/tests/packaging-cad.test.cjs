@@ -63,6 +63,11 @@ const {
 } = loadSource(path.join(root, 'lib/packaging-cad/geometry/solid-builder'));
 
 const {
+  buildHoneycombPartitionGeometry,
+  getHoneycombDividerThicknessMm,
+} = loadSource(path.join(root, 'lib/packaging-cad/geometry/partition-builder'));
+
+const {
   buildPackagingRig,
 } = loadSource(path.join(root, 'lib/packaging-cad/kinematics/rig-builder'));
 
@@ -92,8 +97,8 @@ test('multi-domain registry exposes beverage, packaging and future apparel slot 
   assert.equal(loadSavedDomain(storage), 'packaging');
 });
 
-test('all Wave 1 + Wave 2 templates solve valid 2D dielines, finite 3D rigs, and zero-NaN geometry across extreme sizes', () => {
-  assert.equal(PACKAGING_TEMPLATES.length, 8);
+test('all registered packaging templates solve valid 2D dielines, finite 3D rigs, and zero-NaN geometry across extreme sizes', () => {
+  assert.equal(PACKAGING_TEMPLATES.length, 5);
   for (const tpl of PACKAGING_TEMPLATES) {
     const configs = [
       createDefaultPackagingParams(tpl.id),
@@ -262,12 +267,16 @@ test('packaging preferences sanitize hostile inputs, clamp bounds and round-trip
   assert.equal(hostile.outsideColor, getBoardMaterialPreset('kraft-e').outsideColor);
   assert.equal(BOARD_MATERIAL_PRESETS.length, 8);
   assert.equal(filterPackagingTemplates('mailer').length, 1);
-  assert.equal(filterPackagingTemplates('', 'rigid-box').length, 3);
-  assert.equal(filterPackagingTemplates('', 'carrier').length, 1);
+  assert.equal(filterPackagingTemplates('', 'rigid-box').length, 1);
+  assert.equal(filterPackagingTemplates('', 'carton').length, 2);
+  // Removed template IDs safely fall back to the default template without crashing.
+  for (const removedId of ['beverage-carrier', 'ecma-a20-tuck', 'rigid-magnetic-box', 'rigid-drawer-sleeve']) {
+    assert.equal(parsePackagingParams({ templateId: removedId }).templateId, 'fefco-0421-tray');
+  }
 });
 
-test('Wave 2 two-piece kinematics (Lid & Base, Drawer & Sleeve) and Beverage Carrier dividers behave accurately', () => {
-  // 1. Lid & Base Rigid Box: flat at 0, lid elevated/hovering at 0.72, seated flush at 1.0
+test('two-piece Lid & Base rigid box kinematics hover and seat flush accurately', () => {
+  // Lid & Base Rigid Box: flat at 0, lid elevated/hovering at 0.72, seated flush at 1.0
   const lidBaseSolved = solvePackagingTemplate(createDefaultPackagingParams('rigid-lid-base'));
   const lidBaseMats = createPackagingMaterialSet(lidBaseSolved.params, lidBaseSolved.material);
   const lidBaseRig = buildPackagingRig(lidBaseSolved, lidBaseMats);
@@ -282,27 +291,6 @@ test('Wave 2 two-piece kinematics (Lid & Base, Drawer & Sleeve) and Beverage Car
   assert.ok(Math.abs(seatedHeightM * 1000 - lidBaseSolved.outerMm.height) < 5, 'seated lid height matches outerMm.height');
   lidBaseRig.dispose();
   lidBaseMats.dispose();
-
-  // 2. Drawer & Sleeve Box: drawer extends horizontally at 0.68 and glides flush inside sleeve at 1.0
-  const drawerSolved = solvePackagingTemplate(createDefaultPackagingParams('rigid-drawer-sleeve'));
-  assert.equal(drawerSolved.contentAnchor.panelId, 'drawer-base', 'packed bottles anchor to moving inner drawer');
-  const drawerMats = createPackagingMaterialSet(drawerSolved.params, drawerSolved.material);
-  const drawerRig = buildPackagingRig(drawerSolved, drawerMats);
-  drawerRig.setFoldProgress(0.68);
-  const pulledWidthM = drawerRig.measureBounds().getSize(new THREE.Vector3()).x;
-  drawerRig.setFoldProgress(1.0);
-  const closedWidthM = drawerRig.measureBounds().getSize(new THREE.Vector3()).x;
-  assert.ok(pulledWidthM > closedWidthM + 0.08, `drawer pulls out horizontally (${pulledWidthM.toFixed(3)}m vs ${closedWidthM.toFixed(3)}m)`);
-  drawerRig.dispose();
-  drawerMats.dispose();
-
-  // 3. Beverage 6-Pack Carrier: central arched handle + 2 cross cell dividers (3×2)
-  const carrierParams = { ...createDefaultPackagingParams('beverage-carrier'), carrierPack: '6-pack', dividerGrid: true };
-  const carrierSolved = solvePackagingTemplate(carrierParams);
-  assert.ok(carrierSolved.flatPanels.some((p) => p.id === 'center-handle'), 'carrier includes central handle spine');
-  assert.ok(carrierSolved.flatPanels.some((p) => p.id === 'divider-1') && carrierSolved.flatPanels.some((p) => p.id === 'divider-2'), '6-pack carrier has 2 cross dividers');
-  const carrier8Solved = solvePackagingTemplate({ ...carrierParams, carrierPack: '8-pack' });
-  assert.ok(carrier8Solved.flatPanels.some((p) => p.id === 'divider-3'), '8-pack carrier generates 3 cross dividers');
 });
 
 test('Pack Your Bottles layout solver computes exact auto-fit dimensions, cell alignment, and sanitizes config', () => {
@@ -341,17 +329,15 @@ test('Pack Your Bottles layout solver computes exact auto-fit dimensions, cell a
   const meanZ = trayLayout.slots.reduce((s, p) => s + p.zMm, 0) / trayLayout.slots.length;
   assert.ok(Math.abs(meanX) < 1e-6 && Math.abs(meanZ) < 1e-6, 'bottle slots centered symmetrically');
 
-  // Auto-fit 6-pack Beverage Carrier for 290ml glass bottles
+  // Auto-fit 12-pack RSC carton with honeycomb cell dividers for 290ml glass bottles
   const glass290 = getBeverageFootprintMm('basil-strawberry', 290);
-  const carrierFit = computeAutoFitBoxDimensions({
-    templateId: 'beverage-carrier',
+  const rscFit = computeAutoFitBoxDimensions({
+    templateId: 'fefco-0201-rsc',
     itemMm: glass290,
-    config: { cols: 3, rows: 2, spacingMm: 2, wallPaddingMm: 2 },
-    thicknessMm: 1.5,
-    dividerGrid: true,
+    config: { cols: 4, rows: 3, spacingMm: 0, wallPaddingMm: 2, honeycombDividers: true },
+    thicknessMm: 3.0,
   });
-  assert.equal(carrierFit.carrierPack, '6-pack');
-  assert.ok(carrierFit.lengthMm >= 190, '6-pack carrier accounts for internal divider clearance');
+  assert.ok(rscFit.lengthMm >= 285, 'RSC honeycomb auto-fit reserves clearance for internal partition walls');
 
   // Detect tight overflow when tray is shrunk below bottle footprint
   const tinySolved = solvePackagingTemplate({
@@ -395,6 +381,27 @@ test('Pack Your Bottles layout solver computes exact auto-fit dimensions, cell a
   assert.equal(sanitizedPack.rows, 1);
   assert.equal(sanitizedPack.spacingMm, 16);
   assert.equal(sanitizedPack.facingYawDeg, 180);
+
+  // Full unconstrained 360° random rotation when organicJitter is enabled
+  const jitterA = computeBottlePackLayout(fittedTraySolved, can330, {
+    ...createDefaultBottlePackConfig('can-mango'),
+    enabled: true,
+    cols: 4,
+    rows: 3,
+    organicJitter: true,
+    jitterSeed: 1,
+  });
+  const jitterB = computeBottlePackLayout(fittedTraySolved, can330, {
+    ...createDefaultBottlePackConfig('can-mango'),
+    enabled: true,
+    cols: 4,
+    rows: 3,
+    organicJitter: true,
+    jitterSeed: 42,
+  });
+  const maxAbsDeg = Math.max(...jitterA.slots.map((s) => Math.abs((s.yawRad * 180) / Math.PI)));
+  assert.ok(maxAbsDeg > 45, `organicJitter spans full 360° (maxAbs=${maxAbsDeg.toFixed(1)}°)`);
+  assert.notEqual(jitterA.slots[0].yawRad, jitterB.slots[0].yawRad, 'new jitterSeed produces fresh random angles');
 });
 
 test('photorealistic packaging upgrade generates micro-beveled edges, physical PBR paper maps, and shadow-ready rig meshes', () => {
@@ -498,7 +505,7 @@ test('Spot UV / Hot Foil finish presets, param sanitization, and Progressive Sof
 
   // Strict sanitization & clamping of finish parameters
   const sanitized = parsePackagingParams({
-    templateId: 'rigid-magnetic-box',
+    templateId: 'rigid-lid-base',
     materialId: 'black-e',
     finishMode: 'gold-foil',
     finishTarget: 'brand-frame',
@@ -626,6 +633,286 @@ test('crease fillets progress UVs isotropically with 3-ply solid end caps and FE
   const flapJoint = rig.joints.find((j) => j.panelId === 'front-right-flap');
   assert.ok(flapJoint && flapJoint.fillet, 'front-right-flap has smooth 90° curved corner crease fillet');
   assert.ok(frontBox.max.x < rightBox.min.x, 'front wall curves inward inside right wall (never overhangs outside)');
+
+  rig.dispose();
+  materials.dispose();
+});
+
+test('FEFCO 0201E Side-Open Beer Case folds cleanly with exact dimensions, zero flap/glue collisions, and 24-can fit', () => {
+  const params = createDefaultPackagingParams('fefco-0201e-beer-case');
+  assert.equal(params.lengthMm, 406);
+  assert.equal(params.widthMm, 272);
+  assert.equal(params.heightMm, 122);
+  assert.equal(params.dimensionMode, 'inner');
+  assert.equal(params.fluteDirection, 'along-W');
+
+  const solved = solvePackagingTemplate(params);
+  assert.equal(solved.innerMm.length, 406);
+  assert.equal(solved.innerMm.width, 272);
+  assert.equal(solved.innerMm.height, 122);
+  assert.equal(solved.flatPanels.length, 13, 'beer case has 4 body walls + glue tab + 4 dust flaps + 4 major side flaps');
+
+  const materials = createPackagingMaterialSet(solved.params, solved.material);
+  const rig = buildPackagingRig(solved, materials);
+
+  const worldBox = (id) => {
+    const entry = rig.panelMeshes.get(id);
+    assert.ok(entry, `panel ${id} exists`);
+    entry.mesh.geometry.computeBoundingBox();
+    return entry.mesh.geometry.boundingBox.clone().applyMatrix4(entry.mesh.matrixWorld);
+  };
+
+  // Closed state (fold = 1): outer dimensions match outerMm within 0.05 mm and zero collisions!
+  rig.setFoldProgress(1);
+  const closedSize = rig.measureBounds().getSize(new THREE.Vector3());
+  assert.ok(Math.abs(closedSize.x * 1000 - solved.outerMm.length) < 0.05, 'folded length matches outerMm.length');
+  assert.ok(Math.abs(closedSize.z * 1000 - solved.outerMm.width) < 0.05, 'folded width matches outerMm.width');
+  assert.ok(Math.abs(closedSize.y * 1000 - solved.outerMm.height) < 0.05, 'folded height matches outerMm.height');
+
+  const topBox = worldBox('top-wall');
+  const frontBox = worldBox('front-wall');
+  const glueBox = worldBox('glue-tab');
+  const rightDustFront = worldBox('front-right-dust');
+  const rightDustBack = worldBox('back-right-dust');
+  const rightMajorTop = worldBox('top-right-flap');
+  const rightMajorBot = worldBox('bottom-right-flap');
+
+  // Glue tab tucks cleanly beneath Top Panel (zero protrusion above top-wall!)
+  assert.ok(glueBox.max.y < topBox.min.y, `glue tab sits cleanly beneath top panel (${(glueBox.max.y * 1000).toFixed(2)} < ${(topBox.min.y * 1000).toFixed(2)})`);
+  // Top Panel front edge sits flush with Front Panel outer face
+  assert.ok(Math.abs(topBox.max.z - frontBox.max.z) * 1000 < 0.05, 'top panel front edge aligns flush with front wall outside');
+  // Outer major flaps sit strictly outside inner dust flaps (zero Z-fighting!)
+  assert.ok(rightDustFront.max.x < rightMajorTop.min.x, 'right front dust flap sits inside right upper major flap');
+  assert.ok(rightDustBack.max.x < rightMajorBot.min.x, 'right back dust flap sits inside right lower major flap');
+  // Opposing dust flaps do not overlap across width; opposing major flaps preserve flapGap across height
+  assert.ok(rightDustBack.max.z < rightDustFront.min.z, 'front & back inner dust flaps do not collide');
+  assert.ok(rightMajorBot.max.y < rightMajorTop.min.y, 'top & bottom outer major flaps maintain flap gap');
+
+  // Side-opening animation: at heroFold (0.91), Left end is already closed while Right major flaps are ajar!
+  rig.setFoldProgress(0.91);
+  const leftOpenBox = worldBox('top-left-flap');
+  const rightOpenBox = worldBox('top-right-flap');
+  assert.ok(
+    rightOpenBox.max.x - leftOpenBox.min.x > closedSize.x + 0.015,
+    'at heroFold=0.91 right side flaps open outward cleanly beyond closed length',
+  );
+
+  // Pack Your Bottles: 24 × 330ml cans (6×4) fit inside default Beer Case cleanly!
+  const can330 = getBeverageFootprintMm('can-330', 330);
+  const pack24 = computeBottlePackLayout(solved, can330, {
+    ...createDefaultBottlePackConfig('can-330'),
+    enabled: true,
+    cols: 6,
+    rows: 4,
+    spacingMm: 1.5,
+    wallPaddingMm: 1.5,
+  });
+  assert.equal(pack24.itemCount, 24);
+  assert.equal(pack24.fitsAll, true, '24 × 330ml cans (6×4) fit cleanly inside default beer case');
+
+  rig.dispose();
+  materials.dispose();
+});
+
+test('FEFCO 0201 Top-Open Shipping Carton (RSC) folds cleanly with exact dimensions, tucked glue joint, and nested top/bottom flaps', () => {
+  const params = createDefaultPackagingParams('fefco-0201-rsc');
+  assert.equal(params.lengthMm, 360);
+  assert.equal(params.widthMm, 240);
+  assert.equal(params.heightMm, 220);
+  assert.equal(params.dimensionMode, 'inner');
+  assert.equal(params.fluteDirection, 'along-W');
+
+  const solved = solvePackagingTemplate(params);
+  assert.equal(solved.innerMm.length, 360);
+  assert.equal(solved.innerMm.width, 240);
+  assert.equal(solved.innerMm.height, 220);
+  assert.equal(solved.flatPanels.length, 13, 'RSC carton has 4 body walls + glue tab + 4 minor flaps + 4 major flaps');
+
+  // Outside print-side-up dieline: glue tab sits at far left (largest X in internal 2D CAD) attached to Front panel,
+  // and all 4 top & bottom flaps align to a clean straight outer top/bottom line!
+  const panelById = new Map(solved.flatPanels.map((p) => [p.id, p]));
+  const gluePanel = panelById.get('glue-tab');
+  const frontPanel = panelById.get('front-wall');
+  assert.ok(gluePanel && frontPanel);
+  assert.ok(
+    gluePanel.bounds.maxX >= solved.blankBounds.maxX - 1e-6 &&
+      gluePanel.bounds.minX >= frontPanel.bounds.maxX - solved.params.thicknessMm - 1e-6,
+    'glue tab attaches to Front Wall outer edge (far left on outside print dieline)',
+  );
+  for (const id of ['top-front-flap', 'top-right-flap', 'top-back-flap', 'top-left-flap']) {
+    const p = panelById.get(id);
+    assert.ok(
+      Math.abs(p.bounds.maxY - solved.blankBounds.maxY) < 0.05,
+      `${id} aligns flush with straight top outer edge`,
+    );
+  }
+  for (const id of ['base', 'bottom-front-flap', 'bottom-left-flap', 'bottom-right-flap']) {
+    const p = panelById.get(id);
+    assert.ok(
+      Math.abs(p.bounds.minY - solved.blankBounds.minY) < 0.05,
+      `${id} aligns flush with straight bottom outer edge`,
+    );
+  }
+
+  const materials = createPackagingMaterialSet(solved.params, solved.material);
+  const rig = buildPackagingRig(solved, materials);
+
+  const worldBox = (id) => {
+    const entry = rig.panelMeshes.get(id);
+    assert.ok(entry, `panel ${id} exists`);
+    entry.mesh.geometry.computeBoundingBox();
+    return entry.mesh.geometry.boundingBox.clone().applyMatrix4(entry.mesh.matrixWorld);
+  };
+
+  // Closed state (fold = 1): outer dimensions match outerMm within 0.05 mm and zero collisions!
+  rig.setFoldProgress(1);
+  const closedSize = rig.measureBounds().getSize(new THREE.Vector3());
+  assert.ok(Math.abs(closedSize.x * 1000 - solved.outerMm.length) < 0.05, 'folded length matches outerMm.length');
+  assert.ok(Math.abs(closedSize.z * 1000 - solved.outerMm.width) < 0.05, 'folded width matches outerMm.width');
+  assert.ok(Math.abs(closedSize.y * 1000 - solved.outerMm.height) < 0.05, 'folded height matches outerMm.height');
+
+  const baseBox = worldBox('base');
+  const botFrontBox = worldBox('bottom-front-flap');
+  const botLeftBox = worldBox('bottom-left-flap');
+  const botRightBox = worldBox('bottom-right-flap');
+  const topBackBox = worldBox('top-back-flap');
+  const topFrontBox = worldBox('top-front-flap');
+  const topLeftBox = worldBox('top-left-flap');
+  const topRightBox = worldBox('top-right-flap');
+  const leftBox = worldBox('left-wall');
+  const frontBox = worldBox('front-wall');
+  const glueBox = worldBox('glue-tab');
+
+  // Bottom major flaps sit coplanar on ground; bottom minor flaps nest strictly INSIDE above them
+  assert.ok(Math.abs(baseBox.min.y - botFrontBox.min.y) * 1000 < 0.05, 'bottom major flaps rest coplanar on floor');
+  assert.ok(botLeftBox.min.y > baseBox.max.y, 'bottom-left minor flap nests cleanly above bottom major flaps');
+  assert.ok(botRightBox.min.y > botFrontBox.max.y, 'bottom-right minor flap nests cleanly above bottom major flaps');
+
+  // Top minor flaps nest strictly INSIDE underneath top major flaps (exact inner height cavity!)
+  assert.ok(topLeftBox.max.y < topBackBox.min.y, 'top-left minor flap nests cleanly underneath top major flaps');
+  assert.ok(topRightBox.max.y < topFrontBox.min.y, 'top-right minor flap nests cleanly underneath top major flaps');
+  const cavityHeightMm = (topLeftBox.min.y - botLeftBox.max.y) * 1000;
+  assert.ok(
+    Math.abs(cavityHeightMm - solved.innerMm.height) < 0.05,
+    `interior cavity height matches innerMm.height (${solved.innerMm.height}mm), got ${cavityHeightMm.toFixed(2)}mm`,
+  );
+
+  // Glue tab tucks strictly INSIDE Left Wall, strictly OUTSIDE the interior clear cavity [-Linner/2, +Linner/2],
+  // and strictly between bottom & top minor flaps (zero protrusion and zero packed-bottle clipping!)
+  assert.ok(glueBox.min.x > leftBox.max.x, 'glue tab sits strictly inside left wall');
+  assert.ok(
+    glueBox.max.x * 1000 <= -solved.innerMm.length * 0.5 + 0.05,
+    `glue tab stays completely clear of interior bottle cavity (${(glueBox.max.x * 1000).toFixed(2)} <= ${(-solved.innerMm.length * 0.5).toFixed(2)})`,
+  );
+  assert.ok(glueBox.max.z <= frontBox.min.z + 1e-4, 'glue tab sits strictly behind front wall');
+  assert.ok(glueBox.min.y > botLeftBox.max.y && glueBox.max.y < topLeftBox.min.y, 'glue tab clears minor flaps');
+  assert.ok(Math.abs(leftBox.max.z - frontBox.max.z) * 1000 < 0.05, 'left wall front lip aligns flush with front wall');
+
+  // Opposing major & minor flaps maintain non-overlapping clearances
+  assert.ok(topBackBox.max.z < topFrontBox.min.z, 'top major flaps maintain flap gap');
+  assert.ok(baseBox.max.z < botFrontBox.min.z, 'bottom major flaps maintain flap gap');
+  assert.ok(topLeftBox.max.x < topRightBox.min.x, 'top minor flaps do not collide');
+  assert.ok(botLeftBox.max.x < botRightBox.min.x, 'bottom minor flaps do not collide');
+
+  // Top-opening animation: at heroFold (0.89), bottom & walls are closed while top major flaps open upward!
+  rig.setFoldProgress(0.89);
+  const openTopFront = worldBox('top-front-flap');
+  const openBotFront = worldBox('bottom-front-flap');
+  assert.ok(
+    Math.abs(openBotFront.min.y - baseBox.min.y) * 1000 < 0.05,
+    'bottom remains sealed flat at heroFold=0.89',
+  );
+  assert.ok(
+    openTopFront.max.y > topFrontBox.max.y + 0.05,
+    'top major flaps open clearly upward at heroFold=0.89',
+  );
+
+  // Pack Your Bottles: 12 × 500ml PET bottles (4×3) fit inside default RSC carton cleanly!
+  const pet500 = getBeverageFootprintMm('pet-aloe', 500);
+  const pack12 = computeBottlePackLayout(solved, pet500, {
+    ...createDefaultBottlePackConfig('pet-aloe'),
+    enabled: true,
+    cols: 4,
+    rows: 3,
+    spacingMm: 2,
+    wallPaddingMm: 2,
+  });
+  assert.equal(pack12.itemCount, 12);
+  assert.equal(pack12.fitsAll, true, '12 × 500ml PET bottles (4×3) fit cleanly inside default RSC carton');
+
+  // Honeycomb cell dividers ("Đóng vách tổ ong") for FEFCO 0201:
+  // Auto-fit accounts for partition caliper, centers every bottle inside its cell with zero wall clipping,
+  // and generates a watertight interlocking 2-group BufferGeometry safely below inner height!
+  const glass290 = getBeverageFootprintMm('basil-strawberry', 290);
+  const plainFit = computeAutoFitBoxDimensions({
+    templateId: 'fefco-0201-rsc',
+    itemMm: glass290,
+    config: { cols: 3, rows: 2, spacingMm: 2, wallPaddingMm: 2, honeycombDividers: false },
+    thicknessMm: 3,
+  });
+  const honeycombFit = computeAutoFitBoxDimensions({
+    templateId: 'fefco-0201-rsc',
+    itemMm: glass290,
+    config: { cols: 3, rows: 2, spacingMm: 2, wallPaddingMm: 2, honeycombDividers: true },
+    thicknessMm: 3,
+  });
+  assert.ok(honeycombFit.lengthMm > plainFit.lengthMm, 'honeycomb dividers widen carton length for partition walls');
+  assert.ok(honeycombFit.widthMm > plainFit.widthMm, 'honeycomb dividers deepen carton width for partition walls');
+
+  const fittedHoneycombSolved = solvePackagingTemplate({
+    ...createDefaultPackagingParams('fefco-0201-rsc'),
+    dimensionMode: 'inner',
+    lengthMm: honeycombFit.lengthMm,
+    widthMm: honeycombFit.widthMm,
+    heightMm: honeycombFit.heightMm,
+  });
+  const honeycombLayout = computeBottlePackLayout(fittedHoneycombSolved, glass290, {
+    ...createDefaultBottlePackConfig('basil-strawberry'),
+    enabled: true,
+    cols: 3,
+    rows: 2,
+    spacingMm: 2,
+    wallPaddingMm: 2,
+    honeycombDividers: true,
+  });
+  assert.equal(honeycombLayout.fitsAll, true, '6 glass bottles fit cleanly inside honeycomb cells');
+
+  const divT = getHoneycombDividerThicknessMm(fittedHoneycombSolved.params.thicknessMm);
+  const cellW = fittedHoneycombSolved.innerMm.length / 3;
+  assert.ok(cellW - glass290.diameterXMm - divT >= 1.5, 'every bottle clears adjacent honeycomb walls cleanly');
+
+  const partGeo = buildHoneycombPartitionGeometry({
+    innerL: fittedHoneycombSolved.innerMm.length,
+    innerW: fittedHoneycombSolved.innerMm.width,
+    innerH: fittedHoneycombSolved.innerMm.height,
+    cols: 3,
+    rows: 2,
+    dividerThicknessMm: divT,
+    itemHeightMm: glass290.heightMm,
+  });
+  assert.ok(partGeo, '3×2 honeycomb divider builds valid geometry');
+  assert.equal(partGeo.groups.length, 2, 'separates partition liner faces (0) and fluted cut rims (1)');
+  assert.ok(partGeo.groups[0].count > 0 && partGeo.groups[1].count > 0);
+  partGeo.computeBoundingBox();
+  const partSize = partGeo.boundingBox.getSize(new THREE.Vector3()).multiplyScalar(1000);
+  assert.ok(partSize.x < fittedHoneycombSolved.innerMm.length, 'partition fits cleanly inside inner length');
+  assert.ok(partSize.z < fittedHoneycombSolved.innerMm.width, 'partition fits cleanly inside inner width');
+  assert.ok(partSize.y < fittedHoneycombSolved.innerMm.height - 1.5, 'partition stays safely underneath closed top flaps');
+  partGeo.dispose();
+
+  // 1×1 single bottle needs no internal divider walls
+  assert.equal(
+    buildHoneycombPartitionGeometry({
+      innerL: 100,
+      innerW: 100,
+      innerH: 200,
+      cols: 1,
+      rows: 1,
+      dividerThicknessMm: divT,
+      itemHeightMm: 180,
+    }),
+    null,
+  );
 
   rig.dispose();
   materials.dispose();

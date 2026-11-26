@@ -296,7 +296,7 @@ export default function ManagementPanel({ section }: { section: ManagementSectio
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `labellab-${tab.id}.json`;
+    link.download = `hypermockup-${tab.id}.json`;
     link.click();
     URL.revokeObjectURL(url);
     setNotice("Đã xuất JSON.");

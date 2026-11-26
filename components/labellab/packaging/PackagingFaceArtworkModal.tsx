@@ -14,6 +14,7 @@ import {
 } from "@/lib/labellab/artwork-store";
 import { getLabModel } from "@/lib/labellab/catalog";
 import type { InteractivePickTarget } from "@/lib/mockup/contracts";
+import { useLocale } from "../LocaleProvider";
 
 interface Props {
   target: InteractivePickTarget;
@@ -56,6 +57,8 @@ export default function PackagingFaceArtworkModal({
   onRemovePackedBottleLabel,
   onClose,
 }: Props) {
+  const { t } = useLocale();
+  const pkg = t.studio.packaging;
   const isFace = target.kind === "packaging-face";
 
   const scope = useMemo(
@@ -214,29 +217,33 @@ export default function PackagingFaceArtworkModal({
     }
   };
 
-  const surfaceLabel = isFace ? (target.surface === "outside" ? "Outside" : "Inside") : "";
+  const surfaceLabel = isFace ? (target.surface === "outside" ? pkg.outsideLabel : pkg.insideLabel) : "";
+  const localizedFaceLabel = isFace ? pkg.faceLabel(target.label) : "";
+  const bottleDisplayName = bottleModel?.name ?? target.label;
   const title = isFace
-    ? `${target.label} · ${surfaceLabel}`
-    : `${bottleModel?.name ?? target.label} · Label`;
+    ? `${localizedFaceLabel} · ${surfaceLabel}`
+    : `${bottleDisplayName} · ${t.studio.rail.label}`;
   const subtitle = isFace
-    ? `Independent artwork for ${target.label} (${surfaceLabel}) only — other faces remain untouched.`
+    ? pkg.modalFaceSubtitle(localizedFaceLabel, surfaceLabel)
     : target.packCount && target.packCount > 1
-      ? `Position your label inside the dieline. Confirming updates all ${target.packCount} bottles in this tray.`
-      : "Position your label inside the dieline to apply it to the packed bottle.";
+      ? pkg.modalBottleSubtitleMulti(target.packCount)
+      : pkg.modalBottleSubtitleSingle;
   const badge = isFace
     ? `${surfaceLabel.toUpperCase()} · ${target.widthMm} × ${target.heightMm} mm`
     : target.packCount && target.packCount > 1
-      ? `APPLIES TO ALL ${target.packCount} BOTTLES`
+      ? pkg.modalBottleBadgeMulti(target.packCount)
       : dieline.unit === "mm"
         ? `${dieline.width} × ${dieline.height} mm`
-        : "BOTTLE LABEL";
-  const savedHeading = isFace ? `${target.shortCode} (${surfaceLabel}) history` : "Bottle label history";
+        : pkg.modalBottleBadgeSingle;
+  const savedHeading = isFace
+    ? pkg.modalFaceHistoryHeading(target.shortCode, surfaceLabel)
+    : pkg.modalBottleHistoryHeading;
   const savedSubheading = isFace
-    ? `Isolated artwork history for ${target.label} (${surfaceLabel}) only.`
-    : `Isolated label history for ${bottleModel?.name ?? target.modelId} only.`;
+    ? pkg.modalFaceHistorySub(localizedFaceLabel, surfaceLabel)
+    : pkg.modalBottleHistorySub(bottleModel?.name ?? target.modelId);
   const savedEmptyText = isFace
-    ? `Artworks you confirm for ${target.label} (${surfaceLabel}) will be saved here independently from other faces and bottles.`
-    : `Labels you confirm for ${bottleModel?.name ?? "this bottle"} will be saved here independently from box faces.`;
+    ? pkg.modalFaceHistoryEmpty(localizedFaceLabel, surfaceLabel)
+    : pkg.modalBottleHistoryEmpty(bottleModel?.name ?? target.label);
 
   return (
     <ArtworkEditor
@@ -255,7 +262,7 @@ export default function PackagingFaceArtworkModal({
       defaultFaceTint={isFace ? boardSurfaceColor : undefined}
       onFaceTintChange={isFace ? onFaceTintChange : undefined}
       canRemove={hasCurrentArtwork}
-      removeLabel={isFace ? `Remove from ${target.shortCode}` : "Reset tray bottle label"}
+      removeLabel={isFace ? pkg.modalRemoveFace(target.shortCode) : pkg.modalResetTrayLabel}
       onRemoveCurrent={() => void handleRemoveCurrent()}
       savedArtworks={records}
       savedThumbnails={thumbnails}

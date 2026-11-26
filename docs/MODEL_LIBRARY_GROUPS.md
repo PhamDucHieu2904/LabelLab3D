@@ -8,7 +8,7 @@ model ID**, so opening a saved project preserves its actual variant.
 
 ## Verified source and current availability
 
-The PC source is `D:/UnityHubData/Unity_3D_Mockup_Project/Assets`:
+The PC source is `D:/source 3DHubData/source 3D_3D_Mockup_Project/Assets`:
 
 - `ProductView.cs` declares `packingGroupName`, `productTypeName`, and
   `productTypeOrder`.
@@ -19,10 +19,10 @@ The PC source is `D:/UnityHubData/Unity_3D_Mockup_Project/Assets`:
   the source order is intentional; it is not a missing web variant.
 - The PC pull-tab lid family is separate. It is not published in this web UI.
 
-The current optimized Vinut web inventory only includes the Basil screw-cap
+The current optimized HyperMockup web inventory only includes the Basil screw-cap
 GLB: `/models/bottles/glass-290-basil-web.glb`. Chia and Milk appear as disabled
 `Coming soon` rows with no `modelId`. They do not load Basil's geometry under
-another name, and Unity geometry is not copied into the web viewer.
+another name, and source 3D geometry is not copied into the web viewer.
 
 ## Adding a web variant
 

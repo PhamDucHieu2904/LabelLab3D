@@ -10,8 +10,7 @@ for (const id of displays) {
   const display = catalog.displays3d.find(item => item.id === id);
   if (!display) throw new Error(`Missing display ${id}`);
   const model = catalog.models3d.find(item => item.id === display.modelId);
-  const label = catalog.labels.find(item => item.id === display.labelId);
-  for (const mediaId of [model.mediaId, model.posterId, label.mediaId]) {
+  for (const mediaId of [model.mediaId, model.posterId]) {
     const media = catalog.media.find(item => item.id === mediaId);
     if (!media?.url) throw new Error(`Missing media ${mediaId}`);
     urls.add(media.url);

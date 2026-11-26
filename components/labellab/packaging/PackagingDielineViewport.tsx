@@ -5,6 +5,8 @@ import { useMemo } from "react";
 import { Download } from "lucide-react";
 import type { PackagingPartGroup, SolvedDieline } from "@/lib/packaging-cad/types";
 import { exportDielineSvg } from "@/lib/packaging-cad/exporters/vector-dieline";
+import { recordDomSvgCopy } from "@/lib/client/usage-tracker";
+import { useLocale } from "../LocaleProvider";
 import styles from "./PackagingStudio.module.css";
 
 interface Props {
@@ -30,6 +32,9 @@ export default function PackagingDielineViewport({
   onSelectPanel,
   onDownloadDieline,
 }: Props) {
+  const { t } = useLocale();
+  const vp = t.studio.viewport;
+  const pkg = t.studio.packaging;
   const svgMarkup = useMemo(
     () =>
       exportDielineSvg(solved, {
@@ -52,20 +57,20 @@ export default function PackagingDielineViewport({
       <div className={styles.dielineHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <strong style={{ color: "#1f2328" }}>
-            {solved.templateCode} · Blank {Math.round(solved.blankBounds.width)} × {Math.round(solved.blankBounds.height)} mm
+            {solved.templateCode} · {pkg.dielineBlank} {Math.round(solved.blankBounds.width)} × {Math.round(solved.blankBounds.height)} mm
           </strong>
-          <span style={{ color: "#e11d48", fontWeight: 600 }}>━ Cut</span>
-          <span style={{ color: "#059669", fontWeight: 600 }}>┄ Crease</span>
-          <span style={{ color: "#2563eb", fontWeight: 600 }}>┈ Bleed ({solved.params.bleedMm}mm)</span>
+          <span style={{ color: "#e11d48", fontWeight: 600 }}>━ {pkg.dielineCut}</span>
+          <span style={{ color: "#059669", fontWeight: 600 }}>┄ {pkg.dielineCrease}</span>
+          <span style={{ color: "#2563eb", fontWeight: 600 }}>┈ {pkg.dielineBleed} ({solved.params.bleedMm}mm)</span>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <div className={styles.segmented} role="group" aria-label="Dieline print surface">
             <button type="button" aria-pressed={side === "outside"} onClick={() => onChangeSide("outside")}>
-              Outside
+              {vp.hoverOutside}
             </button>
             <button type="button" aria-pressed={side === "inside"} onClick={() => onChangeSide("inside")}>
-              Inside
+              {vp.hoverInside}
             </button>
           </div>
           <button
@@ -73,7 +78,7 @@ export default function PackagingDielineViewport({
             className={styles.dockIconBtn}
             disabled={disabled}
             onClick={() => onDownloadDieline("svg")}
-            title={`Download 1:1 mm SVG Dieline (${dielineCost === 0 ? "Free" : `${dielineCost} coins`})`}
+            title={`SVG 1:1 mm (${dielineCost === 0 ? t.studio.render.free : `${dielineCost} coin`})`}
           >
             <Download size={13} /> SVG
           </button>
@@ -82,7 +87,7 @@ export default function PackagingDielineViewport({
             className={styles.dockIconBtn}
             disabled={disabled}
             onClick={() => onDownloadDieline("pdf")}
-            title={`Download 1:1 mm Vector PDF Dieline (${dielineCost === 0 ? "Free" : `${dielineCost} coins`})`}
+            title={`PDF 1:1 mm (${dielineCost === 0 ? t.studio.render.free : `${dielineCost} coin`})`}
           >
             <Download size={13} /> PDF
           </button>
@@ -98,6 +103,7 @@ export default function PackagingDielineViewport({
       <div className={styles.dielineCanvasWrap}>
         <div
           className={styles.dielineSvgHost}
+          onCopy={() => recordDomSvgCopy()}
           onClick={(event) => {
             const target = (event.target as HTMLElement | null)?.closest?.("[data-panel-id]");
             const panelId = target?.getAttribute("data-panel-id");

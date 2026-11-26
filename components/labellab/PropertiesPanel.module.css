@@ -30,6 +30,7 @@
 .parts button:hover { background: var(--prop-soft); }
 .parts button[aria-pressed="true"] { color: var(--prop-active-ink); background: var(--prop-active); font-weight: 650; box-shadow: 0 2px 6px #0000000a; }
 .sectionHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin: 20px 0 17px; }
+.sectionHeadingFlush { margin-top: 2px; }
 .sectionHeading h3 { margin: 0; color: var(--prop-ink); font-size: 14px; font-weight: 650; line-height: 1.4; letter-spacing: -.015em; }
 .sectionHeading p { margin: 4px 0 0; color: var(--prop-muted); font-size: 11px; line-height: 1.5; }
 .reset { display: grid; place-items: center; flex-shrink: 0; width: 28px; height: 28px; padding: 0; border: 1px solid var(--prop-line); border-radius: 8px; background: transparent; color: var(--prop-muted); cursor: pointer; }

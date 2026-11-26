@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 import { Check } from "lucide-react";
 import { getOrderedFamilyVariants, type LabModelFamily } from "@/lib/labellab/catalog";
+import { useLocale } from "./LocaleProvider";
 import styles from "./ModelVariantsPanel.module.css";
 
 type Props = {
@@ -19,6 +20,7 @@ type Props = {
 export default function ModelVariantsPanel({
   family, modelId, tone, libraryRef, layoutRef, busy, onChoose, onDismiss,
 }: Props) {
+  const { t } = useLocale();
   const panelRef = useRef<HTMLElement>(null);
 
   useLayoutEffect(() => {
@@ -100,7 +102,7 @@ export default function ModelVariantsPanel({
               <span>{variant.label}</span>
               {variant.available
                 ? <Check className={styles.check} size={15} aria-hidden="true" />
-                : <span className={styles.soon}>Coming soon</span>}
+                : <span className={styles.soon}>{t.studio.library.comingSoon}</span>}
             </button>
           );
         })}

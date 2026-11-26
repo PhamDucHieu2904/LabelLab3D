@@ -1,7 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { CheckCircle2, Download, RefreshCw, ShieldAlert } from "lucide-react";
+import { CheckCircle2, Download, RefreshCw, ShieldAlert, ShieldCheck } from "lucide-react";
+import type { AntiCheatReport, FraudRiskLevel } from "@/lib/server/anticheat";
+import type { WorkerQuotaReport } from "@/lib/server/request-meter";
 import s from "./OperationsPanel.module.css";
 
 type AuditEntry = {
@@ -31,13 +34,22 @@ const defaults = {
   domain: "hypermockup.com",
   timezone: "Asia/Ho_Chi_Minh",
   locale: "vi",
-  contact: "labellab3d@gmail.com",
+  contact: "hypermockup@gmail.com",
+  ownerName: "",
+  ownerTaxId: "",
+  maskOwnerTaxId: true,
+  ownerAddress: "",
+  ownerPhone: "",
+  moitStatusUrl: "",
+  usdToVndRate: 25500,
   maintenance: true,
   resolutions: [1024, 2048, 4096, 8129],
   tileThreshold: 4096,
   freeDownloads: 1,
   renderCost: 10,
   dielineCost: 20,
+  shareCost: 20,
+  projectExtendCost: 10,
   emailVerified: true,
   sessionHours: 720,
   loginLimit: 5,
@@ -58,6 +70,7 @@ const vnOptions = { timeZone: "Asia/Ho_Chi_Minh" };
 const vnDate = (at: string) => new Date(at).toLocaleDateString("vi-VN", vnOptions);
 const vnTime = (at: string) => new Date(at).toLocaleTimeString("vi-VN", vnOptions);
 const vnDay = (at: string) => new Date(Date.parse(at) + 7 * 3600000).toISOString().slice(0, 10);
+const fmtNum = (n: number) => new Intl.NumberFormat("vi-VN").format(Math.round(n));
 
 function downloadCSV(entries: AuditEntry[]) {
   const rows = [
@@ -103,16 +116,25 @@ function Dialog({ title, children, onClose }: { title: string; children: ReactNo
 }
 
 const levels = { info: "Thông tin", warning: "Cảnh báo", error: "Lỗi" };
+const riskLabels: Record<FraudRiskLevel, string> = {
+  high: "Cảnh báo cao",
+  medium: "Nghi ngờ",
+  ok: "Bình thường",
+};
 
 export default function OperationsPanel({ section }: { section: "activity" | "settings" }) {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [security, setSecurity] = useState<SecurityPayload>({ activeLocks: [], rejectedPaymentEvents: [] });
+  const [antiCheat, setAntiCheat] = useState<AntiCheatReport | null>(null);
+  const [workerQuota, setWorkerQuota] = useState<WorkerQuotaReport | null>(null);
   const [integrations, setIntegrations] = useState<IntegrationInfo[]>([]);
   const [settings, setSettings] = useState<Settings>(defaults);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [tab, setTab] = useState("all");
+  const [tab, setTab] = useState("anticheat");
+  const [onlyFlagged, setOnlyFlagged] = useState(false);
+  const [antiCheatQuery, setAntiCheatQuery] = useState("");
   const [settingsTab, setSettingsTab] = useState("general");
   const [query, setQuery] = useState("");
   const [severity, setSeverity] = useState("all");
@@ -131,11 +153,15 @@ export default function OperationsPanel({ section }: { section: "activity" | "se
       const payload = await res.json() as {
         entries?: AuditEntry[];
         security?: SecurityPayload;
+        antiCheat?: AntiCheatReport | null;
+        workerQuota?: WorkerQuotaReport | null;
         integrations?: IntegrationInfo[];
         settings?: Settings;
       };
       setEntries(payload.entries ?? []);
       if (payload.security) setSecurity(payload.security);
+      setAntiCheat(payload.antiCheat ?? null);
+      setWorkerQuota(payload.workerQuota ?? null);
       setIntegrations(payload.integrations ?? []);
       if (payload.settings) setSettings(payload.settings);
     } catch (e) {
@@ -195,6 +221,16 @@ export default function OperationsPanel({ section }: { section: "activity" | "se
   const currentPage = Math.min(page, pages);
   const visible = filtered.slice((currentPage - 1) * 50, currentPage * 50);
 
+  const flaggedCount = antiCheat?.summary.flaggedUsersCount ?? 0;
+  const visibleAntiCheatUsers = (antiCheat?.users ?? []).filter((row) => {
+    if (onlyFlagged && row.riskLevel === "ok") return false;
+    if (!antiCheatQuery.trim()) return true;
+    const needle = antiCheatQuery.toLocaleLowerCase("vi");
+    return `${row.name} ${row.email} ${row.signals.map((sig) => sig.title).join(" ")}`
+      .toLocaleLowerCase("vi")
+      .includes(needle);
+  });
+
   const textField = (key: keyof Settings, label: string, type = "text", min?: number, max?: number) => (
     <label className={s.field}>
       {label}
@@ -221,15 +257,206 @@ export default function OperationsPanel({ section }: { section: "activity" | "se
 
       {section === "activity" ? (
         <>
-          <div className={s.tabs} role="group" aria-label="Nhật ký">
-            {[["all", "Nhật ký D1"], ["security", "An ninh"], ["integrations", "Tích hợp hệ thống"]].map(([id, label]) => (
+          <div className={s.tabs} role="group" aria-label="Nhật ký và giám sát">
+            {[
+              ["anticheat", flaggedCount > 0 ? `Chống gian lận (${flaggedCount})` : "Chống gian lận"],
+              ["all", "Nhật ký D1"],
+              ["security", "An ninh & Bot Shield"],
+              ["integrations", "Tích hợp hệ thống"],
+            ].map(([id, label]) => (
               <button key={id} aria-pressed={tab === id} className={tab === id ? s.active : ""} onClick={() => { setTab(id); setPage(1); }}>
                 {label}
               </button>
             ))}
           </div>
 
-          {tab === "integrations" ? (
+          {tab === "anticheat" ? (
+            <>
+              <div
+                className={s.notice}
+                style={
+                  flaggedCount > 0
+                    ? { borderColor: "#f0c8ce", background: "#fff5f6" }
+                    : { borderColor: "#cde8d6", background: "#f2fbf5" }
+                }
+              >
+                <div>
+                  <strong style={flaggedCount > 0 ? { color: "#a8243a" } : { color: "#1c6b42" }}>
+                    {flaggedCount > 0 ? (
+                      <>
+                        <ShieldAlert size={16} style={{ verticalAlign: "-3px", marginRight: 6 }} />
+                        Phát hiện {flaggedCount} tài khoản có dấu hiệu gian lận ({antiCheat?.summary.highRiskCount ?? 0} cảnh báo cao · {antiCheat?.summary.mediumRiskCount ?? 0} nghi ngờ)
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck size={16} style={{ verticalAlign: "-3px", marginRight: 6 }} />
+                        Hệ thống đối soát coin tự động: toàn bộ tài khoản khớp lượt dùng công cụ và số xu hao hụt
+                      </>
+                    )}
+                  </strong>
+                  <small style={{ color: "#5e6270" }}>
+                    Tự động đối chiếu giữa lượt dùng công cụ (Render 3D + Dieline 1:1 mm), coin dự kiến burn, coin thực tế trừ trên sổ cái, tỷ lệ hủy giữ xu, hành vi sao chép DOM SVG và trùng IP đăng ký.
+                  </small>
+                </div>
+                <button type="button" className={s.button} onClick={() => void load()} disabled={loading}>
+                  <RefreshCw size={15} />Đối soát lại
+                </button>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                  gap: 14,
+                  marginBottom: 18,
+                }}
+              >
+                <article className={s.card} style={{ padding: 18 }}>
+                  <span className={s.muted} style={{ fontSize: 12.5 }}>Tổng lượt dùng công cụ</span>
+                  <div style={{ fontSize: 24, fontWeight: 650, marginTop: 6 }}>
+                    {fmtNum(antiCheat?.summary.totalToolUsesCommitted ?? 0)}
+                  </div>
+                  <small className={s.muted}>
+                    {fmtNum(antiCheat?.summary.totalRendersCommitted ?? 0)} render · {fmtNum(antiCheat?.summary.totalDielinesCommitted ?? 0)} dieline
+                  </small>
+                </article>
+                <article className={s.card} style={{ padding: 18 }}>
+                  <span className={s.muted} style={{ fontSize: 12.5 }}>Xu dự kiến burn (theo lượt dùng)</span>
+                  <div style={{ fontSize: 24, fontWeight: 650, marginTop: 6 }}>
+                    {fmtNum(antiCheat?.summary.totalExpectedCoinBurn ?? 0)} xu
+                  </div>
+                  <small className={s.muted}>
+                    Ghi nhận client: {fmtNum(antiCheat?.summary.totalToolUsesReported ?? 0)} lượt
+                  </small>
+                </article>
+                <article className={s.card} style={{ padding: 18 }}>
+                  <span className={s.muted} style={{ fontSize: 12.5 }}>Xu thực tế hao hụt (sổ cái D1)</span>
+                  <div style={{ fontSize: 24, fontWeight: 650, marginTop: 6 }}>
+                    {fmtNum(antiCheat?.summary.totalActualCoinBurn ?? 0)} xu
+                  </div>
+                  <small className={s.muted}>
+                    Độ lệch tổng:{" "}
+                    <strong style={{ color: (antiCheat?.summary.totalCoinDiscrepancy ?? 0) > 0 ? "#b32f42" : "#287448" }}>
+                      {(antiCheat?.summary.totalCoinDiscrepancy ?? 0) > 0 ? "+" : ""}
+                      {fmtNum(antiCheat?.summary.totalCoinDiscrepancy ?? 0)} xu
+                    </strong>
+                  </small>
+                </article>
+                <article className={s.card} style={{ padding: 18 }}>
+                  <span className={s.muted} style={{ fontSize: 12.5 }}>Tài khoản bị cảnh báo</span>
+                  <div
+                    style={{
+                      fontSize: 24,
+                      fontWeight: 650,
+                      marginTop: 6,
+                      color: flaggedCount > 0 ? "#b32f42" : "#287448",
+                    }}
+                  >
+                    {fmtNum(flaggedCount)} / {fmtNum(antiCheat?.summary.totalUsersChecked ?? 0)}
+                  </div>
+                  <small className={s.muted}>Chỉ cảnh báo — Admin tự quyết định xử lý</small>
+                </article>
+              </div>
+
+              <div className={s.toolbar}>
+                <input
+                  className={s.search}
+                  aria-label="Tìm người dùng hoặc dấu hiệu gian lận"
+                  placeholder="Tìm tên, email hoặc loại dấu hiệu gian lận…"
+                  value={antiCheatQuery}
+                  onChange={(event) => setAntiCheatQuery(event.target.value)}
+                />
+                <label className={s.check} style={{ minHeight: 42, padding: "0 6px" }}>
+                  <input
+                    type="checkbox"
+                    checked={onlyFlagged}
+                    onChange={(event) => setOnlyFlagged(event.target.checked)}
+                  />
+                  Chỉ hiện tài khoản có cảnh báo ({flaggedCount})
+                </label>
+                <Link href="/admin/users" className={s.button} style={{ textDecoration: "none" }}>
+                  Mở trang Quản lý người dùng
+                </Link>
+              </div>
+
+              <div className={s.panel}>
+                <div className={s.scroll}>
+                  <table className={s.table}>
+                    <thead>
+                      <tr>
+                        <th>Người dùng</th>
+                        <th>Lượt dùng (Chốt / Ghi nhận)</th>
+                        <th>Xu dự kiến / Thực tế</th>
+                        <th>Hủy giữ xu</th>
+                        <th>Mức cảnh báo</th>
+                        <th>Dấu hiệu gian lận phát hiện</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleAntiCheatUsers.map((row) => (
+                        <tr key={row.userId}>
+                          <td>
+                            <strong>{row.name}</strong>
+                            <small>{row.email} {row.status === "locked" ? "· Đã khóa" : ""}</small>
+                          </td>
+                          <td>
+                            <strong>{fmtNum(row.toolUsesCommitted)}</strong> lượt chốt
+                            <small>
+                              {row.rendersCommitted} render · {row.dielinesCommitted} dieline · client: {row.toolUsesReported}
+                            </small>
+                          </td>
+                          <td>
+                            <strong>{fmtNum(row.expectedCoinBurn)}</strong> / {fmtNum(row.actualCoinBurn)} xu
+                            <small style={row.coinDiscrepancy > 0 || row.walletDrift !== 0 ? { color: "#b32f42", fontWeight: 600 } : undefined}>
+                              {row.coinDiscrepancy > 0
+                                ? `Thiếu ${fmtNum(row.coinDiscrepancy)} xu`
+                                : row.walletDrift !== 0
+                                  ? `Lệch ví ${fmtNum(row.walletDrift)} xu`
+                                  : "Khớp sổ cái"}
+                            </small>
+                          </td>
+                          <td>
+                            {row.reservesReleased + row.reservesExpiredOpen} / {row.reservesTotal}
+                            <small>{row.releaseRatePct}% hủy/hết hạn</small>
+                          </td>
+                          <td>
+                            <span
+                              className={`${s.badge} ${
+                                row.riskLevel === "high" ? s.error : row.riskLevel === "medium" ? s.warning : s.ok
+                              }`}
+                            >
+                              {riskLabels[row.riskLevel]}
+                            </span>
+                          </td>
+                          <td style={{ whiteSpace: "normal", minWidth: 280, maxWidth: 440 }}>
+                            {row.signals.length > 0 ? (
+                              <ul style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 4 }}>
+                                {row.signals.map((sig, idx) => (
+                                  <li key={`${sig.code}-${idx}`} style={{ fontSize: 12.5 }}>
+                                    <strong style={{ color: sig.severity === "high" ? "#b32f42" : "#815b15" }}>
+                                      {sig.title}:
+                                    </strong>{" "}
+                                    <span>{sig.detail}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <span className={s.muted} style={{ fontSize: 12.5 }}>Không có dấu hiệu bất thường</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {!loading && visibleAntiCheatUsers.length === 0 && (
+                    <div className={s.empty}>
+                      {onlyFlagged ? "Không có tài khoản nào đang bị cảnh báo gian lận." : "Chưa có dữ liệu người dùng trên Cloudflare D1."}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : tab === "integrations" ? (
             <div className={s.grid}>
               {integrations.map((item) => (
                 <article className={s.card} key={item.id}>
@@ -249,21 +476,25 @@ export default function OperationsPanel({ section }: { section: "activity" | "se
           ) : (
             <>
               {tab === "security" && (
-                <div className={s.notice}>
-                  <div>
-                    <strong>
-                      {security.activeLocks.length > 0 || security.rejectedPaymentEvents.length > 0 ? (
-                        <><ShieldAlert size={16} style={{ verticalAlign: "-3px", marginRight: 6 }} />{security.activeLocks.length} phiên đang bị khóa đăng nhập · {security.rejectedPaymentEvents.length} sự kiện webhook bị từ chối</>
-                      ) : (
-                        <><CheckCircle2 size={16} style={{ verticalAlign: "-3px", marginRight: 6, color: "#067647" }} />Không có cảnh báo an ninh bất thường trên Cloudflare D1</>
-                      )}
-                    </strong>
-                    <small>Đọc trực tiếp từ bảng auth_rate_limits và payment_events.</small>
+                <>
+                  <div className={s.notice}>
+                    <div>
+                      <strong>
+                        {security.activeLocks.length > 0 || security.rejectedPaymentEvents.length > 0 ? (
+                          <><ShieldAlert size={16} style={{ verticalAlign: "-3px", marginRight: 6 }} />{security.activeLocks.length} phiên đang bị khóa đăng nhập · {security.rejectedPaymentEvents.length} sự kiện webhook bị từ chối</>
+                        ) : (
+                          <><CheckCircle2 size={16} style={{ verticalAlign: "-3px", marginRight: 6, color: "#067647" }} />Không có cảnh báo khóa đăng nhập hay webhook bất thường trên Cloudflare D1</>
+                        )}
+                      </strong>
+                      <small>
+                        Bot Shield hôm nay đã chặn <strong>{fmtNum(workerQuota?.today.blockedRequests ?? 0)}</strong> request độc hại / bot phá hạn mức · Hôm nay đã dùng <strong>{fmtNum(workerQuota?.today.totalRequests ?? 0)}</strong> / 100.000 request Workers Free ({workerQuota?.today.quotaPercent ?? 0}%).
+                      </small>
+                    </div>
+                    <button type="button" className={s.button} onClick={() => void load()} disabled={loading}>
+                      <RefreshCw size={15} />Làm mới
+                    </button>
                   </div>
-                  <button type="button" className={s.button} onClick={() => void load()} disabled={loading}>
-                    <RefreshCw size={15} />Làm mới
-                  </button>
-                </div>
+                </>
               )}
 
               <div className={s.toolbar}>
@@ -369,6 +600,8 @@ export default function OperationsPanel({ section }: { section: "activity" | "se
                   </label>
                   {textField("renderCost", "Coin render chuẩn 2048 px (1K=0.5× · 4K=2× · 8K=4×)", "number", 0, 10000)}
                   {textField("dielineCost", "Coin xuất Dieline 1:1 mm (SVG/PDF/DXF)", "number", 0, 10000)}
+                  {textField("shareCost", "Coin tạo Link Share 3D cho khách duyệt (0 = miễn phí)", "number", 0, 10000)}
+                  {textField("projectExtendCost", "Coin gia hạn dự án Cloud thêm 30 ngày (0 = miễn phí)", "number", 0, 10000)}
                   {textField("freeDownloads", "Lượt tải miễn phí / ngày", "number", 0, 100)}
                 </>
               )}

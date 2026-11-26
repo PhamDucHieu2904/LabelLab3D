@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       format?: unknown;
       ttlSeconds?: unknown;
     };
-    const action = body.action === "dieline" ? "dieline" : "render";
+    const action = body.action === "dieline" ? "dieline" : body.action === "share" ? "share" : "render";
     const idempotencyKey = typeof body.idempotencyKey === "string" ? body.idempotencyKey.trim() : "";
     const modelId = typeof body.modelId === "string" ? body.modelId.trim() : "";
     if (!/^reserve_[A-Za-z0-9_-]{16,120}$/.test(idempotencyKey) || !/^[A-Za-z0-9._-]{1,120}$/.test(modelId)) {
@@ -34,6 +34,21 @@ export async function POST(request: Request) {
 
     const settings = await getLiveSiteSettings(runtimeEnv);
     const ttlSeconds = typeof body.ttlSeconds === "number" ? body.ttlSeconds : undefined;
+
+    if (action === "share") {
+      const amount = Math.max(0, Math.floor(settings.shareCost));
+      if (amount === 0) {
+        return json({ free: true, reservation: null, quote: { amount: 0, action: "share", modelId } });
+      }
+      const reservation = await reserveCoins(runtimeEnv, {
+        userId: user.id,
+        amount,
+        idempotencyKey,
+        reference: `share:${modelId}`,
+        ttlSeconds,
+      });
+      return json({ free: false, reservation, quote: { amount, action: "share", modelId } });
+    }
 
     if (action === "dieline") {
       const format = typeof body.format === "string" ? body.format.trim().toLowerCase() : "";

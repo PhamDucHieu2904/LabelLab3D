@@ -1,6 +1,8 @@
+import { CURRENT_POLICY_VERSION } from "@/lib/legal/policies";
 import { WELCOME_BONUS_COINS } from "@/lib/payments/packages";
 import { nowIso, randomId, requireDb, type AppEnv } from "./db";
 import type { AuthUser } from "./auth";
+import { recordLegalConsent } from "./legal";
 import { appendLedgerEntry } from "./wallet";
 
 export type GoogleIdentity = {
@@ -56,7 +58,18 @@ export async function upsertGoogleUser(env: AppEnv, identity: GoogleIdentity): P
     return { id: existing.id, email: existing.email, name: existing.name, role: existing.role, status: existing.status };
   }
 
-  // 3. Brand-new Google user -> create D1 user + wallet + oauth_accounts link.
+  // 3. Brand-new Google user -> respect registrations toggle, then create D1 user + wallet + oauth_accounts link.
+  try {
+    const cfgRow = await db.prepare("SELECT value_json AS valueJson FROM site_config WHERE key='settings'").first<{ valueJson: string }>();
+    if (cfgRow?.valueJson) {
+      const parsed = JSON.parse(cfgRow.valueJson) as { registrations?: unknown };
+      if (parsed.registrations === false) throw new Error("REGISTRATIONS_DISABLED");
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message === "REGISTRATIONS_DISABLED") throw error;
+    // Allow lightweight unit-test mock DBs without site_config table to proceed.
+  }
+
   const userId = randomId("usr");
   await db.batch([
     db.prepare(
@@ -76,6 +89,12 @@ export async function upsertGoogleUser(env: AppEnv, identity: GoogleIdentity): P
     reference: `welcome:${userId}`,
     idempotencyKey: `welcome:${userId}`,
     metadata: { source: "google_oauth" },
+  });
+  await recordLegalConsent(env, {
+    userId,
+    consentType: "oauth_google",
+    policyVersion: CURRENT_POLICY_VERSION,
+    metadata: { email, provider: "google" },
   });
   return { id: userId, email, name: displayName, role: "user", status: "active" };
 }

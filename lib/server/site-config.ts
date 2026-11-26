@@ -2,7 +2,9 @@ import { createManagementData, migrateManagementData, persistentManagementData, 
 import {
   COIN_PACKAGES,
   DEFAULT_DIELINE_COIN_COST,
+  DEFAULT_PROJECT_EXTEND_COIN_COST,
   DEFAULT_RENDER_COIN_COST,
+  DEFAULT_SHARE_COIN_COST,
   type CoinPackage,
   type CoinPackageBadge,
   type CoinRegion,
@@ -39,12 +41,21 @@ export type LiveSiteSettings = {
   timezone: "Asia/Ho_Chi_Minh" | "UTC";
   locale: "en" | "vi";
   contact: string;
+  ownerName: string;
+  ownerTaxId: string;
+  maskOwnerTaxId: boolean;
+  ownerAddress: string;
+  ownerPhone: string;
+  moitStatusUrl: string;
+  usdToVndRate: number;
   maintenance: boolean;
   resolutions: number[];
   tileThreshold: number;
   freeDownloads: number;
   renderCost: number;
   dielineCost: number;
+  shareCost: number;
+  projectExtendCost: number;
   emailVerified: boolean;
   sessionHours: number;
   loginLimit: number;
@@ -66,13 +77,22 @@ export const DEFAULT_SITE_SETTINGS: LiveSiteSettings = {
   domain: "hypermockup.com",
   timezone: "Asia/Ho_Chi_Minh",
   locale: "vi",
-  contact: "labellab3d@gmail.com",
+  contact: "hypermockup@gmail.com",
+  ownerName: "",
+  ownerTaxId: "",
+  maskOwnerTaxId: true,
+  ownerAddress: "",
+  ownerPhone: "",
+  moitStatusUrl: "",
+  usdToVndRate: 25500,
   maintenance: true,
   resolutions: [1024, 2048, 4096, 8129],
   tileThreshold: 4096,
   freeDownloads: 1,
   renderCost: DEFAULT_RENDER_COIN_COST,
   dielineCost: DEFAULT_DIELINE_COIN_COST,
+  shareCost: DEFAULT_SHARE_COIN_COST,
+  projectExtendCost: DEFAULT_PROJECT_EXTEND_COIN_COST,
   emailVerified: true,
   sessionHours: 720,
   loginLimit: 5,
@@ -228,15 +248,19 @@ export function extractLiveAnnouncements(management: Record<string, ManagementRe
     if (end && /^\d{4}-\d{2}-\d{2}$/.test(end) && today > end) return false;
     return Boolean(row.name.trim());
   });
-  return active.slice(0, 6).map((row, idx) => ({
-    id: row.id,
-    tone: tones[idx % tones.length],
-    title: row.name.trim(),
-    body: row.values?.text?.trim() || row.name.trim(),
-    time: row.updated || today,
-    url: row.values?.url?.trim() || "/studio",
-    unread: idx < 2,
-  }));
+  return active.slice(0, 6).map((row, idx) => {
+    const rawUrl = row.values?.url?.trim() || "";
+    const safeUrl = /^\/(?!\/)/.test(rawUrl) || /^https:\/\/[^\s]+$/i.test(rawUrl) ? rawUrl : "/studio";
+    return {
+      id: row.id,
+      tone: tones[idx % tones.length],
+      title: row.name.trim(),
+      body: row.values?.text?.trim() || row.name.trim(),
+      time: row.updated || today,
+      url: safeUrl,
+      unread: idx < 2,
+    };
+  });
 }
 
 export function defaultLiveCoinPackages(): LiveCoinPackage[] {
@@ -311,9 +335,12 @@ export function sanitizeSiteSettings(input: unknown): LiveSiteSettings {
     freeDownloads: [0, 100],
     renderCost: [0, 10000],
     dielineCost: [0, 10000],
+    shareCost: [0, 10000],
+    projectExtendCost: [0, 10000],
     sessionHours: [1, 720],
     loginLimit: [1, 100],
     retention: [7, 730],
+    usdToVndRate: [15000, 40000],
   };
   for (const key of Object.keys(DEFAULT_SITE_SETTINGS) as (keyof LiveSiteSettings)[]) {
     const val = raw[key];
@@ -335,7 +362,21 @@ export function sanitizeSiteSettings(input: unknown): LiveSiteSettings {
     } else if (typeof val === "string") {
       if (key === "locale" && !["en", "vi"].includes(val)) continue;
       if (key === "timezone" && !["Asia/Ho_Chi_Minh", "UTC"].includes(val)) continue;
-      Object.assign(result, { [key]: val.slice(0, 400) });
+      if (key === "moitStatusUrl") {
+        const trimmed = val.trim().slice(0, 400);
+        if (trimmed && !/^https?:\/\/(?:www\.)?online\.gov\.vn\/[^\s]+$/i.test(trimmed)) continue;
+        Object.assign(result, { [key]: trimmed });
+        continue;
+      }
+      if (key === "ownerTaxId") {
+        Object.assign(result, { [key]: val.replace(/[^\dA-Za-z-]/g, "").slice(0, 32) });
+        continue;
+      }
+      if (key === "ownerPhone") {
+        Object.assign(result, { [key]: val.replace(/[^\d+\s().-]/g, "").trim().slice(0, 32) });
+        continue;
+      }
+      Object.assign(result, { [key]: val.trim().slice(0, 400) });
     }
   }
   return result;

@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     if (action === "coin_adjustment") {
       const amount = Number(body.amount), reason = body.reason?.trim() ?? "";
       const key = body.idempotencyKey?.trim() ?? "";
-      if (!body.userId || !Number.isSafeInteger(amount) || amount === 0 || reason.length < 3 || reason.length > 300 || !/^admincoin_[A-Za-z0-9_-]{16,120}$/.test(key)) throw new Error("INVALID_INPUT");
+      if (!body.userId || !Number.isSafeInteger(amount) || amount === 0 || Math.abs(amount) > 1_000_000 || reason.length < 3 || reason.length > 300 || !/^admincoin_[A-Za-z0-9_-]{16,120}$/.test(key)) throw new Error("INVALID_INPUT");
       const entry = await appendLedgerEntry(env, { userId: body.userId, amount, kind: "admin_adjustment", reference: reason.slice(0, 240), idempotencyKey: key, metadata: { actorId: actor.id, reason } });
       await db.prepare("INSERT INTO audit_events (id,actor_user_id,action,target_type,target_id,metadata_json,created_at) VALUES (?,?,?,?,?,?,?)").bind(randomId("audit"), actor.id, "admin_coin_adjustment", "user", body.userId, JSON.stringify({ amount, reason, ledgerId: entry.id }), nowIso()).run();
       return json({ ok: true, entry });

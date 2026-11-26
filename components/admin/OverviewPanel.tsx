@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
-import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Bot, Download, Image, LogIn, RefreshCw, Users } from "lucide-react";
+import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Bot, Download, Gauge, Image, LogIn, RefreshCw, ShieldAlert, ShieldCheck, Users } from "lucide-react";
 import { sumTraffic, type Granularity, type TrafficPoint } from "@/lib/admin/analytics";
 import { downloadCsv, formatMoney, formatNumber, type Region } from "@/lib/admin/commerce";
+import type { WorkerQuotaReport } from "@/lib/server/request-meter";
 import s from "./AdminWorkspace.module.css";
 
 type SeriesKey = "guests" | "users" | "bots";
@@ -58,6 +59,16 @@ type OverviewResponse = {
     status: string;
     createdAt: string;
   }>;
+  workerQuota?: WorkerQuotaReport | null;
+  antiCheatSummary?: {
+    flaggedUsersCount: number;
+    highRiskCount: number;
+    mediumRiskCount: number;
+    totalCoinDiscrepancy: number;
+    totalToolUsesCommitted: number;
+    totalExpectedCoinBurn: number;
+    totalActualCoinBurn: number;
+  } | null;
   summary: { totalUsers: number; totalCoinsBalance: number };
 };
 
@@ -261,11 +272,20 @@ export default function OverviewPanel({ detailed = false }: { detailed?: boolean
 
   function exportAnalytics() {
     downloadCsv(
-      `labellab-truy-cap-${inputValue}.csv`,
+      `hypermockup-truy-cap-${inputValue}.csv`,
       ["Thời gian", "Khách lạ", "Người dùng", "Bot", "Phiên Studio", "Lượt render"],
       points.map((p) => [p.iso, p.guests, p.users, p.bots, p.sessions, p.renders]),
     );
   }
+
+  const quota = data?.workerQuota ?? null;
+  const antiCheat = data?.antiCheatSummary ?? null;
+  const quotaBarColor =
+    quota?.today.status === "upgrade"
+      ? "#b83d61"
+      : quota?.today.status === "watch"
+        ? "#c9821d"
+        : "#24806b";
 
   return (
     <>
@@ -304,6 +324,38 @@ export default function OverviewPanel({ detailed = false }: { detailed?: boolean
 
       {error && <p role="alert" className={s.formError} style={{ marginBottom: 16 }}>{error}</p>}
 
+      {antiCheat && antiCheat.flaggedUsersCount > 0 && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 14,
+            flexWrap: "wrap",
+            padding: "14px 18px",
+            marginBottom: 18,
+            borderRadius: 12,
+            border: "1px solid #f0c8ce",
+            background: "#fff5f6",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <ShieldAlert size={18} color="#b23e50" aria-hidden="true" />
+            <div>
+              <strong style={{ color: "#9c2337", display: "block" }}>
+                Cảnh báo chống gian lận: {formatNumber(antiCheat.flaggedUsersCount)} tài khoản có dấu hiệu bất thường
+              </strong>
+              <span className={s.subtle}>
+                {antiCheat.highRiskCount} cảnh báo cao · {antiCheat.mediumRiskCount} nghi ngờ · Chênh lệch coin burn: {formatNumber(antiCheat.totalCoinDiscrepancy)} xu
+              </span>
+            </div>
+          </div>
+          <Link href="/admin/activity" className={s.secondary} style={{ textDecoration: "none" }}>
+            Xem chi tiết gian lận<ArrowRight size={14} aria-hidden="true" />
+          </Link>
+        </div>
+      )}
+
       <div className={s.stats}>
         {stats.map((stat) => (
           <article className={s.stat} key={stat.title}>
@@ -316,6 +368,101 @@ export default function OverviewPanel({ detailed = false }: { detailed?: boolean
           </article>
         ))}
       </div>
+
+      {quota && (
+        <section className={s.panel} style={{ marginBottom: 22 }}>
+          <div className={s.panelHeader}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Gauge size={18} color={quotaBarColor} aria-hidden="true" />
+              <h2>Hạn mức Cloudflare Workers (100.000 req/ngày) &amp; Bot Shield</h2>
+            </div>
+            <span
+              className={s.status}
+              data-status={quota.today.status === "upgrade" ? "failed" : quota.today.status === "watch" ? "pending" : "active"}
+            >
+              {quota.today.status === "upgrade"
+                ? "Nên nâng cấp Paid"
+                : quota.today.status === "watch"
+                  ? "Theo dõi sát"
+                  : "An toàn gói Free"}
+            </span>
+          </div>
+          <div style={{ padding: "0 22px 18px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap", fontSize: 13 }}>
+              <span>
+                Hôm nay ({quota.today.day}): <strong>{formatNumber(quota.today.totalRequests)}</strong> / {formatNumber(quota.freeDailyLimit)} request ({quota.today.quotaPercent}%)
+              </span>
+              <span className={s.subtle}>{quota.today.recommendation}</span>
+            </div>
+            <div className={s.progress} style={{ height: 8, marginTop: 10 }}>
+              <span
+                style={{
+                  width: `${Math.min(100, Math.max(quota.today.totalRequests > 0 ? 2 : 0, quota.today.quotaPercent))}%`,
+                  background: quotaBarColor,
+                }}
+              />
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(175px, 1fr))",
+                gap: 14,
+                marginTop: 16,
+                paddingTop: 16,
+                borderTop: "1px solid #eceef2",
+              }}
+            >
+              <div>
+                <div className={s.subtle} style={{ fontSize: 12 }}>TB request / 1 user (hôm nay)</div>
+                <strong style={{ fontSize: 20, display: "block", marginTop: 2 }}>
+                  {quota.today.avgRequestsPerUser.toLocaleString("vi-VN")} <small className={s.subtle}>req/user</small>
+                </strong>
+                <span className={s.subtle} style={{ fontSize: 11.5 }}>
+                  {formatNumber(quota.today.uniqueUsers)} user đăng nhập · Trong kỳ: {quota.period.avgRequestsPerUser.toLocaleString("vi-VN")} req/user
+                </span>
+              </div>
+              <div>
+                <div className={s.subtle} style={{ fontSize: 12 }}>TB request / khách truy cập</div>
+                <strong style={{ fontSize: 20, display: "block", marginTop: 2 }}>
+                  {quota.today.avgRequestsPerVisitor.toLocaleString("vi-VN")} <small className={s.subtle}>req/khách</small>
+                </strong>
+                <span className={s.subtle} style={{ fontSize: 11.5 }}>
+                  {formatNumber(quota.today.uniqueUsers + quota.today.uniqueGuests)} người thực hôm nay · Kỳ: {quota.period.avgRequestsPerVisitor.toLocaleString("vi-VN")}
+                </span>
+              </div>
+              <div>
+                <div className={s.subtle} style={{ fontSize: 12 }}>Tổng Worker request ({periodText})</div>
+                <strong style={{ fontSize: 20, display: "block", marginTop: 2 }}>
+                  {formatNumber(quota.period.totalRequests)}
+                </strong>
+                <span className={s.subtle} style={{ fontSize: 11.5 }}>
+                  Trang: {formatNumber(quota.period.pageRequests)} · API: {formatNumber(quota.period.apiRequests)} · Auth: {formatNumber(quota.period.authRequests)}
+                </span>
+              </div>
+              <div>
+                <div className={s.subtle} style={{ fontSize: 12 }}>Bot &amp; probe đã chặn (Bot Shield)</div>
+                <strong style={{ fontSize: 20, display: "block", marginTop: 2, color: quota.today.blockedRequests > 0 ? "#b83d61" : "#24806b" }}>
+                  {formatNumber(quota.today.blockedRequests)} <small className={s.subtle}>hôm nay</small>
+                </strong>
+                <span className={s.subtle} style={{ fontSize: 11.5 }}>
+                  Trong kỳ: {formatNumber(quota.period.blockedRequests)} · Đỉnh ngày: {quota.period.peakDay ? `${formatNumber(quota.period.peakRequests)} (${quota.period.peakDay.slice(5)})` : "—"}
+                </span>
+              </div>
+              <div>
+                <div className={s.subtle} style={{ fontSize: 12 }}>Đối soát chống gian lận</div>
+                <strong style={{ fontSize: 20, display: "flex", alignItems: "center", gap: 6, marginTop: 2, color: (antiCheat?.flaggedUsersCount ?? 0) > 0 ? "#b23e50" : "#24806b" }}>
+                  {(antiCheat?.flaggedUsersCount ?? 0) > 0 ? <ShieldAlert size={17} /> : <ShieldCheck size={17} />}
+                  {formatNumber(antiCheat?.flaggedUsersCount ?? 0)} <small className={s.subtle}>cảnh báo</small>
+                </strong>
+                <Link href="/admin/activity" className={s.smallLink} style={{ marginTop: 2 }}>
+                  Xem đối soát coin<ArrowRight size={12} aria-hidden="true" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className={s.chartGrid}>
         <section className={s.panel}>

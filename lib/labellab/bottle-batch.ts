@@ -11,15 +11,15 @@ import pp500 from '../../public/models/bottles/pp-500.manifest.json';
 import pp500Variant2 from '../../public/models/bottles/pp-500-2.manifest.json';
 
 const definitions = [
-  { manifest: pet1500, name: '1.5 L Bottle', volume: '1.5 L', packaging: 'pet' },
-  { manifest: pet325, name: '325 ml Bottle', volume: '325 ml', packaging: 'pet' },
-  { manifest: pet1000Short, name: '1 L Bottle · Short label', volume: '1 L', packaging: 'pet' },
-  { manifest: pp1250, name: '1.25 L PP Bottle', volume: '1.25 L', packaging: 'pp' },
-  { manifest: pp1000, name: '1 L PP Bottle', volume: '1 L', packaging: 'pp' },
-  { manifest: pp2000, name: '2 L PP Bottle', volume: '2 L', packaging: 'pp' },
-  { manifest: pp1000Variant2, name: '1 L PP Bottle · Variant 2', volume: '1 L', packaging: 'pp' },
-  { manifest: pp500, name: '500 ml PP Bottle', volume: '500 ml', packaging: 'pp' },
-  { manifest: pp500Variant2, name: '500 ml PP Bottle · Variant 2', volume: '500 ml', packaging: 'pp' },
+  { manifest: pet325, name: 'PET - 325 mL', volume: '325 mL', packaging: 'pet' },
+  { manifest: pet1000Short, name: 'PET - 1 L · Short label', volume: '1 L', packaging: 'pet' },
+  { manifest: pet1500, name: 'PET - 1.5 L', volume: '1.5 L', packaging: 'pet' },
+  { manifest: pp500, name: 'PP - 500 mL', volume: '500 mL', packaging: 'pp' },
+  { manifest: pp500Variant2, name: 'PP - 500 mL · Variant 2', volume: '500 mL', packaging: 'pp' },
+  { manifest: pp1000, name: 'PP - 1 L', volume: '1 L', packaging: 'pp' },
+  { manifest: pp1000Variant2, name: 'PP - 1 L · Variant 2', volume: '1 L', packaging: 'pp' },
+  { manifest: pp1250, name: 'PP - 1.25 L', volume: '1.25 L', packaging: 'pp' },
+  { manifest: pp2000, name: 'PP - 2 L', volume: '2 L', packaging: 'pp' },
 ] as const;
 
 /** Shared native defaults keep reset and preference migration consistent for this batch. */
@@ -32,11 +32,11 @@ export const BATCH_MATERIAL_DEFAULTS: Record<string, Partial<MaterialPreferences
 }]));
 
 export const BATCH_MODELS: LabModel[] = definitions.map(({manifest,name,volume,packaging})=>{
-  const poster = `/models/bottles/${manifest.id}-poster.webp?v=${manifest.sha256.slice(0,12)}`;
+  const poster = `/models/bottles/${manifest.id}-poster.webp?v=thumb-v2`;
   const slots: Record<string,string[]> = manifest.materialSlots;
   return {
     id: manifest.id, name, volume, category: packaging,
-    description: `${manifest.volumeMl} ml ${packaging.toUpperCase()} bottle · ${packaging === 'pp' ? 'Opaque white' : 'Juice'} · ready for artwork.`,
+    description: `${manifest.volumeMl} mL ${packaging.toUpperCase()} bottle · ${packaging === 'pp' ? 'Opaque white' : 'Juice'} · ready for artwork.`,
     poster,
     asset: {
       id: manifest.id, name, src: `${manifest.src}?v=${manifest.sha256.slice(0,12)}`,

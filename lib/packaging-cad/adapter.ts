@@ -21,7 +21,14 @@ import {
   createBottlePacker,
   type BottlePackVisualSource,
 } from './bottle-packer';
-import type { BeverageFootprintMm } from './pack-layout';
+import {
+  getBeverageFootprintMm,
+  type BeverageFootprintMm,
+} from './pack-layout';
+import {
+  buildHoneycombPartitionGeometry,
+  getHoneycombDividerThicknessMm,
+} from './geometry/partition-builder';
 
 export interface PackagingSubjectController extends ProceduralSubject {
   getSolved(): SolvedDieline;
@@ -119,15 +126,84 @@ export function createPackagingSubject(
 
   let cachedBoxBounds = new THREE.Box3();
   let cachedBounds = new THREE.Box3();
+  let honeycombMesh: THREE.Mesh | null = null;
+  let lastHoneycombSig = '';
+
+  const disposeHoneycombMesh = () => {
+    if (!honeycombMesh) return;
+    honeycombMesh.removeFromParent();
+    honeycombMesh.geometry.dispose();
+    honeycombMesh = null;
+    lastHoneycombSig = '';
+  };
+
+  const syncHoneycombPartition = () => {
+    if (disposed) return;
+    const cfg = currentBottleConfig;
+    const shouldShow =
+      solved.templateId === 'fefco-0201-rsc' &&
+      Boolean(cfg?.enabled) &&
+      Boolean(cfg?.honeycombDividers) &&
+      (Math.round(cfg?.cols ?? 1) > 1 || Math.round(cfg?.rows ?? 1) > 1);
+
+    if (!shouldShow || !cfg) {
+      disposeHoneycombMesh();
+      return;
+    }
+
+    const cols = Math.max(1, Math.min(6, Math.round(cfg.cols)));
+    const rows = Math.max(1, Math.min(4, Math.round(cfg.rows)));
+    const measuredFp =
+      bottlePacker.getMeasuredFootprintMm() ??
+      getBeverageFootprintMm(cfg.modelId, currentBottleVisual?.model.asset.volumeMl);
+    const divT = getHoneycombDividerThicknessMm(solved.params.thicknessMm);
+    const sig = JSON.stringify([
+      solved.innerMm.length,
+      solved.innerMm.width,
+      solved.innerMm.height,
+      cols,
+      rows,
+      divT,
+      Math.round(measuredFp.heightMm * 10),
+    ]);
+    if (sig === lastHoneycombSig && honeycombMesh) {
+      if (honeycombMesh.parent !== bottlePacker.group) {
+        bottlePacker.group.add(honeycombMesh);
+      }
+      return;
+    }
+
+    disposeHoneycombMesh();
+    const geo = buildHoneycombPartitionGeometry({
+      innerL: solved.innerMm.length,
+      innerW: solved.innerMm.width,
+      innerH: solved.innerMm.height,
+      cols,
+      rows,
+      dividerThicknessMm: divT,
+      itemHeightMm: measuredFp.heightMm,
+    });
+    if (!geo) return;
+
+    const mesh = new THREE.Mesh(geo, [materials.partition, materials.edge]);
+    mesh.name = 'honeycomb-partition';
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    bottlePacker.group.add(mesh);
+    honeycombMesh = mesh;
+    lastHoneycombSig = sig;
+  };
 
   const bottlePacker = createBottlePacker({
     onNeedsRender: () => {
       if (disposed) return;
+      syncHoneycombPartition();
       cachedBounds = computeCombinedBounds();
       callbacks?.onBoundsChanged?.();
       callbacks?.onNeedsRender?.();
     },
     onFootprintMeasured: (modelId, footprintMm) => {
+      syncHoneycombPartition();
       callbacks?.onBottleFootprintMeasured?.(modelId, footprintMm);
     },
   });
@@ -253,6 +329,7 @@ export function createPackagingSubject(
         if (currentBottleConfig) {
           bottlePacker.sync(solved, currentBottleConfig, currentBottleVisual);
         }
+        syncHoneycombPartition();
       } else {
         rig.setFoldProgress(solved.params.foldProgress);
         rig.setCreaseLinesVisible(solved.params.showCreaseLines);
@@ -284,6 +361,7 @@ export function createPackagingSubject(
       currentBottleVisual = visualSource;
       attachBottlePackToRig();
       bottlePacker.sync(solved, currentBottleConfig, visualSource);
+      syncHoneycombPartition();
       cachedBounds = centerRigAndMeasure();
     },
     setFoldProgress(progress) {
@@ -474,6 +552,7 @@ export function createPackagingSubject(
       if (disposed) return;
       disposed = true;
       foldPlaying = false;
+      disposeHoneycombMesh();
       bottlePacker.group.removeFromParent();
       bottlePacker.dispose();
       rig.root.removeFromParent();

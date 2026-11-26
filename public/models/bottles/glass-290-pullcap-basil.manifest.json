@@ -4,8 +4,8 @@
   "sourceName": "Glass 290ml napkeo model (Basil) web.glb",
   "sourceBytes": 430280,
   "sourceSha256": "486b827bdd7f49a23ab327fbc042960a25e7dd5eedacc5d8aa150bc0b0a249d5",
-  "bytes": 195056,
-  "sha256": "2dff43bbbca5a8a8af80099260205beb27cb876d2ba02434925f439161f5d6bf",
+  "bytes": 194892,
+  "sha256": "840c992ababeb615f926aea10661a77b9a3ffeee276f65ab19514d5d3a6bea31",
   "binarySha256": "08def4d7f4ea254be33611e52623f1542aee8ae2e22841e59baa6db1787e7004",
   "sourceToMetres": 0.1,
   "units": "metres",
@@ -55,9 +55,7 @@
     ]
   },
   "geometryRepair": {
-    "capSourceBlend": "D:/3D model/Model Bottle Can/Blender Model 1/Glass 290ml napkeo model (Basil).blend",
     "capSourceBlendSha256": "b4c6f87355124e9c3d0633e32faad535b8e78e98eb0e7442a200d78149099475",
-    "capEvaluatedArtifact": "artifacts/pullcap-cap-evaluated.glb",
     "capEvaluatedVertices": 5630,
     "capEvaluatedTriangles": 9176,
     "labelRadialOffsetMetres": 0.0001,

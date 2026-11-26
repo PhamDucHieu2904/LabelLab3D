@@ -2,6 +2,23 @@ import { backgroundConfig, labellabWhiteIconUrl } from '../background-config';
 import { loadBackgroundTile } from '../background-image-tile';
 import type { ScenePreferences } from './preferences';
 
+/**
+ * Curated Mockup Studio themes: each entry pairs a backdrop color with its full
+ * Studio UI palette. Add new themes here when designing additional UI palettes.
+ */
+export const SCENE_THEME_BACKGROUNDS: Readonly<Record<ScenePreferences['style'], string>> = Object.freeze({
+  white: '#ffffff',
+  pink: '#d53660',
+});
+
+export const SCENE_THEME_OPTIONS: ReadonlyArray<{
+  readonly id: ScenePreferences['style'];
+  readonly color: string;
+}> = Object.freeze([
+  { id: 'white', color: SCENE_THEME_BACKGROUNDS.white },
+  { id: 'pink', color: SCENE_THEME_BACKGROUNDS.pink },
+]);
+
 const tiles = new Map<string, Promise<string>>();
 
 /** Shared raster for the live grid, glass refraction, previews and exports. */

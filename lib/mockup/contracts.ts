@@ -1,7 +1,8 @@
 import type * as THREE from 'three';
 import type { ProductAppearance, ProductAsset } from '../viewer-config';
 import type { LiveMaterialOverrides } from '../viewer/material-adjustments';
-import type { UnityCameraPresetId } from './unity-camera-presets';
+import type { StudioCameraPresetId } from './camera-presets';
+import type { EnvironmentPresetId, StudioSpotLightConfig } from './environment-presets';
 import type { QualityPreference, QualityRuntimeReport } from './quality-tier';
 
 export interface ProceduralContactFootprint {
@@ -51,7 +52,7 @@ export interface ProceduralSubject {
   dispose(): void;
 }
 
-export type MockupCameraPreset = 'front' | 'three-quarter' | UnityCameraPresetId;
+export type MockupCameraPreset = 'front' | 'three-quarter' | StudioCameraPresetId;
 export type MockupFocalPreset = 'ultraWide' | 'wide' | 'standard' | 'long' | 'telephoto';
 export type MockupBackgroundType = 'white' | 'gray' | 'dark' | 'color' | 'gradient' | 'transparent';
 export interface MockupBackground { type: MockupBackgroundType; color?: string; colorEnd?: string }
@@ -79,6 +80,10 @@ export interface MockupStatus {
 }
 export interface MockupRuntimeOptions {
   onStatus(value: MockupStatus): void;
+  /** Optional initial HDRI lighting preset ('studio-original' by default). */
+  environmentPreset?: EnvironmentPresetId;
+  /** Optional initial Studio Spotlight configuration. */
+  spotLight?: StudioSpotLightConfig;
   /** Optional quality tier preference ('auto' | 'low' | 'medium' | 'high' | 'ultra'). */
   qualityPreference?: QualityPreference;
   /** Notifies Studio UI of the detected & active quality tier / MSAA state. */
@@ -111,6 +116,10 @@ export interface MockupRuntime {
   setFocalLength(preset: MockupFocalPreset): void;
   /** Switch live rendering quality tier ('auto' | 'low' | 'medium' | 'high' | 'ultra'). */
   setQualityPreference(preference: QualityPreference): void;
+  /** Switch live HDRI lighting environment preset (cached in PMREM for instant zero-lag updates). */
+  setEnvironment(preset: EnvironmentPresetId): void;
+  /** Toggle or adjust the optional Studio Spotlight rig in real time. */
+  setSpotLight(config: StudioSpotLightConfig): void;
   setBackground(background: MockupBackground): void;
   setAnimation(animation: MockupAnimation): void;
   /** Suspend background rendering for a modal without resetting the view or animation clock. */

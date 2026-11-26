@@ -1,6 +1,6 @@
 /** Manual graphics preference. No device benchmark or automatic mode switching. */
 export type GraphicsMode = 'standard' | 'enhanced';
-export const GRAPHICS_STORAGE_KEY = 'vinut.graphics-mode.v1';
+export const GRAPHICS_STORAGE_KEY = 'hypermockup.graphics-mode.v1';
 const listeners = new Set<() => void>();
 let cached: GraphicsMode | undefined;
 

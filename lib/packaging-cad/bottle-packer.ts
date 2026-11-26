@@ -1427,15 +1427,15 @@ export function createBottlePacker(callbacks?: {
         const labelRough =
           typeof visual.labelRoughness === 'number' && Number.isFinite(visual.labelRoughness)
             ? visual.labelRoughness
-            : (slotSpec?.roughness ?? (isCan ? 0.28 : 0.26));
+            : (slotSpec?.roughness ?? (isCan ? 0.15 : 0.26));
         const labelMetal =
           typeof visual.labelMetalness === 'number' && Number.isFinite(visual.labelMetalness)
             ? visual.labelMetalness
-            : (slotSpec?.metalness ?? (isCan ? 0.18 : 0.02));
+            : (slotSpec?.metalness ?? (isCan ? 0 : 0.02));
         const mat = isCan
           ? new THREE.MeshPhysicalMaterial({
               color: labelTexture ? '#ffffff' : (safeHex(slotSpec?.color) ?? '#f8f7f3'),
-              map: labelTexture ?? (origStd?.map ?? null),
+              map: labelTexture,
               roughness: labelRough,
               metalness: labelMetal,
               clearcoat: slotSpec?.clearcoat ?? 0.35,
@@ -1447,7 +1447,7 @@ export function createBottlePacker(callbacks?: {
             })
           : new THREE.MeshStandardMaterial({
               color: labelTexture ? '#ffffff' : (safeHex(slotSpec?.color) ?? '#f8f7f3'),
-              map: labelTexture ?? (origStd?.map ?? null),
+              map: labelTexture,
               roughness: labelRough,
               metalness: labelMetal,
               envMapIntensity: 1.18,

@@ -15,7 +15,7 @@ export interface StudioGroundController {
 /** White perspective studio floor in model metres. Fit to upright model bounds. */
 export function createStudioGround(scene: THREE.Scene): StudioGroundController {
   const group = new THREE.Group();
-  group.name = "Labellab studio ground";
+  group.name = "HyperMockup studio ground";
   group.visible = false;
   const floorGeometry = new THREE.PlaneGeometry(200, 200);
   const floorMaterial = new THREE.MeshBasicMaterial({

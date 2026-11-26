@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
+  AlertCircle,
   ArrowDown,
   ArrowLeft,
   ArrowRight,
@@ -13,10 +14,12 @@ import {
   Circle,
   Droplets,
   FileImage,
-  FolderOpen,
   Globe2,
   Grid2X2,
+  Layers,
+  Layers3,
   Maximize2,
+  Milk,
   Minus,
   MousePointerClick,
   Package,
@@ -24,14 +27,16 @@ import {
   Plus,
   RotateCcw,
   RotateCw,
+  Ruler,
   Save,
   Search,
   Shirt,
-  SlidersHorizontal,
+  Sliders,
   Sparkles,
+  Sticker,
   Sun,
-  Trash2,
   Upload,
+  Wrench,
   X,
 } from "lucide-react";
 import {
@@ -75,9 +80,17 @@ import {
   exportDielinePdf,
   exportDielineSvg,
 } from "@/lib/packaging-cad/exporters/vector-dieline";
+import { SCENE_THEME_BACKGROUNDS, SCENE_THEME_OPTIONS } from "@/lib/labellab/style-background";
+import {
+  SPOT_LIGHT_ANGLE_PRESETS,
+  SPOT_LIGHT_COLOR_SWATCHES,
+  STUDIO_ENVIRONMENT_PRESETS,
+  type StudioSpotLightConfig,
+} from "@/lib/mockup/environment-presets";
 import pkgStyles from "./packaging/PackagingStudio.module.css";
+import LibrarySearchFilterBar from "./LibrarySearchFilterBar";
 import PackagingLibrary from "./packaging/PackagingLibrary";
-import PackagingInspector from "./packaging/PackagingInspector";
+import PackagingInspector, { type PackagingInspectorSection } from "./packaging/PackagingInspector";
 import PackagingBottomDock, {
   type PackagingCameraViewPreset,
   type PackagingViewMode,
@@ -85,8 +98,11 @@ import PackagingBottomDock, {
 import PackagingDielineViewport from "./packaging/PackagingDielineViewport";
 import PackagingArtworkPanel from "./packaging/PackagingArtworkPanel";
 import PackagingFaceArtworkModal from "./packaging/PackagingFaceArtworkModal";
-import SaveProjectDialog from "./SaveProjectDialog";
+import ProjectsModal from "./ProjectsModal";
+import SaveProjectDialog, { type SaveProjectPayload } from "./SaveProjectDialog";
+import ShareProjectDialog from "./ShareProjectDialog";
 import ViewportDisplayRail from "./ViewportDisplayRail";
+import { useLocale } from "./LocaleProvider";
 import {
   getDefaultFamilyVariant,
   getLabModelFamily,
@@ -115,7 +131,7 @@ import {
   type QualityPreference,
   type QualityRuntimeReport,
 } from "@/lib/mockup/quality-tier";
-import { UNITY_CAMERA_PRESETS } from "@/lib/mockup/unity-camera-presets";
+import { STUDIO_CAMERA_PRESETS } from "@/lib/mockup/camera-presets";
 import studioTheme from "./StudioNeutral.module.css";
 import modelLibrary from "./ModelLibrary.module.css";
 import SceneCanvas, { type SceneCanvasHandle } from "./SceneCanvas";
@@ -132,54 +148,78 @@ import {
   type StoredArtwork,
 } from "@/lib/labellab/artwork-store";
 import {
+  capturePackedBottleSnapshot,
+  capturePackagingArtworkSnapshot,
   deleteCustomProject,
+  deleteProjectGroupRecord,
+  groupCustomProjects,
+  hydratePackagingArtworkSnapshot,
   listCustomProjects,
+  listProjectGroups,
+  resolveItemGroupId,
   sanitizeProjectName,
   saveCustomProject,
+  saveProjectGroup,
   type CustomProjectRecord,
+  type ProjectGroup,
 } from "@/lib/labellab/project-store";
+import {
+  cloudProjectAssetUrl,
+  deleteCloudProjectApi,
+  deleteCloudProjectItemApi,
+  extendCloudProjectApi,
+  fetchUserCloudProjects,
+  hydrateCloudItemToRecord,
+  migrateLocalGroupToCloud,
+  patchCloudProject,
+  saveRecordToCloudProject,
+  type StudioProjectCollection,
+} from "@/lib/labellab/cloud-projects-client";
+import {
+  CLOUD_PROJECT_LIMITS,
+  type CloudProjectItem,
+  type CloudProjectSummary,
+} from "@/lib/projects/contracts";
+import type { SharedProjectSummary } from "@/lib/share/contracts";
 import SiteHeader from "./SiteHeader";
 import ModelVariantsPanel from "./ModelVariantsPanel";
-import PropertiesPanel from "./PropertiesPanel";
+import PropertiesPanel, { type PropertiesPart } from "./PropertiesPanel";
 import { useAuthDialog } from "./AuthDialog";
 import {
   DEFAULT_DIELINE_COIN_COST,
+  DEFAULT_PROJECT_EXTEND_COIN_COST,
   DEFAULT_RENDER_COIN_COST,
+  DEFAULT_SHARE_COIN_COST,
   resolveRenderCoinCost,
 } from "@/lib/payments/packages";
+import { fetchSiteConfigCached } from "@/lib/client/api-cache";
+import {
+  attachUsageTrackerLifecycle,
+  recordDielineCompleted,
+  recordDielineStarted,
+  recordRenderCompleted,
+  recordRenderStarted,
+} from "@/lib/client/usage-tracker";
 
 type Modal = "projects" | "guide" | null;
-type EditorTool = "models" | "scene" | "materials";
-const swatches = [
-  "#d53660",
-  "#7f9a7a",
-  "#98bdcb",
-  "#d8ad72",
-  "#ac97be",
-  "#253d36",
-];
+type BeverageTool = "models" | "label" | "liquid" | "cap" | "body" | "backdrop";
+type PackagingTool =
+  | "models"
+  | "pkg-size"
+  | "pkg-pack"
+  | "pkg-material"
+  | "pkg-structure"
+  | "pkg-procad"
+  | "scene";
+type EditorTool = BeverageTool | PackagingTool;
 const VALID_BEVERAGE_MODEL_IDS = new Set(LAB_MODELS.map((m) => m.id));
 const libraryPageSize = 8; // Two columns, four rows.
-const categories = [
-  { id: "all", label: "All" },
-  { id: "glass", label: "Glass" },
-  { id: "can", label: "Cans" },
-  { id: "pet", label: "PET" },
-  { id: "pp", label: "PP" },
-];
-const formatDate = (value: string) =>
-  new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
 
 function captureCanvasThumbnailBlob(canvas: HTMLCanvasElement | null): Promise<Blob | undefined> {
   if (!canvas || canvas.width < 2 || canvas.height < 2) return Promise.resolve(undefined);
   return new Promise((resolve) => {
     try {
-      const size = 256;
+      const size = 480;
       const offscreen = document.createElement("canvas");
       offscreen.width = size;
       offscreen.height = size;
@@ -202,6 +242,22 @@ function captureCanvasThumbnailBlob(canvas: HTMLCanvasElement | null): Promise<B
 }
 
 export default function LabellabApp() {
+  const { t } = useLocale();
+  const st = t.studio;
+  const modelCategoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: LAB_MODEL_FAMILIES.length };
+    for (const family of LAB_MODEL_FAMILIES) {
+      counts[family.category] = (counts[family.category] ?? 0) + 1;
+    }
+    return counts;
+  }, []);
+  const localizedCategories = [
+    { id: "all", label: st.library.catAll, count: modelCategoryCounts.all ?? 0 },
+    { id: "glass", label: st.library.catGlass, count: modelCategoryCounts.glass ?? 0 },
+    { id: "can", label: st.library.catCans, count: modelCategoryCounts.can ?? 0 },
+    { id: "pet", label: st.library.catPet, count: modelCategoryCounts.pet ?? 0 },
+    { id: "pp", label: st.library.catPp, count: modelCategoryCounts.pp ?? 0 },
+  ];
   const [domain, setDomain] = useState<StudioDomainId>("beverage");
   const [packagingParams, setPackagingParams] = useState<PackagingParams>(() => createDefaultPackagingParams());
   const [packagingArtwork, setPackagingArtwork] = useState<PackagingArtworkState>({
@@ -237,11 +293,21 @@ export default function LabellabApp() {
   const [activeTool, setActiveTool] = useState<EditorTool | null>("models");
   const [modal, setModal] = useState<Modal>(null);
   const [status, setStatus] = useState<MockupStatus["phase"]>("loading-model");
-  const [toast, setToast] = useState("");
+  const [toastState, setToastState] = useState<{ message: string; tone: "success" | "error" } | null>(null);
+  const setToast = useCallback((message: string, tone: "success" | "error" = "success") => {
+    setToastState(message ? { message, tone } : null);
+  }, []);
   const [projectName, setProjectName] = useState("Basil study 01");
   const [projects, setProjects] = useState<CustomProjectRecord[]>([]);
+  const [projectGroups, setProjectGroups] = useState<ProjectGroup[]>([]);
+  const [cloudProjects, setCloudProjects] = useState<CloudProjectSummary[]>([]);
+  const [cloudAuthenticated, setCloudAuthenticated] = useState(false);
+  const [sharedProjects, setSharedProjects] = useState<SharedProjectSummary[]>([]);
+  const [shareDialogGroupId, setShareDialogGroupId] = useState<string | null>(null);
   const [projectThumbUrls, setProjectThumbUrls] = useState<Record<string, string>>({});
   const [loadedProjectId, setLoadedProjectId] = useState<string | undefined>(undefined);
+  const [loadedCloudProjectId, setLoadedCloudProjectId] = useState<string | undefined>(undefined);
+  const [loadedCloudItemId, setLoadedCloudItemId] = useState<string | undefined>(undefined);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [savePreviewBlob, setSavePreviewBlob] = useState<Blob | undefined>(undefined);
   const [savePreviewUrl, setSavePreviewUrl] = useState<string | undefined>(undefined);
@@ -257,6 +323,8 @@ export default function LabellabApp() {
   const [sitePricing, setSitePricing] = useState({
     renderCost: DEFAULT_RENDER_COIN_COST,
     dielineCost: DEFAULT_DIELINE_COIN_COST,
+    shareCost: DEFAULT_SHARE_COIN_COST,
+    projectExtendCost: DEFAULT_PROJECT_EXTEND_COIN_COST,
   });
   const [dielineBusy, setDielineBusy] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
@@ -272,10 +340,15 @@ export default function LabellabApp() {
   const stageRef = useRef<HTMLDivElement>(null);
   const workspaceLayoutRef = useRef<HTMLDivElement>(null);
   const libraryPanelRef = useRef<HTMLElement>(null);
+  const railRef = useRef<HTMLElement>(null);
+  const railPropsRef = useRef<HTMLDivElement>(null);
+  const connectorRef = useRef<HTMLDivElement>(null);
+  const hadConnectorRef = useRef(false);
   const artworkRef = useRef<string | undefined>(undefined);
   const artworkBlobRef = useRef<Blob | undefined>(undefined);
   const artworkIdRef = useRef<string | undefined>(undefined);
   const suppressLibraryAutoApplyRef = useRef(false);
+  const suppressPackagingHydrateRef = useRef(false);
   const resultRef = useRef<string | undefined>(undefined);
   const modelMaterials = useRef(
     new Map<string, ReturnType<typeof getModelMaterialDefaults>>(),
@@ -306,19 +379,31 @@ export default function LabellabApp() {
   );
   useEffect(() => {
     let active = true;
-    void fetch("/api/site/config", { cache: "no-store" })
-      .then(async (res) => (res.ok ? (await res.json() as { settings?: { renderCost?: number; dielineCost?: number } }) : null))
+    void fetchSiteConfigCached<{
+      settings?: { renderCost?: number; dielineCost?: number; shareCost?: number; projectExtendCost?: number };
+    }>()
       .then((payload) => {
         if (!active || !payload?.settings) return;
         const renderCost = Number(payload.settings.renderCost);
         const dielineCost = Number(payload.settings.dielineCost);
+        const shareCost = Number(payload.settings.shareCost);
+        const projectExtendCost = Number(payload.settings.projectExtendCost);
         setSitePricing({
           renderCost: Number.isSafeInteger(renderCost) && renderCost >= 0 ? renderCost : DEFAULT_RENDER_COIN_COST,
           dielineCost: Number.isSafeInteger(dielineCost) && dielineCost >= 0 ? dielineCost : DEFAULT_DIELINE_COIN_COST,
+          shareCost: Number.isSafeInteger(shareCost) && shareCost >= 0 ? shareCost : DEFAULT_SHARE_COIN_COST,
+          projectExtendCost:
+            Number.isSafeInteger(projectExtendCost) && projectExtendCost >= 0
+              ? projectExtendCost
+              : DEFAULT_PROJECT_EXTEND_COIN_COST,
         });
       })
       .catch(() => undefined);
-    return () => { active = false; };
+    const detachTracker = attachUsageTrackerLifecycle();
+    return () => {
+      active = false;
+      detachTracker();
+    };
   }, []);
 
   useEffect(() => {
@@ -331,9 +416,92 @@ export default function LabellabApp() {
     bottlePackRef.current = bottlePack;
   }, [bottlePack]);
 
-  const beverageProjects = useMemo(
-    () => projects.filter((p) => p.kind === "beverage"),
-    [projects],
+  const cloudBeverageMeta = useMemo(() => {
+    const records: CustomProjectRecord[] = [];
+    const labelUrls: Record<string, string> = {};
+    const thumbUrls: Record<string, string> = {};
+    for (const cp of cloudProjects) {
+      for (const item of cp.items) {
+        if (item.kind !== "beverage" || item.payload.kind !== "beverage") continue;
+        const updatedMs = Date.parse(item.updatedAt) || 0;
+        records.push({
+          id: item.id,
+          name: item.name,
+          kind: "beverage",
+          date: item.updatedAt,
+          createdAt: updatedMs,
+          updatedAt: updatedMs,
+          groupId: cp.id,
+          groupName: cp.name,
+          sortOrder: item.sortOrder,
+          settings: item.payload.settings,
+        });
+        if (item.payload.labelHash) {
+          labelUrls[item.id] = cloudProjectAssetUrl(cp.id, item.payload.labelHash);
+        }
+        if (item.thumbnailHash) {
+          thumbUrls[item.id] = cloudProjectAssetUrl(cp.id, item.thumbnailHash);
+        }
+      }
+    }
+    return { records, labelUrls, thumbUrls };
+  }, [cloudProjects]);
+
+  const beverageProjects = useMemo(() => {
+    const localBev = projects.filter((p) => p.kind === "beverage");
+    return [...cloudBeverageMeta.records, ...localBev];
+  }, [cloudBeverageMeta.records, projects]);
+
+  const combinedPackThumbUrls = useMemo(
+    () => ({ ...cloudBeverageMeta.thumbUrls, ...projectThumbUrls }),
+    [cloudBeverageMeta.thumbUrls, projectThumbUrls],
+  );
+
+  const groupedProjects = useMemo(
+    () => groupCustomProjects(projects, projectGroups),
+    [projects, projectGroups],
+  );
+
+  const studioCollections = useMemo<StudioProjectCollection[]>(() => {
+    const cloudCols: StudioProjectCollection[] = cloudProjects.map((cp) => ({
+      id: cp.id,
+      source: "cloud",
+      name: cp.name,
+      description: cp.description,
+      brandName: cp.brandName,
+      updatedAt: Date.parse(cp.updatedAt) || 0,
+      createdAt: Date.parse(cp.createdAt) || 0,
+      expiresAt: cp.expiresAt,
+      autoRenew: cp.autoRenew,
+      renewalCount: cp.renewalCount,
+      totalBytes: cp.totalBytes,
+      cloudItems: cp.items,
+    }));
+    const localCols: StudioProjectCollection[] = groupedProjects.map((g) => ({
+      id: g.group.id,
+      source: "local",
+      name: g.group.name,
+      description: g.group.description ?? "",
+      brandName: g.group.brandName ?? "",
+      updatedAt: g.group.updatedAt,
+      createdAt: g.group.createdAt,
+      localGroup: g,
+    }));
+    return [...cloudCols, ...localCols];
+  }, [cloudProjects, groupedProjects]);
+
+  const shareByGroupId = useMemo(() => {
+    const map = new Map<string, SharedProjectSummary>();
+    for (const share of sharedProjects) {
+      if (share.localProjectId && !map.has(share.localProjectId)) {
+        map.set(share.localProjectId, share);
+      }
+    }
+    return map;
+  }, [sharedProjects]);
+  const activeShareCollection = useMemo(
+    () => (shareDialogGroupId ? studioCollections.find((c) => c.id === shareDialogGroupId) ?? null : null),
+    [shareDialogGroupId, studioCollections],
   );
   const activeCustomPackProject = useMemo(
     () =>
@@ -370,17 +538,38 @@ export default function LabellabApp() {
 
   useEffect(() => {
     const blob = activeCustomPackProject?.artworkBlob;
-    if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    const frame = requestAnimationFrame(() => setCustomProjectLabelUrl(url));
+    const cloudUrl = activeCustomPackProject
+      ? cloudBeverageMeta.labelUrls[activeCustomPackProject.id]
+      : undefined;
+    if (blob) {
+      const url = URL.createObjectURL(blob);
+      const frame = requestAnimationFrame(() => setCustomProjectLabelUrl(url));
+      return () => {
+        cancelAnimationFrame(frame);
+        URL.revokeObjectURL(url);
+      };
+    }
+    if (!cloudUrl) return;
+    let cancelled = false;
+    let createdUrl: string | undefined;
+    void fetch(cloudUrl, { credentials: "same-origin" })
+      .then((res) => (res.ok ? res.blob() : null))
+      .then((fetched) => {
+        if (cancelled || !fetched || fetched.size === 0) return;
+        createdUrl = URL.createObjectURL(fetched);
+        setCustomProjectLabelUrl(createdUrl);
+      })
+      .catch(() => {});
     return () => {
-      cancelAnimationFrame(frame);
-      URL.revokeObjectURL(url);
+      cancelled = true;
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
-  }, [activeCustomPackProject]);
-  const effectiveCustomProjectLabelUrl = activeCustomPackProject?.artworkBlob
-    ? customProjectLabelUrl
-    : undefined;
+  }, [activeCustomPackProject, cloudBeverageMeta.labelUrls]);
+  const effectiveCustomProjectLabelUrl =
+    activeCustomPackProject &&
+    (activeCustomPackProject.artworkBlob || cloudBeverageMeta.labelUrls[activeCustomPackProject.id])
+      ? customProjectLabelUrl
+      : undefined;
 
   useEffect(() => {
     const artworkId = bottlePack.packLabelArtworkId;
@@ -519,7 +708,7 @@ export default function LabellabApp() {
     setBottlePack(initialBottlePack);
     setQualityPreference(loadQualityPreference());
     setSettings(initial);
-    if (nextDomain === "packaging") setActiveTool("materials");
+    if (nextDomain === "packaging") setActiveTool("pkg-size");
     setActiveCamera(
       initial.sceneMode === "studio"
         ? "view-4"
@@ -527,8 +716,11 @@ export default function LabellabApp() {
           ? "animated"
           : "view-1",
     );
-    void listCustomProjects()
-      .then((loaded) => setProjects(loaded))
+    void Promise.all([listCustomProjects(), listProjectGroups()])
+      .then(([loadedItems, loadedGroups]) => {
+        setProjects(loadedItems);
+        setProjectGroups(loadedGroups);
+      })
       .catch(() => {});
     if (params.get("panel") === "projects") setModal("projects");
     setHydrated(true);
@@ -605,7 +797,6 @@ export default function LabellabApp() {
                 lengthMm: fit.lengthMm,
                 widthMm: fit.widthMm,
                 heightMm: fit.heightMm,
-                ...(fit.carrierPack ? { carrierPack: fit.carrierPack } : {}),
               };
               setPackagingParams(refined);
               packagingSubjectRef.current?.syncParams(refined, { interactive: false });
@@ -638,9 +829,73 @@ export default function LabellabApp() {
     }
   }, []);
 
+  const refreshCloudState = useCallback(async () => {
+    try {
+      const res = await fetchUserCloudProjects();
+      setCloudAuthenticated(res.authenticated);
+      setCloudProjects(res.projects);
+      if (typeof res.extendCost === "number" && res.extendCost >= 0) {
+        setSitePricing((prev) => ({ ...prev, projectExtendCost: res.extendCost! }));
+      }
+      if (!res.authenticated) {
+        setSharedProjects([]);
+      }
+    } catch {
+      // Keep last known cloud state on transient error.
+    }
+  }, []);
+
+  // Load user's Cloud Projects on startup and whenever login/logout/account changes.
+  useEffect(() => {
+    let active = true;
+    const sync = () => {
+      if (!active) return;
+      void refreshCloudState();
+    };
+    const frame = requestAnimationFrame(sync);
+    window.addEventListener("labellab-account-changed", sync);
+    return () => {
+      active = false;
+      cancelAnimationFrame(frame);
+      window.removeEventListener("labellab-account-changed", sync);
+    };
+  }, [refreshCloudState]);
+
+  // Refresh active cloud projects & share links whenever the Projects modal opens.
+  useEffect(() => {
+    if (modal !== "projects") return;
+    let active = true;
+    void fetchUserCloudProjects()
+      .then((res) => {
+        if (!active) return;
+        setCloudAuthenticated(res.authenticated);
+        setCloudProjects(res.projects);
+        if (typeof res.extendCost === "number" && res.extendCost >= 0) {
+          setSitePricing((prev) => ({ ...prev, projectExtendCost: res.extendCost! }));
+        }
+        if (!res.authenticated) setSharedProjects([]);
+      })
+      .catch(() => {});
+    void fetch("/api/share/mine", { credentials: "same-origin" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload: { shares?: SharedProjectSummary[] } | null) => {
+        if (active && Array.isArray(payload?.shares)) {
+          setSharedProjects(payload.shares);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [modal]);
+
   // Hydrate saved independent per-face artworks for the active packaging template from IndexedDB.
   useEffect(() => {
     if (!hydrated || !isPackaging) return;
+    if (suppressPackagingHydrateRef.current) {
+      suppressPackagingHydrateRef.current = false;
+      return;
+    }
     let cancelled = false;
     const templateId = packagingParams.templateId;
     const prefix = packagingTemplateScopePrefix(templateId);
@@ -705,14 +960,15 @@ export default function LabellabApp() {
     [revokePackagingArtworkUrls],
   );
   useEffect(() => {
-    if (!toast) return;
-    const timer = setTimeout(() => setToast(""), 4500);
+    if (!toastState) return;
+    const timer = setTimeout(() => setToastState(null), 4500);
     return () => clearTimeout(timer);
-  }, [toast]);
+  }, [toastState]);
   useEffect(() => {
     const dialog = dialogRef.current;
-    if (modal && dialog && !dialog.open) dialog.showModal();
-    if (!modal && dialog?.open) dialog.close();
+    const showGuide = modal === "guide";
+    if (showGuide && dialog && !dialog.open) dialog.showModal();
+    if (!showGuide && dialog?.open) dialog.close();
   }, [modal]);
   useEffect(
     () => () => {
@@ -774,78 +1030,225 @@ export default function LabellabApp() {
     setHoverTarget(null);
     const previewBlob = await captureCanvasThumbnailBlob(renderCanvasRef.current);
     setSavePreviewBlob(previewBlob);
-    const existingLoaded = loadedProjectId
-      ? projects.find((p) => p.id === loadedProjectId && p.kind === (isPackaging ? "packaging" : "beverage"))
+    const kind = isPackaging ? "packaging" : "beverage";
+    const existingCloudItem =
+      loadedCloudProjectId && loadedCloudItemId
+        ? cloudProjects
+            .find((p) => p.id === loadedCloudProjectId)
+            ?.items.find((i) => i.id === loadedCloudItemId && i.kind === kind)
+        : undefined;
+    const existingLocal = loadedProjectId
+      ? projects.find((p) => p.id === loadedProjectId && p.kind === kind)
       : undefined;
-    if (existingLoaded) {
-      setProjectName(existingLoaded.name);
+    if (existingCloudItem) {
+      setProjectName(existingCloudItem.name);
+    } else if (existingLocal) {
+      setProjectName(existingLocal.name);
     } else {
       setProjectName(isPackaging ? `${activePackagingTemplate.shortName} Custom` : `${model.name} Custom`);
     }
     setSaveDialogOpen(true);
   };
-  const handleConfirmSaveProject = async (rawName: string, mode: "new" | "update") => {
+  const handleConfirmSaveProject = async (payload: SaveProjectPayload) => {
     const kind = isPackaging ? "packaging" : "beverage";
     const isoNow = new Date().toISOString();
     const now = Date.parse(isoNow);
+    const cleanGroupName = sanitizeProjectName(payload.groupName, payload.itemName);
+
+    const packagingArtworkSnapshot = isPackaging
+      ? await capturePackagingArtworkSnapshot(packagingArtworkRef.current)
+      : undefined;
+    const packedBottleSnapshot = isPackaging
+      ? await capturePackedBottleSnapshot(
+          bottlePackRef.current,
+          activeCustomPackProject,
+          effectivePackBottleLabelUrl ??
+            effectiveCustomProjectLabelUrl ??
+            (bottlePackRef.current.modelId === settings.modelId ? artworkRef.current : undefined),
+          settings,
+        )
+      : undefined;
+
+    const targetIsExistingLocal = Boolean(
+      payload.groupId && groupedProjects.some((g) => g.group.id === payload.groupId),
+    );
+    const shouldSaveToCloud = cloudAuthenticated && !targetIsExistingLocal;
+
+    if (shouldSaveToCloud) {
+      const targetCloudProjectId =
+        payload.groupId && cloudProjects.some((p) => p.id === payload.groupId)
+          ? payload.groupId
+          : undefined;
+      const updatingCloudItemId =
+        payload.mode === "update" &&
+        targetCloudProjectId &&
+        loadedCloudProjectId === targetCloudProjectId &&
+        loadedCloudItemId
+          ? loadedCloudItemId
+          : undefined;
+
+      const snapshotRecord: CustomProjectRecord = {
+        id: updatingCloudItemId ?? crypto.randomUUID(),
+        name: sanitizeProjectName(payload.itemName, isPackaging ? activePackagingTemplate.name : model.name),
+        kind,
+        date: isoNow,
+        createdAt: now,
+        updatedAt: now,
+        groupId: targetCloudProjectId,
+        groupName: cleanGroupName,
+        settings: { ...settings },
+        ...(!isPackaging && artworkIdRef.current ? { artworkId: artworkIdRef.current } : {}),
+        ...(!isPackaging && artworkBlobRef.current ? { artworkBlob: artworkBlobRef.current } : {}),
+        ...(savePreviewBlob ? { thumbnailBlob: savePreviewBlob } : {}),
+        ...(isPackaging ? { packagingParams: { ...packagingParams }, bottlePack: { ...bottlePack } } : {}),
+        ...(packagingArtworkSnapshot ? { packagingArtwork: packagingArtworkSnapshot } : {}),
+        ...(packedBottleSnapshot ? { packedBottle: packedBottleSnapshot } : {}),
+      };
+
+      try {
+        const savedCloud = await saveRecordToCloudProject({
+          record: snapshotRecord,
+          cloudProjectId: targetCloudProjectId,
+          cloudItemId: updatingCloudItemId,
+          projectName: cleanGroupName,
+          autoRenew: payload.autoRenew,
+        });
+        setCloudProjects((prev) => [
+          savedCloud.project,
+          ...prev.filter((p) => p.id !== savedCloud.project.id),
+        ]);
+        setLoadedCloudProjectId(savedCloud.project.id);
+        setLoadedCloudItemId(savedCloud.savedItemId);
+        setLoadedProjectId(undefined);
+        setProjectName(snapshotRecord.name);
+        setSaveDialogOpen(false);
+        setToast(st.toasts.savedCloudItem(snapshotRecord.name, savedCloud.project.name));
+        return;
+      } catch (err) {
+        const code = err instanceof Error ? err.message : "";
+        if (code === "PROJECT_LIMIT_REACHED") {
+          throw new Error(st.toasts.projectLimitReached(CLOUD_PROJECT_LIMITS.maxProjectsPerUser));
+        }
+        if (code === "AUTH_REQUIRED") {
+          setCloudAuthenticated(false);
+          openAuth("login");
+          throw new Error(st.projectsModal.guestBannerTitle);
+        }
+        throw new Error(st.toasts.cloudActionFailed);
+      }
+    }
+
     const existing =
-      mode === "update" && loadedProjectId
+      payload.mode === "update" && loadedProjectId
         ? projects.find((p) => p.id === loadedProjectId && p.kind === kind)
         : undefined;
+
+    let targetGroupId = payload.groupId;
+    const existingGroup = targetGroupId
+      ? groupedProjects.find((g) => g.group.id === targetGroupId)?.group
+      : undefined;
+    if (!targetGroupId) {
+      targetGroupId = `grp_${crypto.randomUUID()}`;
+    }
+
+    const groupRecord: ProjectGroup = existingGroup
+      ? { ...existingGroup, name: cleanGroupName, updatedAt: now }
+      : { id: targetGroupId, name: cleanGroupName, createdAt: now, updatedAt: now };
+    const savedGroup = await saveProjectGroup(groupRecord);
+
+    const siblings = projects.filter((p) => resolveItemGroupId(p) === targetGroupId);
+    const nextSortOrder =
+      existing && resolveItemGroupId(existing) === targetGroupId
+        ? (existing.sortOrder ?? 0)
+        : siblings.reduce((max, item) => Math.max(max, (item.sortOrder ?? 0) + 1), 0);
+
     const record: CustomProjectRecord = {
       id: existing ? existing.id : crypto.randomUUID(),
-      name: sanitizeProjectName(rawName, isPackaging ? activePackagingTemplate.name : model.name),
+      name: sanitizeProjectName(payload.itemName, isPackaging ? activePackagingTemplate.name : model.name),
       kind,
       date: isoNow,
       createdAt: existing ? existing.createdAt : now,
       updatedAt: now,
+      groupId: savedGroup.id,
+      groupName: savedGroup.name,
+      sortOrder: nextSortOrder,
       settings: { ...settings },
       ...(!isPackaging && artworkIdRef.current ? { artworkId: artworkIdRef.current } : {}),
       ...(!isPackaging && artworkBlobRef.current ? { artworkBlob: artworkBlobRef.current } : {}),
       ...(savePreviewBlob ? { thumbnailBlob: savePreviewBlob } : {}),
       ...(isPackaging ? { packagingParams: { ...packagingParams }, bottlePack: { ...bottlePack } } : {}),
+      ...(packagingArtworkSnapshot ? { packagingArtwork: packagingArtworkSnapshot } : {}),
+      ...(packedBottleSnapshot ? { packedBottle: packedBottleSnapshot } : {}),
     };
     const saved = await saveCustomProject(record);
-    setProjects((prev) => [saved, ...prev.filter((item) => item.id !== saved.id)].slice(0, 60));
+    setProjects((prev) => [saved, ...prev.filter((item) => item.id !== saved.id)].slice(0, 120));
+    setProjectGroups((prev) => [savedGroup, ...prev.filter((g) => g.id !== savedGroup.id)]);
     setLoadedProjectId(saved.id);
+    setLoadedCloudProjectId(undefined);
+    setLoadedCloudItemId(undefined);
     setProjectName(saved.name);
     setSaveDialogOpen(false);
-    setToast(
-      kind === "beverage"
-        ? `Saved "${saved.name}" — now ready to select in Boxes & Trays → Pack Your Bottles!`
-        : `Saved "${saved.name}" to Your projects.`,
-    );
+    setToast(st.toasts.savedItem(saved.name, savedGroup.name));
   };
   const handleDeleteSavedProject = async (project: CustomProjectRecord) => {
+    const gid = resolveItemGroupId(project);
     await deleteCustomProject(project.id);
-    setProjects((prev) => prev.filter((item) => item.id !== project.id));
+    const remaining = projects.filter((item) => item.id !== project.id);
+    setProjects(remaining);
+    if (!remaining.some((item) => resolveItemGroupId(item) === gid)) {
+      await deleteProjectGroupRecord(gid);
+      setProjectGroups((prev) => prev.filter((g) => g.id !== gid));
+    }
     if (loadedProjectId === project.id) setLoadedProjectId(undefined);
     if (bottlePack.customProjectId === project.id) {
       setBottlePack((cur) => ({ ...cur, customProjectId: undefined }));
     }
-    setToast(`Deleted "${project.name}".`);
+    setToast(st.toasts.deletedName(project.name));
   };
-  const handleOpenSavedProject = (project: CustomProjectRecord) => {
+  const handleDeleteProjectGroup = async (groupId: string, groupName: string) => {
+    const victims = projects.filter((item) => resolveItemGroupId(item) === groupId);
+    for (const item of victims) {
+      await deleteCustomProject(item.id);
+    }
+    await deleteProjectGroupRecord(groupId);
+    setProjects((prev) => prev.filter((item) => resolveItemGroupId(item) !== groupId));
+    setProjectGroups((prev) => prev.filter((g) => g.id !== groupId));
+    if (loadedProjectId && victims.some((v) => v.id === loadedProjectId)) {
+      setLoadedProjectId(undefined);
+    }
+    if (bottlePack.customProjectId && victims.some((v) => v.id === bottlePack.customProjectId)) {
+      setBottlePack((cur) => ({ ...cur, customProjectId: undefined }));
+    }
+    setToast(st.toasts.deletedProject(groupName));
+  };
+  const applyOpenedProjectRecord = (project: CustomProjectRecord) => {
     setHoverTarget(null);
     setActiveArtworkTarget(null);
-    setLoadedProjectId(project.id);
     setProjectName(project.name);
     if (project.kind === "packaging" && project.packagingParams) {
+      if (project.packagingArtwork) {
+        suppressPackagingHydrateRef.current = true;
+        revokePackagingArtworkUrls(packagingArtworkRef.current);
+        const hydratedArt = hydratePackagingArtworkSnapshot(project.packagingArtwork);
+        setPackagingArtwork(hydratedArt);
+        void packagingSubjectRef.current?.syncArtwork(hydratedArt);
+      }
       setDomain("packaging");
       setPackagingParams(project.packagingParams);
       if (project.bottlePack) setBottlePack(project.bottlePack);
       setSettings((cur) => ({ ...cur, sceneMode: "studio", motion: "off" }));
-      setActiveTool("materials");
+      setActiveTool("pkg-size");
       setPackagingViewMode("3d");
       packagingSubjectRef.current?.syncParams(project.packagingParams, { interactive: false });
       sceneRef.current?.refreshProceduralBounds(true);
       setModal(null);
-      setToast(`Loaded "${project.name}".`);
+      setToast(st.toasts.loadedName(project.name));
       return;
     }
     if (domain !== "beverage") {
       setPackagingFoldPlaying(false);
       setDomain("beverage");
+      setActiveTool("models");
     }
     clearArtwork();
     setActiveFamilyId(null);
@@ -865,7 +1268,122 @@ export default function LabellabApp() {
           : "view-1",
     );
     setModal(null);
-    setToast(`Loaded custom bottle "${project.name}".`);
+    setToast(st.toasts.loadedName(project.name));
+  };
+  const handleOpenSavedProject = (project: CustomProjectRecord) => {
+    setLoadedProjectId(project.id);
+    setLoadedCloudProjectId(undefined);
+    setLoadedCloudItemId(undefined);
+    applyOpenedProjectRecord(project);
+  };
+  const handleOpenCloudProjectItem = async (
+    cloudProject: CloudProjectSummary,
+    item: CloudProjectItem,
+  ) => {
+    try {
+      const record = await hydrateCloudItemToRecord(cloudProject, item);
+      setLoadedProjectId(undefined);
+      setLoadedCloudProjectId(cloudProject.id);
+      setLoadedCloudItemId(item.id);
+      applyOpenedProjectRecord(record);
+    } catch {
+      setToast(st.toasts.cloudActionFailed, "error");
+    }
+  };
+  const handleToggleCloudAutoRenew = async (projectId: string, nextValue: boolean) => {
+    try {
+      const updated = await patchCloudProject(projectId, { autoRenew: nextValue });
+      setCloudProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      setToast(
+        nextValue
+          ? st.toasts.autoRenewEnabled(updated.name, sitePricing.projectExtendCost)
+          : st.toasts.autoRenewDisabled(updated.name),
+      );
+    } catch {
+      setToast(st.toasts.cloudActionFailed, "error");
+    }
+  };
+  const handleExtendCloudProject = async (projectId: string) => {
+    try {
+      const res = await extendCloudProjectApi(projectId);
+      setCloudProjects((prev) => prev.map((p) => (p.id === res.project.id ? res.project : p)));
+      if (res.chargedCoins > 0) {
+        window.dispatchEvent(new Event("labellab-account-changed"));
+      }
+      setToast(
+        st.toasts.extendedProject(
+          res.project.name,
+          CLOUD_PROJECT_LIMITS.extensionDays,
+          res.chargedCoins,
+        ),
+      );
+    } catch (err) {
+      const code = err instanceof Error ? err.message : "";
+      if (code === "INSUFFICIENT_COINS") {
+        setToast(st.toasts.needCoinsExtend(sitePricing.projectExtendCost), "error");
+      } else if (code === "AUTH_REQUIRED") {
+        setCloudAuthenticated(false);
+        openAuth("login");
+      } else {
+        setToast(st.toasts.cloudActionFailed, "error");
+      }
+    }
+  };
+  const handleDeleteCloudProject = async (projectId: string, name: string) => {
+    try {
+      await deleteCloudProjectApi(projectId);
+      setCloudProjects((prev) => prev.filter((p) => p.id !== projectId));
+      if (loadedCloudProjectId === projectId) {
+        setLoadedCloudProjectId(undefined);
+        setLoadedCloudItemId(undefined);
+      }
+      setToast(st.toasts.deletedProject(name));
+    } catch {
+      setToast(st.toasts.cloudActionFailed, "error");
+    }
+  };
+  const handleDeleteCloudItem = async (projectId: string, itemId: string, itemName: string) => {
+    try {
+      const res = await deleteCloudProjectItemApi(projectId, itemId);
+      if (res.projectDeleted || !res.project) {
+        setCloudProjects((prev) => prev.filter((p) => p.id !== projectId));
+      } else {
+        setCloudProjects((prev) => prev.map((p) => (p.id === projectId ? res.project! : p)));
+      }
+      if (loadedCloudItemId === itemId) {
+        setLoadedCloudItemId(undefined);
+        if (res.projectDeleted) setLoadedCloudProjectId(undefined);
+      }
+      setToast(st.toasts.deletedName(itemName));
+    } catch {
+      setToast(st.toasts.cloudActionFailed, "error");
+    }
+  };
+  const handleMigrateLocalGroupToCloud = async (groupId: string) => {
+    const target = groupedProjects.find((g) => g.group.id === groupId);
+    if (!target) return;
+    try {
+      const created = await migrateLocalGroupToCloud(target, false);
+      setCloudProjects((prev) => [created, ...prev.filter((p) => p.id !== created.id)]);
+      // Clean up the migrated local records so there is no duplicate card.
+      for (const item of target.items) {
+        await deleteCustomProject(item.id).catch(() => {});
+      }
+      await deleteProjectGroupRecord(groupId).catch(() => {});
+      setProjects((prev) => prev.filter((item) => resolveItemGroupId(item) !== groupId));
+      setProjectGroups((prev) => prev.filter((g) => g.id !== groupId));
+      setToast(st.toasts.migratedToCloud(created.name));
+    } catch (err) {
+      const code = err instanceof Error ? err.message : "";
+      if (code === "PROJECT_LIMIT_REACHED") {
+        setToast(st.toasts.projectLimitReached(CLOUD_PROJECT_LIMITS.maxProjectsPerUser), "error");
+      } else if (code === "AUTH_REQUIRED") {
+        setCloudAuthenticated(false);
+        openAuth("login");
+      } else {
+        setToast(st.toasts.cloudActionFailed, "error");
+      }
+    }
   };
   const handleSceneHoverTarget = useCallback((target: InteractivePickTarget | null) => {
     setHoverTarget(target);
@@ -1011,7 +1529,7 @@ export default function LabellabApp() {
     if (exportBusy || next === domain) return;
     const meta = getStudioDomain(next);
     if (meta.id !== next) {
-      setToast("Fashion & Apparel Studio is on our roadmap — coming soon!");
+      setToast(st.toasts.apparelComingSoon);
       return;
     }
     setActiveFamilyId(null);
@@ -1021,7 +1539,7 @@ export default function LabellabApp() {
     setDomain(next);
     if (next === "packaging") {
       setSettings((cur) => ({ ...cur, sceneMode: "studio", motion: "off" }));
-      setActiveTool("materials");
+      setActiveTool("pkg-size");
       setPackagingViewMode("3d");
     } else {
       setPackagingFoldPlaying(false);
@@ -1058,7 +1576,6 @@ export default function LabellabApp() {
         lengthMm: fit.lengthMm,
         widthMm: fit.widthMm,
         heightMm: fit.heightMm,
-        ...(fit.carrierPack ? { carrierPack: fit.carrierPack } : {}),
         ...(shouldOpenLid ? { foldProgress: tpl.openPreviewFold } : {}),
       };
       setPackagingParams(nextParams);
@@ -1075,24 +1592,11 @@ export default function LabellabApp() {
   const updateBottlePack = (patch: Partial<BottlePackConfig>) => {
     if (exportBusy) return;
     const enablingNow = patch.enabled === true && !bottlePack.enabled;
-    const isCarrier = packagingParams.templateId === "beverage-carrier";
-    const carrierCols =
-      packagingParams.carrierPack === "4-pack"
-        ? 2
-        : packagingParams.carrierPack === "8-pack"
-          ? 4
-          : 3;
 
     const nextPack: BottlePackConfig = {
       ...bottlePack,
-      // When first turning Pack Your Bottles ON, default to user's active Beverage Studio model
-      // and smartly match carrier/tray layout!
-      ...(enablingNow
-        ? {
-            modelId: settings.modelId,
-            ...(isCarrier ? { cols: carrierCols, rows: 2 } : {}),
-          }
-        : {}),
+      // When first turning Pack Your Bottles ON, default to user's active Beverage Studio model.
+      ...(enablingNow ? { modelId: settings.modelId } : {}),
       ...patch,
     };
     setBottlePack(nextPack);
@@ -1104,7 +1608,8 @@ export default function LabellabApp() {
       patch.cols !== undefined ||
       patch.rows !== undefined ||
       patch.spacingMm !== undefined ||
-      patch.wallPaddingMm !== undefined;
+      patch.wallPaddingMm !== undefined ||
+      patch.honeycombDividers !== undefined;
 
     if (nextPack.enabled && nextPack.autoFitOnChange && gridOrModelChanged) {
       applyAutoFitForPack(nextPack, packagingParams, {
@@ -1142,15 +1647,6 @@ export default function LabellabApp() {
 
   const updatePackaging = (patch: Partial<PackagingParams>, interactive = false) => {
     if (exportBusy) return;
-    // If user switches carrier layout (4/6/8-pack) while bottles are packed inside, sync bottle grid columns!
-    if (
-      patch.carrierPack &&
-      packagingParams.templateId === "beverage-carrier" &&
-      bottlePack.enabled
-    ) {
-      const cols = patch.carrierPack === "4-pack" ? 2 : patch.carrierPack === "8-pack" ? 4 : 3;
-      setBottlePack((cur) => ({ ...cur, cols, rows: 2 }));
-    }
     setPackagingParams((current) => {
       const next = { ...current, ...patch };
       const subject = packagingSubjectRef.current;
@@ -1168,19 +1664,14 @@ export default function LabellabApp() {
     packagingSubjectRef.current?.setFoldPlaying(false);
     let next = createDefaultPackagingParams(tpl.id);
     if (bottlePack.enabled && bottlePack.autoFitOnChange) {
-      const adjustedPack: BottlePackConfig =
-        tpl.id === "beverage-carrier"
-          ? { ...bottlePack, cols: Math.max(2, Math.min(4, bottlePack.cols)), rows: 2 }
-          : bottlePack;
-      if (adjustedPack !== bottlePack) setBottlePack(adjustedPack);
-      const targetModel = getLabModel(adjustedPack.modelId);
+      const targetModel = getLabModel(bottlePack.modelId);
       const fp =
         measuredFootprints[targetModel.id] ??
         getBeverageFootprintMm(targetModel.id, targetModel.asset.volumeMl);
       const fit = computeAutoFitBoxDimensions({
         templateId: tpl.id,
         itemMm: fp,
-        config: adjustedPack,
+        config: bottlePack,
         thicknessMm: next.thicknessMm,
         dividerGrid: next.dividerGrid,
       });
@@ -1190,7 +1681,6 @@ export default function LabellabApp() {
         lengthMm: fit.lengthMm,
         widthMm: fit.widthMm,
         heightMm: fit.heightMm,
-        ...(fit.carrierPack ? { carrierPack: fit.carrierPack } : {}),
         foldProgress: isOpenTopPackagingTemplate(tpl.id) ? tpl.heroFold : tpl.openPreviewFold,
       };
     }
@@ -1203,7 +1693,11 @@ export default function LabellabApp() {
       sceneRef.current?.cameraAngles(34, 28, 32, true);
       setPackagingCameraId("iso");
     }
-    setToast(`Loaded ${tpl.code} — ${tpl.name} (${next.lengthMm}×${next.widthMm}×${next.heightMm} mm).`);
+    setToast(
+      t.studio.toasts.loadedName(
+        `${tpl.code} — ${tpl.name} (${next.lengthMm}×${next.widthMm}×${next.heightMm} mm)`,
+      ),
+    );
   };
 
   const handlePackagingFoldChange = (progress: number) => {
@@ -1272,7 +1766,7 @@ export default function LabellabApp() {
     const cleared: PackagingArtworkState = { mode: "panel", panelOverlays: {} };
     setPackagingArtwork(cleared);
     void packagingSubjectRef.current?.syncArtwork(cleared);
-    setToast("Cleared all box face artworks.");
+    setToast(st.toasts.clearedBoxArtworks);
   };
 
   const downloadPackagingDieline = async (format: "svg" | "pdf" | "dxf") => {
@@ -1297,8 +1791,9 @@ export default function LabellabApp() {
       if (reserveResponse.status === 401 || reserveResponse.status === 403) {
         setToast(
           sitePricing.dielineCost > 0
-            ? `Please sign in to export 1:1 mm dieline files (${sitePricing.dielineCost} coins).`
-            : "Please sign in to export 1:1 mm dieline files.",
+            ? st.toasts.dielineSignInPaid(sitePricing.dielineCost)
+            : st.toasts.dielineSignInFree,
+          "error",
         );
         openAuth("login");
         return;
@@ -1311,16 +1806,18 @@ export default function LabellabApp() {
       if (!reserveResponse.ok) {
         setToast(
           reservePayload?.error === "INSUFFICIENT_COINS"
-            ? `You need ${sitePricing.dielineCost} coins to export a 1:1 mm ${format.toUpperCase()} dieline.`
-            : "Could not start dieline export. Please try again.",
+            ? st.toasts.dielineNeedCoins(sitePricing.dielineCost, format.toUpperCase())
+            : st.toasts.dielineStartFailed,
+          "error",
         );
         return;
       }
       const isFree = Boolean(reservePayload?.free);
       chargedAmount = Number(reservePayload?.quote?.amount ?? (isFree ? 0 : sitePricing.dielineCost));
       reserved = !isFree;
+      recordDielineStarted();
 
-      const baseName = `labellab-${solved.templateId}-${Math.round(solved.params.lengthMm)}x${Math.round(solved.params.widthMm)}x${Math.round(solved.params.heightMm)}mm`;
+      const baseName = `hypermockup-${solved.templateId}-${Math.round(solved.params.lengthMm)}x${Math.round(solved.params.widthMm)}x${Math.round(solved.params.heightMm)}mm`;
       let blob: Blob;
       if (format === "svg") {
         blob = new Blob([exportDielineSvg(solved, { side: packagingSurface })], { type: "image/svg+xml;charset=utf-8" });
@@ -1340,10 +1837,11 @@ export default function LabellabApp() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ idempotencyKey: reservationKey }),
         });
-        if (!commitResponse.ok) throw new Error("Dieline export payment could not be committed. Please try again.");
+        if (!commitResponse.ok) throw new Error(st.toasts.dielineFailed);
         reserved = false;
         window.dispatchEvent(new Event("labellab-account-changed"));
       }
+      recordDielineCompleted(isFree ? 0 : chargedAmount);
 
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -1354,7 +1852,12 @@ export default function LabellabApp() {
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       setToast(
-        `Downloaded 1:1 mm ${format.toUpperCase()} dieline (${Math.round(solved.blankBounds.width)}×${Math.round(solved.blankBounds.height)} mm)${chargedAmount > 0 ? ` · −${chargedAmount} coins` : ""}.`,
+        st.toasts.dielineDownloaded(
+          format.toUpperCase(),
+          Math.round(solved.blankBounds.width),
+          Math.round(solved.blankBounds.height),
+          chargedAmount,
+        ),
       );
     } catch (error) {
       if (reserved) {
@@ -1367,7 +1870,7 @@ export default function LabellabApp() {
           .then(() => window.dispatchEvent(new Event("labellab-account-changed")))
           .catch(() => undefined);
       }
-      setToast(error instanceof Error ? error.message : "Dieline export failed. Please try again.");
+      setToast(error instanceof Error ? error.message : st.toasts.dielineFailed, "error");
     } finally {
       setDielineBusy(false);
     }
@@ -1401,8 +1904,9 @@ export default function LabellabApp() {
       if (reserveResponse.status === 401 || reserveResponse.status === 403) {
         setToast(
           expectedCost > 0
-            ? `Please sign in to render (${expectedCost} coins at ${settings.resolution} px).`
-            : "Please sign in before rendering.",
+            ? st.toasts.signInRender(expectedCost, settings.resolution)
+            : st.toasts.signInRenderFree,
+          "error",
         );
         openAuth("login");
         return;
@@ -1415,35 +1919,39 @@ export default function LabellabApp() {
       if (!reserveResponse.ok) {
         setToast(
           reservePayload?.error === "INSUFFICIENT_COINS"
-            ? `You need ${expectedCost} coins to render at ${settings.resolution} px.`
-            : "Could not charge the render. Please try again.",
+            ? st.toasts.needCoinsRender(expectedCost, settings.resolution)
+            : st.toasts.renderChargeFailed,
+          "error",
         );
         return;
       }
       const isFree = Boolean(reservePayload?.free);
+      const chargedRenderCoins = Number(reservePayload?.quote?.amount ?? (isFree ? 0 : expectedCost));
       reserved = !isFree;
+      recordRenderStarted();
       const blob = await sceneRef.current!.capture(setRenderProgress);
       if (reserved) {
         const commitResponse = await fetch("/api/account/coin/commit", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idempotencyKey: reservationKey }) });
-        if (!commitResponse.ok) throw new Error("Render payment could not be committed. Please try again.");
+        if (!commitResponse.ok) throw new Error(st.toasts.renderChargeFailed);
         reserved = false;
         window.dispatchEvent(new Event("labellab-account-changed"));
       }
+      recordRenderCompleted(isFree ? 0 : chargedRenderCoins);
       if (resultRef.current) URL.revokeObjectURL(resultRef.current);
       const url = URL.createObjectURL(blob);
       resultRef.current = url;
       const sizeSuffix = isPackaging
         ? `-${Math.round(packagingParams.lengthMm)}x${Math.round(packagingParams.widthMm)}x${Math.round(packagingParams.heightMm)}mm`
         : "";
-      setExportResult({ url, name: `labellab-${activeExportId}${sizeSuffix}-${settings.resolution}${settings.transparent ? "-transparent" : ""}.png` });
-      setToast("Your image is ready. Select Download image to save the PNG.");
+      setExportResult({ url, name: `hypermockup-${activeExportId}${sizeSuffix}-${settings.resolution}${settings.transparent ? "-transparent" : ""}.png` });
+      setToast(st.toasts.imageReady);
     } catch (error) {
       if (reserved) {
         void fetch("/api/account/coin/release", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idempotencyKey: reservationKey }) })
           .then(() => window.dispatchEvent(new Event("labellab-account-changed")))
           .catch(() => undefined);
       }
-      setToast(error instanceof Error ? error.message : "Rendering failed. Please try again.");
+      setToast(error instanceof Error ? error.message : st.toasts.renderFailed, "error");
     } finally {
       setExportBusy(false);
       setRenderProgress(null);
@@ -1477,7 +1985,7 @@ export default function LabellabApp() {
       sceneRef.current?.refreshProceduralBounds(true);
       sceneRef.current?.cameraAngles(34, 28, 32, true);
       setPackagingCameraId("iso");
-      setToast(`Restored ${activePackagingTemplate.code} defaults.`);
+      setToast(st.toasts.restoredTemplateDefaults(activePackagingTemplate.code));
       return;
     }
     // Keep the library while clearing the current/default model's label choice.
@@ -1489,92 +1997,307 @@ export default function LabellabApp() {
     setActiveFamilyId(null);
     setActiveCamera("animated");
     sceneRef.current?.reset();
-    setToast("Default Basil Strawberry scene restored.");
+    setToast(st.toasts.defaultRestored);
   };
+
+  const hasModelLabel = Boolean(model.asset.materialSlots?.label?.length);
+  const hasModelLiquid = Boolean(model.asset.materialSlots?.liquid?.length);
+  const hasModelCap = Boolean(model.asset.materialSlots?.cap?.length || model.asset.materialSlots?.tab?.length);
+  const hasModelBody = Boolean(model.asset.materialSlots?.body?.length);
+
+  const beverageRailItems: ReadonlyArray<{
+    id: BeverageTool;
+    label: string;
+    title: string;
+    icon: typeof Sticker;
+  }> = [
+    ...(hasModelLabel ? [{ id: "label" as const, label: st.rail.label, title: st.rail.label, icon: Sticker }] : []),
+    ...(hasModelLiquid ? [{ id: "liquid" as const, label: st.rail.liquid, title: st.properties.liquidAppearance, icon: Droplets }] : []),
+    ...(hasModelCap ? [{ id: "cap" as const, label: model.category === "can" ? st.rail.top : st.rail.cap, title: model.category === "can" ? st.rail.headingTopTab : st.properties.capFinish, icon: Circle }] : []),
+    ...(hasModelBody ? [{ id: "body" as const, label: model.category === "can" ? st.rail.body : st.rail.bottle, title: model.category === "can" ? st.rail.headingCanBody : st.properties.surfaceFinish, icon: Layers3 }] : []),
+    { id: "backdrop" as const, label: st.rail.scene, title: st.scenePanel.bgAndEnv, icon: Palette },
+  ];
+
+  const packagingRailItems: ReadonlyArray<{
+    id: PackagingTool;
+    label: string;
+    title: string;
+    icon: typeof Ruler;
+    activeDot?: boolean;
+  }> = [
+    { id: "pkg-size", label: st.rail.sizeSpec, title: st.rail.sizeSpec, icon: Ruler },
+    ...(activePackagingTemplate.features.bottlePacking !== false
+      ? [{ id: "pkg-pack" as const, label: st.rail.packBottles, title: st.rail.headingPackBottles, icon: Milk, activeDot: bottlePack.enabled }]
+      : []),
+    { id: "pkg-material", label: st.rail.material, title: st.rail.headingBoardMaterial, icon: Layers },
+    { id: "pkg-structure", label: st.rail.structure, title: st.rail.headingStructure, icon: Sliders },
+    { id: "pkg-procad", label: st.rail.proCad, title: st.rail.headingProCad, icon: Wrench },
+    { id: "scene", label: st.rail.design, title: st.rail.headingBoxDesign, icon: Palette },
+  ];
+
+  // Resolve effective active tool if switching models/templates hides a part (e.g. liquid on aluminum cans).
+  const effectiveTool: EditorTool | null = (() => {
+    if (!activeTool || activeTool === "models") return activeTool;
+    if (isPackaging) {
+      if (packagingRailItems.some((item) => item.id === activeTool)) return activeTool;
+      return "pkg-size";
+    }
+    if (beverageRailItems.some((item) => item.id === activeTool)) return activeTool;
+    return hasModelLabel ? "label" : hasModelBody ? "body" : "backdrop";
+  })();
+
+  const isControlsOpen = effectiveTool !== null && effectiveTool !== "models";
+  const controlsToolGroup: "scene" | "materials" =
+    effectiveTool === "scene" || effectiveTool === "backdrop" ? "scene" : "materials";
+
+  const activeBeveragePart: PropertiesPart =
+    effectiveTool === "liquid" || effectiveTool === "cap" || effectiveTool === "body" || effectiveTool === "label"
+      ? effectiveTool
+      : hasModelLabel
+        ? "label"
+        : hasModelLiquid
+          ? "liquid"
+          : hasModelBody
+            ? "body"
+            : "cap";
+
+  const activePackagingSection: PackagingInspectorSection =
+    effectiveTool === "pkg-pack"
+      ? "pack"
+      : effectiveTool === "pkg-material"
+        ? "material"
+        : effectiveTool === "pkg-structure"
+          ? "structure"
+          : effectiveTool === "pkg-procad"
+            ? "procad"
+            : "size";
+
+  const controlsHeading = (() => {
+    if (isPackaging) {
+      switch (effectiveTool) {
+        case "pkg-pack":
+          return { icon: Milk, title: st.rail.headingPackBottles };
+        case "pkg-material":
+          return { icon: Layers, title: st.rail.headingBoardMaterial };
+        case "pkg-structure":
+          return { icon: Sliders, title: st.rail.headingStructure };
+        case "pkg-procad":
+          return { icon: Wrench, title: st.rail.headingProCad };
+        case "scene":
+          return { icon: Palette, title: st.rail.headingBoxDesign };
+        default:
+          return { icon: Ruler, title: st.rail.headingSizeSpec(activePackagingTemplate.code) };
+      }
+    }
+    switch (effectiveTool) {
+      case "liquid":
+        return { icon: Droplets, title: st.rail.liquid };
+      case "cap":
+        return { icon: Circle, title: model.category === "can" ? st.rail.headingTopTab : st.rail.cap };
+      case "body":
+        return { icon: Layers3, title: model.category === "can" ? st.rail.headingCanBody : st.rail.bottle };
+      case "backdrop":
+        return { icon: Palette, title: st.rail.scene };
+      default:
+        return { icon: Sticker, title: st.rail.label };
+    }
+  })();
+  const ControlsHeadingIcon = controlsHeading.icon;
+
+  // Position & smoothly glide the concave metaball liquid bridge linking the active left-rail button
+  // directly into the left edge of the open tool panel (100% zoom-immune via offsetHeight ratio).
+  useEffect(() => {
+    const connectorEl = connectorRef.current;
+    const layoutEl = workspaceLayoutRef.current;
+    const railEl = railRef.current;
+    if (!connectorEl || !layoutEl || !railEl) return;
+
+    const syncConnector = (instant: boolean) => {
+      if (!effectiveTool) {
+        connectorEl.style.opacity = "0";
+        hadConnectorRef.current = false;
+        return;
+      }
+      const activeBtn = railEl.querySelector<HTMLButtonElement>("button.is-active");
+      const activeCard = activeBtn?.closest<HTMLElement>(".editor-rail-card");
+      if (!activeBtn || !activeCard) {
+        connectorEl.style.opacity = "0";
+        hadConnectorRef.current = false;
+        return;
+      }
+      const layoutRect = layoutEl.getBoundingClientRect();
+      const btnRect = activeBtn.getBoundingClientRect();
+      const cardRect = activeCard.getBoundingClientRect();
+      const scaleY = layoutEl.offsetHeight > 0 ? layoutRect.height / layoutEl.offsetHeight : 1;
+      if (scaleY <= 0.01) return;
+
+      const btnCenterY = (btnRect.top + btnRect.height * 0.5 - layoutRect.top) / scaleY;
+      const cardTopY = (cardRect.top - layoutRect.top) / scaleY;
+      const cardBottomY = (cardRect.bottom - layoutRect.top) / scaleY;
+      const panelTopY = 20;
+      const panelBottomY = layoutEl.offsetHeight - 20;
+
+      // SVG bridge height = 38px (tangency points at localY = 2 and localY = 36, center at 19).
+      // Keep both tangency points inside the straight vertical edge (past the 18px corner radii)
+      // of BOTH the active rail card and the open tool panel so curves merge C1-continuously.
+      const minY = Math.max(cardTopY, panelTopY) + 18 - 2;
+      const maxY = Math.min(cardBottomY, panelBottomY) - 18 - 36;
+      const rawTop = btnCenterY - 19;
+      const bridgeTop = maxY >= minY ? Math.max(minY, Math.min(maxY, rawTop)) : (minY + maxY) * 0.5;
+
+      const snap = instant || !hadConnectorRef.current;
+      if (snap) {
+        connectorEl.style.transition = "none";
+        connectorEl.style.transform = `translate3d(0, ${bridgeTop.toFixed(2)}px, 0)`;
+        void connectorEl.offsetHeight;
+        connectorEl.style.transition = "";
+      } else {
+        connectorEl.style.transform = `translate3d(0, ${bridgeTop.toFixed(2)}px, 0)`;
+      }
+      connectorEl.style.opacity = "1";
+      hadConnectorRef.current = true;
+    };
+
+    const rafId = window.requestAnimationFrame(() => syncConnector(false));
+    const propsEl = railPropsRef.current;
+    const onScroll = () => syncConnector(true);
+    propsEl?.addEventListener("scroll", onScroll, { passive: true });
+    const ro = new ResizeObserver(() => syncConnector(true));
+    ro.observe(layoutEl);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      propsEl?.removeEventListener("scroll", onScroll);
+      ro.disconnect();
+    };
+  }, [effectiveTool, isPackaging, model.id, bottlePack.enabled]);
 
   return (
     <main>
       <a className="skip-link" href="#workspace">
-        Skip to studio
+        {st.skipToStudio}
       </a>
       <SiteHeader activePage="studio" disabled={exportBusy} onOpenProjects={() => setModal("projects")} />
 
       <section
         className={`creative-space ${studio ? `is-studio ${studioTheme.theme}` : ""}`}
         data-style={settings.style}
-        style={{ "--scene-color": studio || whiteStyle ? "#ffffff" : settings.background } as CSSProperties}
+        style={{ "--scene-color": studio ? "#ffffff" : SCENE_THEME_BACKGROUNDS[settings.style] } as CSSProperties}
         id="workspace"
       >
         <MovingGrid enabled={settings.grid && !studio} style={settings.style} />
         <div className="workspace-heading">
           <div>
             <div className="eyebrow">
-              <span /> {isPackaging ? "PARAMETRIC MILLIMETRE PACKAGING CAD" : "A LITTLE LABEL. A WHOLE NEW WORLD."}
+              <span /> {isPackaging ? st.eyebrowPackaging : st.eyebrowBeverage}
             </div>
             <h1>
               {isPackaging ? (
-                <>Custom boxes.<span> Folded real.</span></>
+                <>{st.heroPackagingLead}<span>{st.heroPackagingAccent}</span></>
               ) : (
-                <>Your design.<span> Made real.</span></>
+                <>{st.heroBeverageLead}<span>{st.heroBeverageAccent}</span></>
               )}
             </h1>
           </div>
           <button className="text-guide" onClick={() => setModal("guide")}>
-            Explore the studio <ArrowRight size={16} />
+            {st.exploreStudio} <ArrowRight size={16} />
           </button>
         </div>
 
         <div className="workbench">
           <div
             ref={workspaceLayoutRef}
-            className={`workspace-layout ${activeTool ? "has-tool-panel" : "canvas-only"} has-render-panel`}
+            className={`workspace-layout ${effectiveTool ? "has-tool-panel" : "canvas-only"} has-render-panel`}
           >
-            <nav className="editor-rail" aria-label="Studio tools" inert={exportBusy}>
-              <button
-                className={activeTool === "models" ? "is-active" : ""}
-                aria-pressed={activeTool === "models"}
-                aria-label={isPackaging ? "Templates" : "Models"}
-                title={isPackaging ? "Box & tray templates" : "Models"}
-                onClick={() => selectTool("models")}
-              >
-                {isPackaging ? <Package size={18} /> : <Box size={18} />}
-                <span>{isPackaging ? "Templates" : "Models"}</span>
-              </button>
-              <button
-                className={activeTool === "materials" ? "is-active" : ""}
-                aria-pressed={activeTool === "materials"}
-                aria-label={isPackaging ? "Size & CAD" : "Properties"}
-                title={isPackaging ? "Dimensions, material & Pro CAD" : "Properties"}
-                onClick={() => selectTool("materials")}
-              >
-                {isPackaging ? <SlidersHorizontal size={18} /> : <Droplets size={18} />}
-                <span>{isPackaging ? "Size & CAD" : "Properties"}</span>
-              </button>
-              {isPackaging && (
+            <nav ref={railRef} className="editor-rail" aria-label="Studio tools" inert={exportBusy}>
+              <div className="editor-rail-card editor-rail-primary">
                 <button
-                  className={activeTool === "scene" ? "is-active" : ""}
-                  aria-pressed={activeTool === "scene"}
-                  aria-label="Design"
-                  title="Panel artwork & 1:1 dieline print"
-                  onClick={() => selectTool("scene")}
+                  type="button"
+                  className={effectiveTool === "models" ? "is-active" : ""}
+                  aria-pressed={effectiveTool === "models"}
+                  aria-label={isPackaging ? st.rail.templates : st.rail.models}
+                  title={isPackaging ? st.library.boxTemplates : st.library.modelLibrary}
+                  onClick={() => selectTool("models")}
                 >
-                  <Palette size={18} />
-                  <span>Design</span>
+                  {isPackaging ? <Package size={18} /> : <Box size={18} />}
+                  <span>{isPackaging ? st.rail.templates : st.rail.models}</span>
                 </button>
-              )}
+              </div>
+              <div
+                ref={railPropsRef}
+                className="editor-rail-card editor-rail-props"
+                role="group"
+                aria-label={isPackaging ? "Box & CAD controls" : "Product properties"}
+              >
+                {isPackaging
+                  ? packagingRailItems.map((item) => {
+                      const Icon = item.icon;
+                      const active = effectiveTool === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className={active ? "is-active" : ""}
+                          aria-pressed={active}
+                          aria-label={item.label}
+                          title={item.title}
+                          onClick={() => selectTool(item.id)}
+                        >
+                          <Icon size={17} aria-hidden="true" />
+                          <span>{item.label}</span>
+                          {item.activeDot && <i className="editor-rail-dot" aria-hidden="true" />}
+                        </button>
+                      );
+                    })
+                  : beverageRailItems.map((item) => {
+                      const Icon = item.icon;
+                      const active = effectiveTool === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className={active ? "is-active" : ""}
+                          aria-pressed={active}
+                          aria-label={item.label}
+                          title={item.title}
+                          onClick={() => selectTool(item.id)}
+                        >
+                          <Icon size={17} aria-hidden="true" />
+                          <span>{item.label}</span>
+                        </button>
+                      );
+                    })}
+              </div>
             </nav>
+
+            {/* Animated concave metaball liquid bridge fusing the active rail button into the open panel */}
+            <div ref={connectorRef} className="rail-connector" aria-hidden="true">
+              <svg viewBox="0 0 18 38" width="18" height="38" focusable="false">
+                <path
+                  className="rail-connector-fill"
+                  d="M 0,2 L 1.5,2 A 7.5,7.5 0 0 0 16.5,2 L 18,2 L 18,36 L 16.5,36 A 7.5,7.5 0 0 0 1.5,36 L 0,36 Z"
+                />
+                <path
+                  className="rail-connector-stroke"
+                  d="M 1.5,1.5 L 1.5,2 A 7.5,7.5 0 0 0 16.5,2 L 16.5,1.5"
+                />
+                <path
+                  className="rail-connector-stroke"
+                  d="M 1.5,36.5 L 1.5,36 A 7.5,7.5 0 0 1 16.5,36 L 16.5,36.5"
+                />
+              </svg>
+            </div>
 
             <aside
               ref={libraryPanelRef}
-              className={`library-panel tool-panel ${modelLibrary.panel} ${activeTool === "models" ? "is-open" : ""}`}
-              data-panel={activeTool}
+              className={`library-panel tool-panel ${modelLibrary.panel} ${effectiveTool === "models" ? "is-open" : ""}`}
+              data-panel={effectiveTool}
               data-tone={studio ? "neutral" : settings.style}
               inert={exportBusy}
               aria-label={isPackaging ? "Packaging templates" : "Model library"}
-              aria-hidden={activeTool !== "models"}
+              aria-hidden={effectiveTool !== "models"}
             >
               <div className="panel-title">
-                <h2>{isPackaging ? "Box templates" : "Model library"}</h2>
+                <h2>{isPackaging ? st.library.boxTemplates : st.library.modelLibrary}</h2>
                 {activeTool === "models" && (
                   <span className="count-badge">{isPackaging ? PACKAGING_TEMPLATES.length : LAB_MODEL_FAMILIES.length}</span>
                 )}
@@ -1588,26 +2311,30 @@ export default function LabellabApp() {
                 />
               ) : activeTool === "models" ? (
                 <>
-                  <label className="search-box">
-                    <Search size={16} />
-                    <input
-                      placeholder="Search packaging..."
-                      aria-label="Search packaging"
-                      value={query}
-                      onChange={(e) => { setQuery(e.target.value); setLibraryPage(0); setActiveFamilyId(null); }}
-                    />
-                  </label>
-                  <div className="category-filters" aria-label="Filter packaging">
-                    {categories.map((category) => (
-                      <button
-                        key={category.id}
-                        aria-pressed={filter === category.id}
-                        onClick={() => { setFilter(category.id); setLibraryPage(0); setActiveFamilyId(null); }}
-                      >
-                        {category.label}
-                      </button>
-                    ))}
-                  </div>
+                  <LibrarySearchFilterBar
+                    tone={studio ? "neutral" : settings.style}
+                    query={query}
+                    placeholder={st.library.searchPackaging}
+                    category={filter}
+                    allCategoryId="all"
+                    categories={localizedCategories}
+                    activeResultCount={modelFamilies.length}
+                    filterLabel={st.library.filterModels}
+                    menuAriaLabel={st.library.modelLibrary}
+                    resetLabel={st.library.resetFilter}
+                    clearLabel={st.library.clearFilters}
+                    disabled={exportBusy}
+                    onQueryChange={(nextQuery) => {
+                      setQuery(nextQuery);
+                      setLibraryPage(0);
+                      setActiveFamilyId(null);
+                    }}
+                    onCategoryChange={(nextCategory) => {
+                      setFilter(nextCategory);
+                      setLibraryPage(0);
+                      setActiveFamilyId(null);
+                    }}
+                  />
                   <div
                     id="model-library-grid"
                     className={`models-grid ${modelLibrary.grid}`}
@@ -1645,7 +2372,7 @@ export default function LabellabApp() {
                           {family.name}
                         </strong>
                         <span className={modelLibrary.caption}>
-                          ({family.category === "glass" ? "Glass bottle" : family.category === "can" ? "Alu can" : family.category === "pp" ? "PP bottle" : "PET bottle"})
+                          ({family.category === "glass" ? st.library.kindGlass : family.category === "can" ? st.library.kindCan : family.category === "pp" ? st.library.kindPp : st.library.kindPet})
                         </span>
                       </button>
                       );
@@ -1654,7 +2381,7 @@ export default function LabellabApp() {
                   {!modelFamilies.length && (
                     <div className="empty-state">
                       <Search size={24} />
-                      <p>No matching models found.</p>
+                      <p>{st.library.noModels}</p>
                       <button
                         onClick={() => {
                           setQuery("");
@@ -1663,7 +2390,7 @@ export default function LabellabApp() {
                           setActiveFamilyId(null);
                         }}
                       >
-                        Clear filters
+                        {st.library.clearFilters}
                       </button>
                     </div>
                   )}
@@ -1676,7 +2403,7 @@ export default function LabellabApp() {
                       disabled={currentLibraryPage === 0} onClick={() => changeLibraryPage(currentLibraryPage - 1)}>
                       <ChevronLeft size={18} aria-hidden="true" />
                     </button>
-                    <span role="status" aria-live="polite" aria-atomic="true">Page {currentLibraryPage + 1} / {libraryPageCount}</span>
+                    <span role="status" aria-live="polite" aria-atomic="true">{st.library.pageOf(currentLibraryPage + 1, libraryPageCount)}</span>
                     <button type="button" aria-label="Next model page" aria-controls="model-library-grid"
                       disabled={currentLibraryPage === libraryPageCount - 1} onClick={() => changeLibraryPage(currentLibraryPage + 1)}>
                       <ChevronRight size={18} aria-hidden="true" />
@@ -1713,7 +2440,7 @@ export default function LabellabApp() {
                       className={`${pkgStyles.splitContainer} ${packagingViewMode !== "3d" ? pkgStyles.splitContainerInset : ""}`}
                       style={
                         {
-                          "--pkg-left-inset": activeTool ? "372px" : "88px",
+                          "--pkg-left-inset": effectiveTool ? "372px" : "88px",
                           "--pkg-right-inset": packagingViewMode === "2d" ? "312px" : "306px",
                         } as CSSProperties
                       }
@@ -1778,21 +2505,21 @@ export default function LabellabApp() {
                   {hoverTarget.kind === "packaging-face" ? (
                     <>
                       <span className={pkgStyles.hoverPillAccent}>
-                        {hoverTarget.surface === "outside" ? "Outside" : "Inside"}
+                        {hoverTarget.surface === "outside" ? st.viewport.hoverOutside : st.viewport.hoverInside}
                       </span>
                       <span>
                         {hoverTarget.label} ({hoverTarget.widthMm} × {hoverTarget.heightMm} mm)
                       </span>
-                      <span className={pkgStyles.hoverPillHint}>· Click to replace artwork</span>
+                      <span className={pkgStyles.hoverPillHint}>{st.viewport.hoverClickReplace}</span>
                     </>
                   ) : (
                     <>
-                      <span className={pkgStyles.hoverPillAccent}>Label</span>
+                      <span className={pkgStyles.hoverPillAccent}>{st.viewport.hoverLabel}</span>
                       <span>{hoverTarget.label}</span>
                       <span className={pkgStyles.hoverPillHint}>
                         {hoverTarget.packCount && hoverTarget.packCount > 1
-                          ? `· Click to replace all ${hoverTarget.packCount} bottles`
-                          : "· Click to replace artwork"}
+                          ? st.viewport.hoverClickReplaceAll(hoverTarget.packCount)
+                          : st.viewport.hoverClickReplace}
                       </span>
                     </>
                   )}
@@ -1807,7 +2534,14 @@ export default function LabellabApp() {
                     aria-label="Mockup studio category"
                   >
                     {STUDIO_DOMAINS.map((item) => {
-                      const Icon = item.id === "packaging" ? Package : item.id === "apparel" ? Shirt : Droplets;
+                      const Icon = item.id === "packaging" ? Package : item.id === "apparel" ? Shirt : Milk;
+                      const label =
+                        item.id === "packaging"
+                          ? st.domains.packaging
+                          : item.id === "apparel"
+                            ? st.domains.apparel
+                            : st.domains.beverage;
+                      const badge = item.badge === "SOON" ? st.domains.soon : item.badge;
                       return (
                         <button
                           key={item.id}
@@ -1815,22 +2549,22 @@ export default function LabellabApp() {
                           className={pkgStyles.domainBtn}
                           aria-pressed={domain === item.id}
                           disabled={exportBusy || !item.available}
-                          title={item.description}
+                          title={label}
                           onClick={() => switchDomain(item.id)}
                         >
                           <Icon size={14} aria-hidden="true" />
-                          <span>{item.shortLabel}</span>
-                          {item.badge && <span className={pkgStyles.domainBadge}>{item.badge}</span>}
+                          <span>{label}</span>
+                          {badge && <span className={pkgStyles.domainBadge}>{badge}</span>}
                         </button>
                       );
                     })}
                   </div>
                   <div className="studio-project-actions" role="group" aria-label="Project actions">
-                    <button type="button" onClick={reset} aria-label="Restore default scene" title="Restore default scene">
-                      <RotateCcw size={16} /><span>Restore defaults</span>
+                    <button type="button" onClick={reset} aria-label={st.actions.restoreDefaultsTitle} title={st.actions.restoreDefaultsTitle}>
+                      <RotateCcw size={16} /><span>{st.actions.restoreDefaults}</span>
                     </button>
-                    <button type="button" onClick={() => void openSaveProjectDialog()} aria-label="Save project" title="Save custom project with a name">
-                      <Save size={16} /><span>Save project</span>
+                    <button type="button" onClick={() => void openSaveProjectDialog()} aria-label={st.actions.saveProject} title={st.actions.saveProjectTitle}>
+                      <Save size={16} /><span>{st.actions.saveProject}</span>
                     </button>
                   </div>
                 </div>
@@ -1869,8 +2603,8 @@ export default function LabellabApp() {
                     </button>
                   </div>
                   <button
-                    aria-label="Fullscreen scene"
-                    title="Fullscreen"
+                    aria-label={st.viewport.fullscreen}
+                    title={st.viewport.fullscreen}
                     onClick={() => {
                       if (document.fullscreenElement)
                         void document.exitFullscreen();
@@ -1878,7 +2612,7 @@ export default function LabellabApp() {
                         void stageRef.current
                           ?.requestFullscreen()
                           .catch(() =>
-                            setToast("Fullscreen is unavailable in this browser."),
+                            setToast(st.toasts.fullscreenUnavailable, "error"),
                           );
                     }}
                   >
@@ -1891,7 +2625,14 @@ export default function LabellabApp() {
                     qualityReport={qualityReport}
                     disabled={exportBusy}
                     onSwitchSceneMode={switchMode}
-                    onToggleStyle={() => update("style", whiteStyle ? "pink" : "white")}
+                    onToggleStyle={() => {
+                      const nextStyle = whiteStyle ? "pink" : "white";
+                      setSettings((cur) => ({
+                        ...cur,
+                        style: nextStyle,
+                        background: SCENE_THEME_BACKGROUNDS[nextStyle],
+                      }));
+                    }}
                     onChangeQuality={setQualityPreference}
                   />
                 </div>
@@ -1936,12 +2677,12 @@ export default function LabellabApp() {
                           }}
                         >
                           <span className="camera-preset-dot" />
-                          <span>Animated</span>
+                          <span>{st.viewport.animated}</span>
                         </button>
                         </div>
                         <div className="camera-mode-frame camera-mode-frame-green">
                         <div className="camera-preset-list" aria-label="Idle camera angles">
-                          {UNITY_CAMERA_PRESETS.map(({ id: preset, label }) => (
+                          {STUDIO_CAMERA_PRESETS.map(({ id: preset }, idx) => (
                             <button
                               key={preset}
                               className={`camera-preset ${activeCamera === preset ? "is-active" : ""}`}
@@ -1952,7 +2693,7 @@ export default function LabellabApp() {
                                 sceneRef.current?.camera(preset);
                               }}
                             >
-                              {label}
+                              {st.viewport.viewLabel(idx + 1)}
                             </button>
                           ))}
                         </div>
@@ -1960,21 +2701,21 @@ export default function LabellabApp() {
                       </div>
                       <div className="zoom-tools">
                         <button
-                          aria-label="Zoom out"
+                          aria-label={st.viewport.zoomOut}
                           onClick={() => sceneRef.current?.zoom(1 / 1.15)}
                         >
                           <Minus size={16} />
                         </button>
                         <button
-                          aria-label="Zoom in"
+                          aria-label={st.viewport.zoomIn}
                           onClick={() => sceneRef.current?.zoom(1.15)}
                         >
                           <Plus size={16} />
                         </button>
                         <span />
-                        <button aria-label="Reset" onClick={() => { setActiveCamera("animated"); sceneRef.current?.reset(); }}>
+                        <button aria-label={st.viewport.reset} onClick={() => { setActiveCamera("animated"); sceneRef.current?.reset(); }}>
                           <RotateCcw size={14} />
-                          <span>Reset</span>
+                          <span>{st.viewport.reset}</span>
                         </button>
                       </div>
                     </>
@@ -1985,23 +2726,15 @@ export default function LabellabApp() {
 
             <aside
               id="material-settings-panel"
-              className={`controls-panel tool-panel ${activeTool === "scene" || activeTool === "materials" ? "is-open" : ""}`}
-              data-active-tool={activeTool ?? ""}
-              aria-label={isPackaging ? (activeTool === "scene" ? "Box design & artwork" : "Size & CAD") : "Properties"}
+              className={`controls-panel tool-panel ${isControlsOpen ? "is-open" : ""}`}
+              data-active-tool={controlsToolGroup}
+              aria-label={controlsHeading.title}
               inert={exportBusy}
-              aria-hidden={activeTool !== "scene" && activeTool !== "materials"}
+              aria-hidden={!isControlsOpen}
             >
               <div className="panel-title">
                 <h2>
-                  {isPackaging ? (
-                    activeTool === "scene" ? (
-                      <><Palette size={16} aria-hidden="true" /> Box design</>
-                    ) : (
-                      <><SlidersHorizontal size={16} aria-hidden="true" /> {activePackagingTemplate.code}</>
-                    )
-                  ) : (
-                    <><SlidersHorizontal size={16} aria-hidden="true" /> Properties</>
-                  )}
+                  <ControlsHeadingIcon size={16} aria-hidden="true" /> {controlsHeading.title}
                 </h2>
               </div>
               {isPackaging ? (
@@ -2013,14 +2746,12 @@ export default function LabellabApp() {
                       surface={packagingSurface}
                       selectedPanelId={selectedPanelId}
                       tone={studio ? "studio" : settings.style}
-                      dielineCost={sitePricing.dielineCost}
                       disabled={exportBusy || dielineBusy}
                       onChangeSurface={setPackagingSurface}
                       onSelectPanel={setSelectedPanelId}
                       onOpenFaceEditor={openFaceArtworkEditor}
                       onChangeArtwork={handlePackagingArtworkChange}
                       onRemoveFaceArtwork={handleRemoveFaceArtwork}
-                      onDownloadDieline={(fmt) => void downloadPackagingDieline(fmt)}
                       onClearAll={clearPackagingArtwork}
                     />
                   </section>
@@ -2033,13 +2764,13 @@ export default function LabellabApp() {
                       activeBeverageModelId={settings.modelId}
                       hasActiveBeverageArtwork={Boolean(artwork)}
                       savedBottleProjects={beverageProjects}
-                      projectThumbnails={projectThumbUrls}
+                      projectThumbnails={combinedPackThumbUrls}
                       hasPackLabelOverride={Boolean(bottlePack.packLabelArtworkId)}
                       hasCustomFinishMask={Boolean(packagingArtwork.finishMaskUrl)}
                       finishMaskName={packagingArtwork.finishMaskName}
                       measuredFootprints={measuredFootprints}
                       tone={studio ? "studio" : settings.style}
-                      dielineCost={sitePricing.dielineCost}
+                      activeSection={activePackagingSection}
                       disabled={exportBusy || dielineBusy}
                       onChange={updatePackaging}
                       onChangeBottlePack={updateBottlePack}
@@ -2051,7 +2782,6 @@ export default function LabellabApp() {
                       onGoCustomizeBottle={() => switchDomain("beverage")}
                       onReset={() => void reset()}
                       onHoverPart={handlePackagingHoverPart}
-                      onDownloadDieline={(fmt) => void downloadPackagingDieline(fmt)}
                     />
                   </section>
                 </>
@@ -2060,70 +2790,256 @@ export default function LabellabApp() {
                   <section className="control-section" data-tool-section="scene">
                     <div className="control-heading">
                       <Palette size={15} />
-                      <h3>Background & environment</h3>
+                      <h3>{st.scenePanel.bgAndEnv}</h3>
                     </div>
                     {studio ? (
                       <div className="studio-info">
                         <Sun size={17} />
                         <span>
-                          White Studio
-                          <small>White floor · Perspective grid · 20 m fade</small>
+                          {st.scenePanel.whiteStudio}
+                          <small>{st.scenePanel.whiteStudioSub}</small>
                         </span>
                       </div>
                     ) : (
                       <>
-                        <div className="color-field">
-                          <label htmlFor="background-color">Background color</label>
-                          <div className="color-value">
-                            <span>{settings.background.toUpperCase()}</span>
-                            <input
-                              id="background-color"
-                              type="color"
-                              aria-label="Choose background color"
-                              value={settings.background}
-                              onInput={(e) =>
-                                update("background", e.currentTarget.value)
-                              }
-                              onChange={(e) => update("background", e.target.value)}
-                            />
+                        <div className={pkgStyles.sceneThemeGroup} data-tone={settings.style}>
+                          <span className={pkgStyles.sceneThemeLabel}>{st.scenePanel.bgColor}</span>
+                          <div className={pkgStyles.sceneThemeGrid} role="group" aria-label={st.scenePanel.bgColor}>
+                            {SCENE_THEME_OPTIONS.map((theme) => {
+                              const active = settings.style === theme.id;
+                              const label = theme.id === "white" ? st.viewport.styleWhite : st.viewport.stylePink;
+                              return (
+                                <button
+                                  key={theme.id}
+                                  type="button"
+                                  className={pkgStyles.sceneThemeBtn}
+                                  aria-pressed={active}
+                                  onClick={() =>
+                                    setSettings((cur) => ({
+                                      ...cur,
+                                      style: theme.id,
+                                      background: theme.color,
+                                    }))
+                                  }
+                                >
+                                  <span
+                                    className={`${pkgStyles.sceneThemeDot} ${theme.id === "white" ? pkgStyles.sceneThemeDotWhite : ""}`}
+                                    style={{ background: theme.color }}
+                                    aria-hidden="true"
+                                  />
+                                  <span className={pkgStyles.sceneThemeName}>{label}</span>
+                                  {active && <Check size={13} className={pkgStyles.sceneThemeCheck} aria-hidden="true" />}
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
-                        <div className="swatches">
-                          {swatches.map((color) => (
-                            <button
-                              key={color}
-                              style={{ background: color }}
-                              aria-label={`Background ${color}`}
-                              aria-pressed={
-                                settings.background.toLowerCase() === color
-                              }
-                              onClick={() => update("background", color)}
-                            >
-                              {settings.background.toLowerCase() === color && (
-                                <Check size={13} />
-                              )}
-                            </button>
-                          ))}
-                        </div>
                         <Toggle
-                          label="Animated grid"
+                          label={st.scenePanel.animatedGrid}
                           checked={settings.grid}
                           onChange={() => update("grid", !settings.grid)}
                           icon={<Grid2X2 size={14} />}
                         />
                         <Toggle
-                          label="Product highlight"
+                          label={st.scenePanel.productHighlight}
                           checked={settings.highlight}
                           onChange={() => update("highlight", !settings.highlight)}
                           icon={<Sun size={14} />}
                         />
                       </>
                     )}
+                    <div className={pkgStyles.sceneEnvGroup} data-tone={studio ? "neutral" : settings.style}>
+                      <div className={pkgStyles.sceneEnvHeader}>
+                        <span className={pkgStyles.sceneEnvLabel}>
+                          <Sun size={13} aria-hidden="true" />
+                          {st.scenePanel.envLighting}
+                        </span>
+                      </div>
+                      <div
+                        className={pkgStyles.sceneEnvGrid}
+                        role="group"
+                        aria-label={st.scenePanel.envLighting}
+                      >
+                        {STUDIO_ENVIRONMENT_PRESETS.map((preset) => {
+                          const active = settings.environment === preset.id;
+                          const copy = st.scenePanel.envPresets[preset.id];
+                          return (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              className={pkgStyles.sceneEnvBtn}
+                              aria-pressed={active}
+                              disabled={exportBusy}
+                              title={copy.detail}
+                              onClick={() => update("environment", preset.id)}
+                            >
+                              <span
+                                className={pkgStyles.sceneEnvOrb}
+                                style={{ background: preset.swatch }}
+                                aria-hidden="true"
+                              />
+                              <span className={pkgStyles.sceneEnvName}>{copy.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className={pkgStyles.sceneEnvHint}>{st.scenePanel.envLightingHint}</p>
+                    </div>
+                    <div className={pkgStyles.sceneSpotGroup} data-tone={studio ? "neutral" : settings.style}>
+                      <label className={pkgStyles.sceneSpotCheckRow}>
+                        <span className={pkgStyles.sceneSpotCheckTitle}>
+                          <Sparkles size={13} aria-hidden="true" />
+                          {st.scenePanel.spotLight}
+                        </span>
+                        <input
+                          type="checkbox"
+                          className={pkgStyles.sceneSpotCheckbox}
+                          checked={settings.spotLight.enabled}
+                          disabled={exportBusy}
+                          onChange={(event) => {
+                            const checked = event.target.checked;
+                            setSettings((cur) => ({
+                              ...cur,
+                              spotLight: { ...cur.spotLight, enabled: checked },
+                            }));
+                          }}
+                        />
+                      </label>
+                      {settings.spotLight.enabled && (
+                        <div className={pkgStyles.sceneSpotBody}>
+                          <div
+                            className={pkgStyles.sceneSpotPresets}
+                            role="group"
+                            aria-label={st.scenePanel.spotLight}
+                          >
+                            {SPOT_LIGHT_ANGLE_PRESETS.map((preset) => {
+                              const isActive =
+                                Math.abs(settings.spotLight.azimuthDeg - preset.azimuthDeg) <= 4 &&
+                                Math.abs(settings.spotLight.elevationDeg - preset.elevationDeg) <= 4;
+                              const label =
+                                preset.id === "top"
+                                  ? st.scenePanel.spotPresetTop
+                                  : preset.id === "hero"
+                                    ? st.scenePanel.spotPresetHero
+                                    : st.scenePanel.spotPresetRim;
+                              return (
+                                <button
+                                  key={preset.id}
+                                  type="button"
+                                  className={pkgStyles.sceneSpotPresetBtn}
+                                  aria-pressed={isActive}
+                                  disabled={exportBusy}
+                                  onClick={() =>
+                                    setSettings((cur) => ({
+                                      ...cur,
+                                      spotLight: {
+                                        ...cur.spotLight,
+                                        azimuthDeg: preset.azimuthDeg,
+                                        elevationDeg: preset.elevationDeg,
+                                        softness: preset.softness,
+                                      },
+                                    }))
+                                  }
+                                >
+                                  {label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {(
+                            [
+                              {
+                                key: "intensity" as const,
+                                label: st.scenePanel.spotIntensity,
+                                value: settings.spotLight.intensity,
+                                min: 0,
+                                max: 3,
+                                step: 0.05,
+                                format: (v: number) => `${Math.round(v * 100)}%`,
+                              },
+                              {
+                                key: "azimuthDeg" as const,
+                                label: st.scenePanel.spotAngle,
+                                value: settings.spotLight.azimuthDeg,
+                                min: -180,
+                                max: 180,
+                                step: 1,
+                                format: (v: number) => `${Math.round(v)}°`,
+                              },
+                              {
+                                key: "elevationDeg" as const,
+                                label: st.scenePanel.spotHeight,
+                                value: settings.spotLight.elevationDeg,
+                                min: 10,
+                                max: 85,
+                                step: 1,
+                                format: (v: number) => `${Math.round(v)}°`,
+                              },
+                            ] as const
+                          ).map((ctrl) => (
+                            <div key={ctrl.key} className={pkgStyles.sceneSpotSliderBlock}>
+                              <div className={pkgStyles.sceneSpotSliderHead}>
+                                <span>{ctrl.label}</span>
+                                <span className={pkgStyles.sceneSpotSliderVal}>{ctrl.format(ctrl.value)}</span>
+                              </div>
+                              <input
+                                type="range"
+                                className={pkgStyles.sceneSpotRange}
+                                aria-label={ctrl.label}
+                                min={ctrl.min}
+                                max={ctrl.max}
+                                step={ctrl.step}
+                                value={ctrl.value}
+                                disabled={exportBusy}
+                                onChange={(event) => {
+                                  const nextVal = Number(event.target.value);
+                                  setSettings((cur) => ({
+                                    ...cur,
+                                    spotLight: {
+                                      ...cur.spotLight,
+                                      [ctrl.key]: nextVal,
+                                    } as StudioSpotLightConfig,
+                                  }));
+                                }}
+                              />
+                            </div>
+                          ))}
+                          <div className={pkgStyles.sceneSpotColorRow}>
+                            <span className={pkgStyles.sceneSpotSliderHead}>{st.scenePanel.spotColor}</span>
+                            <div className={pkgStyles.sceneSpotSwatches} role="group" aria-label={st.scenePanel.spotColor}>
+                              {SPOT_LIGHT_COLOR_SWATCHES.map((sw) => {
+                                const activeColor =
+                                  settings.spotLight.color.toLowerCase() === sw.hex.toLowerCase();
+                                const title = st.scenePanel.spotColors[sw.id];
+                                return (
+                                  <button
+                                    key={sw.id}
+                                    type="button"
+                                    className={pkgStyles.sceneSpotSwatchBtn}
+                                    aria-pressed={activeColor}
+                                    aria-label={title}
+                                    title={title}
+                                    disabled={exportBusy}
+                                    style={{ background: sw.hex }}
+                                    onClick={() =>
+                                      setSettings((cur) => ({
+                                        ...cur,
+                                        spotLight: { ...cur.spotLight, color: sw.hex },
+                                      }))
+                                    }
+                                  />
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </section>
                   <section className="control-section" data-tool-section="scene">
                     <div className="control-heading">
                       <RotateCw size={15} />
-                      <h3>Motion</h3>
+                      <h3>{st.scenePanel.motion}</h3>
                     </div>
                     <div className="motion-options">
                       <button
@@ -2135,8 +3051,8 @@ export default function LabellabApp() {
                         }}
                       >
                         <Sparkles size={16} />
-                        <strong>Website</strong>
-                        <small>Tilt & rotate</small>
+                        <strong>{st.scenePanel.motionWebsite}</strong>
+                        <small>{st.scenePanel.motionWebsiteSub}</small>
                       </button>
                       <button
                         aria-pressed={studio || settings.motion === "off"}
@@ -2149,12 +3065,12 @@ export default function LabellabApp() {
                         }}
                       >
                         <Circle size={15} />
-                        <strong>Idle</strong>
-                        <small>Still</small>
+                        <strong>{st.scenePanel.motionIdle}</strong>
+                        <small>{st.scenePanel.motionIdleSub}</small>
                       </button>
                     </div>
                   </section>
-                  <PropertiesPanel key={model.id} model={model} settings={settings}
+                  <PropertiesPanel key={model.id} model={model} settings={settings} activePart={activeBeveragePart}
                     artwork={<ArtworkLibrary key={`${model.id}:${artworkReset}`} modelId={model.id} modelName={model.name} disabled={exportBusy}
                       resetSignal={artworkReset} openSignal={beverageArtworkOpenSignal} onApply={applyArtwork} onClear={clearArtwork} onEditorStateChange={setArtworkEditing} />}
                     onChange={(patch) => { if (!exportBusy) setSettings((current) => ({ ...current, ...patch })); }} />
@@ -2171,13 +3087,60 @@ export default function LabellabApp() {
               progress={renderProgress}
               onRender={() => void exportPreview()}
               result={exportResult}
-              onOpenMaterials={() => setActiveTool("materials")}
-              materialsOpen={activeTool === "materials"}
               baseRenderCost={sitePricing.renderCost}
+              dielineExport={
+                isPackaging
+                  ? {
+                      cost: sitePricing.dielineCost,
+                      busy: dielineBusy,
+                      templateCode: activePackagingTemplate.code,
+                      onDownload: (fmt) => void downloadPackagingDieline(fmt),
+                    }
+                  : undefined
+              }
             />
           </div>
         </div>
       </section>
+
+      <ProjectsModal
+        open={modal === "projects"}
+        collections={studioCollections}
+        cloudProjects={cloudProjects}
+        cloudAuthenticated={cloudAuthenticated}
+        projectThumbUrls={projectThumbUrls}
+        shareByGroupId={shareByGroupId}
+        extendCost={sitePricing.projectExtendCost}
+        busy={exportBusy}
+        onOpenLocalItem={handleOpenSavedProject}
+        onOpenCloudItem={handleOpenCloudProjectItem}
+        onDeleteLocalItem={(item) => void handleDeleteSavedProject(item)}
+        onDeleteLocalGroup={(gid, gname) => void handleDeleteProjectGroup(gid, gname)}
+        onDeleteCloudItem={handleDeleteCloudItem}
+        onDeleteCloudProject={handleDeleteCloudProject}
+        onToggleAutoRenew={handleToggleCloudAutoRenew}
+        onExtendCloudProject={handleExtendCloudProject}
+        onMigrateLocalToCloud={handleMigrateLocalGroupToCloud}
+        onOpenShare={(cid) => {
+          if (!cloudAuthenticated) {
+            setModal(null);
+            setToast(
+              sitePricing.shareCost > 0
+                ? st.toasts.signInSharePaid(sitePricing.shareCost)
+                : st.toasts.signInShareFree,
+              "error",
+            );
+            openAuth("login");
+            return;
+          }
+          setShareDialogGroupId(cid);
+        }}
+        onRequireLogin={() => {
+          setModal(null);
+          openAuth("login");
+        }}
+        onClose={() => setModal(null)}
+      />
 
       <dialog
         ref={dialogRef}
@@ -2194,128 +3157,33 @@ export default function LabellabApp() {
       >
         <div className="dialog-header">
           <div>
-            <span className="eyebrow dark">LABELLAB STUDIO</span>
-            <h2 id="dialog-title">
-              {modal === "projects"
-                  ? "Your projects."
-                  : "Meet Labellab."}
-            </h2>
+            <span className="eyebrow dark">{st.projectsModal.eyebrow}</span>
+            <h2 id="dialog-title">{st.guide.title}</h2>
           </div>
           <button
             className="close-dialog"
-            aria-label="Close dialog"
+            aria-label={st.projectsModal.closeAria}
             disabled={exportBusy}
             onClick={() => setModal(null)}
           >
             <X size={21} />
           </button>
         </div>
-        {modal === "projects" && (
-          <div className="projects-dialog">
-            <p className="dialog-muted">
-              Custom bottle/can projects are saved in this browser and can also be packed directly
-              inside Boxes &amp; Trays → Pack Your Bottles.
-            </p>
-            {projects.length ? (
-              projects.map((project) => {
-                const baseModel = getLabModel(project.settings.modelId);
-                const thumbUrl = projectThumbUrls[project.id] || (project.kind === "beverage" ? baseModel.poster : undefined);
-                const subLabel =
-                  project.kind === "packaging" && project.packagingParams
-                    ? `${getPackagingTemplate(project.packagingParams.templateId).code} · ${formatDate(project.date)}`
-                    : `${baseModel.name} (${baseModel.volume})${project.artworkBlob ? " · Custom label" : ""} · ${formatDate(project.date)}`;
-                return (
-                  <div className="saved-project" key={project.id}>
-                    <div
-                      className="saved-project-color"
-                      style={{
-                        background: thumbUrl ? "#ffffff" : project.settings.background,
-                        overflow: "hidden",
-                        border: "1px solid #e5dce0",
-                      }}
-                    >
-                      {thumbUrl ? (
-                        <img src={thumbUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      ) : project.kind === "packaging" ? (
-                        <Package size={20} />
-                      ) : (
-                        <Box size={21} />
-                      )}
-                    </div>
-                    <div>
-                      <strong>{project.name}</strong>
-                      <small>{subLabel}</small>
-                    </div>
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      <button
-                        type="button"
-                        aria-label={`Delete ${project.name}`}
-                        title="Delete project"
-                        onClick={() => void handleDeleteSavedProject(project)}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Open ${project.name}`}
-                        title="Open project"
-                        onClick={() => handleOpenSavedProject(project)}
-                      >
-                        <ArrowRight size={19} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="projects-empty">
-                <FolderOpen size={36} strokeWidth={1} />
-                <h3>Room for your first idea.</h3>
-                <p>
-                  Create a scene and select Save project.
-                  <br />
-                  Pick up where you left off next time.
-                </p>
-                <button className="dark-cta" onClick={() => setModal(null)}>
-                  Back to studio <ArrowRight size={16} />
-                </button>
-              </div>
-            )}
-          </div>
-        )}
         {modal === "guide" && (
           <div className="guide-steps">
-            {[
-              {
-                title: "Choose a shape",
-                text: "Start with a Basil bottle, aluminum can or PET bottle from the library.",
-                icon: <Box />,
-              },
-              {
-                title: "Add your design",
-                text: "Upload your label artwork, then adjust its position and surface finish.",
-                icon: <Upload />,
-              },
-              {
-                title: "Set the scene",
-                text: "Scene 1 has a colored background and motion. Scene 2 has a white floor and perspective grid.",
-                icon: <Globe2 />,
-              },
-              {
-                title: "Capture the moment",
-                text: "Choose an aspect ratio and resolution, then render a PNG. Use the left/right arrows to rotate, up/down to change field of view, WASD to pan, and +/− to zoom.",
-                icon: <FileImage />,
-              },
-            ].map((step, i) => (
-              <div className="guide-step" key={step.title}>
-                <span>{step.icon}</span>
-                <div>
-                  <small>0{i + 1}</small>
-                  <h3>{step.title}</h3>
-                  <p>{step.text}</p>
+            {st.guide.steps.map((step, i) => {
+              const icons = [<Box key="box" />, <Upload key="up" />, <Globe2 key="g" />, <FileImage key="f" />];
+              return (
+                <div className="guide-step" key={step.title}>
+                  <span>{icons[i] ?? <Box />}</span>
+                  <div>
+                    <small>0{i + 1}</small>
+                    <h3>{step.title}</h3>
+                    <p>{step.body}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </dialog>
@@ -2401,21 +3269,97 @@ export default function LabellabApp() {
           previewUrl={effectiveSavePreviewUrl}
           initialName={projectName}
           existingProjectName={
-            loadedProjectId
-              ? projects.find(
-                  (p) => p.id === loadedProjectId && p.kind === (isPackaging ? "packaging" : "beverage"),
-                )?.name
-              : undefined
+            loadedCloudProjectId && loadedCloudItemId
+              ? cloudProjects
+                  .find((p) => p.id === loadedCloudProjectId)
+                  ?.items.find((i) => i.id === loadedCloudItemId && i.kind === (isPackaging ? "packaging" : "beverage"))
+                  ?.name
+              : loadedProjectId
+                ? projects.find(
+                    (p) => p.id === loadedProjectId && p.kind === (isPackaging ? "packaging" : "beverage"),
+                  )?.name
+                : undefined
           }
+          existingGroupId={
+            loadedCloudProjectId
+              ? loadedCloudProjectId
+              : loadedProjectId
+                ? (() => {
+                    const found = projects.find((p) => p.id === loadedProjectId);
+                    return found ? resolveItemGroupId(found) : undefined;
+                  })()
+                : undefined
+          }
+          availableGroups={studioCollections.map((col) => ({
+            id: col.id,
+            name: col.name,
+            itemCount: col.source === "cloud" ? (col.cloudItems?.length ?? 0) : (col.localGroup?.items.length ?? 0),
+            source: col.source,
+          }))}
+          isCloudAuthenticated={cloudAuthenticated}
+          extendCost={sitePricing.projectExtendCost}
           busy={exportBusy}
           onSave={handleConfirmSaveProject}
           onClose={() => setSaveDialogOpen(false)}
         />
       )}
-      {toast && (
-        <div className={`toast ${isPackaging ? pkgStyles.toastTop : ""}`} role="status">
-          <Check size={17} />
-          <span>{toast}</span>
+      {activeShareCollection && (
+        <ShareProjectDialog
+          open={Boolean(activeShareCollection)}
+          collection={activeShareCollection}
+          thumbUrls={projectThumbUrls}
+          existingShare={shareByGroupId.get(activeShareCollection.id) ?? null}
+          shareCost={sitePricing.shareCost}
+          onShareCreatedOrUpdated={(share, chargedCoins) => {
+            setSharedProjects((prev) => [share, ...prev.filter((s) => s.id !== share.id)]);
+            if (activeShareCollection.source === "local" && activeShareCollection.localGroup) {
+              const updatedGroup: ProjectGroup = {
+                ...activeShareCollection.localGroup.group,
+                shareId: share.id,
+                shareToken: share.token,
+                shareStatus: share.status,
+                lastSharedAt: Date.now(),
+              };
+              void saveProjectGroup(updatedGroup)
+                .then((saved) => setProjectGroups((prev) => [saved, ...prev.filter((g) => g.id !== saved.id)]))
+                .catch(() => {});
+            }
+            setToast(
+              chargedCoins > 0
+                ? st.toasts.shareLivePaid(chargedCoins)
+                : st.toasts.shareUpdated,
+            );
+          }}
+          onShareDeleted={(shareId, groupId) => {
+            setSharedProjects((prev) => prev.filter((s) => s.id !== shareId));
+            const existingGroup = projectGroups.find((g) => g.id === groupId);
+            if (existingGroup) {
+              const cleaned: ProjectGroup = {
+                ...existingGroup,
+                shareId: undefined,
+                shareToken: undefined,
+                shareStatus: undefined,
+              };
+              void saveProjectGroup(cleaned)
+                .then((saved) => setProjectGroups((prev) => [saved, ...prev.filter((g) => g.id !== saved.id)]))
+                .catch(() => {});
+            }
+            setToast(st.toasts.shareRevoked);
+          }}
+          onRequireLogin={(msg) => {
+            setToast(msg, "error");
+            openAuth("login");
+          }}
+          onClose={() => setShareDialogGroupId(null)}
+        />
+      )}
+      {toastState && (
+        <div
+          className={`toast ${toastState.tone === "error" ? "toast-error" : ""} ${isPackaging ? pkgStyles.toastTop : ""}`}
+          role={toastState.tone === "error" ? "alert" : "status"}
+        >
+          {toastState.tone === "error" ? <AlertCircle size={17} /> : <Check size={17} />}
+          <span>{toastState.message}</span>
           <button aria-label="Dismiss notification" onClick={() => setToast("")}>
             <X size={15} />
           </button>

@@ -13,7 +13,7 @@ loaded.paths = module.paths;
 loaded._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText, filename);
-const { projectedRefractionRect } = loaded.exports;
+const { createRefractionAtlas, projectedRefractionRect } = loaded.exports;
 
 const width = 4573, height = 8129;
 const bounds = new THREE.Box3(
@@ -157,4 +157,58 @@ test('camera inside product and near-plane intersection safely reserve the full 
   assert.equal(nearBounds.containsPoint(closeView.position), false, 'Near-plane case is distinct from an eye inside the product');
   assert.deepEqual(projectedRefractionRect(nearBounds, new THREE.Matrix4(), closeView, width, height),
     { x: 0, y: 0, width, height });
+});
+
+test('createRefractionAtlas positions tiles in physical target pixels without HiDPI viewport scaling', () => {
+  const pixelRatio = 2;
+  const canvasViewport = new THREE.Vector4(0, 0, 1100, 700);
+  const currentViewport = canvasViewport.clone().multiplyScalar(pixelRatio);
+  let setViewportCalls = 0;
+  const renderedViewports = [];
+
+  const mockRenderer = {
+    autoClear: true,
+    setRenderTarget(target) {
+      if (target) currentViewport.copy(target.viewport);
+      else currentViewport.copy(canvasViewport).multiplyScalar(pixelRatio).floor();
+    },
+    setViewport(x, y, w, h) {
+      setViewportCalls++;
+      if (x && x.isVector4) canvasViewport.copy(x);
+      else canvasViewport.set(x, y, w, h);
+      currentViewport.copy(canvasViewport).multiplyScalar(pixelRatio).round();
+    },
+    getContext() {
+      return {
+        FRAMEBUFFER: 36160,
+        FRAMEBUFFER_COMPLETE: 36053,
+        checkFramebufferStatus() { return 36053; },
+      };
+    },
+    render() {
+      renderedViewports.push(currentViewport.clone());
+    },
+  };
+
+  const rect = { x: 100, y: 200, width: 2800, height: 3200 };
+  const atlas = createRefractionAtlas(mockRenderer, rect, THREE.HalfFloatType);
+  const source = new THREE.Texture();
+  atlas.copy(source, {
+    x: 0, y: 0, width: 1408, height: 1408,
+    renderX: 0, renderY: 0, renderWidth: 1472, renderHeight: 1472,
+    cropX: 0, cropY: 0,
+  }, false);
+  atlas.copy(source, {
+    x: 1408, y: 1408, width: 1392, height: 1792,
+    renderX: 1344, renderY: 1344, renderWidth: 1456, renderHeight: 1856,
+    cropX: 64, cropY: 64,
+  }, true);
+  atlas.dispose();
+
+  assert.equal(setViewportCalls, 0, 'Atlas copy must configure target.viewport instead of renderer.setViewport');
+  assert.deepEqual(renderedViewports.map(v => v.toArray()), [
+    [0, 3200 - 1408, 1408, 1408],
+    [1408, 0, 1392, 1792],
+  ]);
+  assert.deepEqual(canvasViewport.toArray(), [0, 0, 1100, 700], 'Main canvas viewport must remain untouched');
 });

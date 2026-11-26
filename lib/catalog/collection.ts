@@ -2,7 +2,10 @@ import type { CatalogData, DrinkType, ProductGroup } from './contracts';
 import { catalogProducts, type StorefrontProduct } from './storefront';
 import { checkDisplay3DCompatibility } from './compatibility';
 import { hasValidationErrors } from './validation';
-import { normalizeSearch } from '../i18n/catalog';
+
+function normalizeSearch(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().trim();
+}
 
 export interface CollectionSection { group: ProductGroup; title: string; products: StorefrontProduct[] }
 const usesLegacyCollections = (data: CatalogData) => data.catalogCollections === undefined || (!data.catalogCollections.length && data.productGroups.some(group => group.collectionVisible === true));

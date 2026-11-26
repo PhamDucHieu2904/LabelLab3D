@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { Activity, Box, ChevronRight, ExternalLink, FolderOpen, Gift, LayoutDashboard, LogOut, Menu, Newspaper, Rocket, Settings2, ShieldCheck, Users, Wallet, X } from "lucide-react";
+import { Activity, Box, ChevronRight, ExternalLink, FolderOpen, Gift, LayoutDashboard, LogOut, Menu, Newspaper, Rocket, Scale, Settings2, ShieldCheck, Users, Wallet, X } from "lucide-react";
 import { ADMIN_SECTIONS, adminHref, type AdminSection } from "@/lib/admin/navigation";
 import OverviewPanel from "./OverviewPanel";
 import s from "./AdminWorkspace.module.css";
@@ -12,6 +12,7 @@ const CommercePanel = dynamic(() => import("./CommercePanel"));
 const ProductionUsersPanel = dynamic(() => import("./ProductionUsersPanel"));
 const ManagementPanel = dynamic(() => import("./ManagementPanel"));
 const OperationsPanel = dynamic(() => import("./OperationsPanel"));
+const LegalHubPanel = dynamic(() => import("./LegalHubPanel"));
 
 const icons = {
   overview: LayoutDashboard,
@@ -23,6 +24,7 @@ const icons = {
   content: Newspaper,
   promotions: Gift,
   releases: Rocket,
+  legal: Scale,
   activity: ShieldCheck,
   settings: Settings2,
 };
@@ -134,6 +136,7 @@ export default function AdminWorkspace({ section }: { section: AdminSection }) {
               <ManagementPanel key={section} section={section as "models" | "assets" | "content" | "promotions" | "releases"} />
             </>
           )}
+          {section === "legal" && <LegalHubPanel />}
           {(section === "activity" || section === "settings") && (
             <>
               <div className={s.pageHeading}><h1>{current.title}</h1></div>

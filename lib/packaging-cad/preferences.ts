@@ -201,6 +201,12 @@ export function parseBottlePackConfig(
         ? rawPackLabelArtworkId
         : undefined;
 
+    const rawJitterSeed = own('jitterSeed');
+    const jitterSeed =
+      typeof rawJitterSeed === 'number' && Number.isFinite(rawJitterSeed)
+        ? Math.round(Math.max(0, Math.min(999999, rawJitterSeed)))
+        : undefined;
+
     return {
       enabled: bool(own('enabled'), fallback.enabled),
       modelId,
@@ -212,6 +218,8 @@ export function parseBottlePackConfig(
       wallPaddingMm: bounded(own('wallPaddingMm'), fallback.wallPaddingMm, 0, 16),
       facingYawDeg: bounded(own('facingYawDeg'), fallback.facingYawDeg, -180, 180),
       organicJitter: bool(own('organicJitter'), fallback.organicJitter),
+      ...(jitterSeed !== undefined ? { jitterSeed } : {}),
+      ...(bool(own('honeycombDividers'), false) ? { honeycombDividers: true } : {}),
       autoFitOnChange: bool(own('autoFitOnChange'), fallback.autoFitOnChange),
     };
   } catch {

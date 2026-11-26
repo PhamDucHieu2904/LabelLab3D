@@ -1,9 +1,19 @@
 import { BATCH_MATERIAL_DEFAULTS } from './bottle-batch';
+import {
+  DEFAULT_ENVIRONMENT_PRESET_ID,
+  DEFAULT_SPOT_LIGHT,
+  normalizeEnvironmentPresetId,
+  sanitizeSpotLightConfig,
+  type EnvironmentPresetId,
+  type StudioSpotLightConfig,
+} from '../mockup/environment-presets';
 /** Device-local scene preferences. This state grants no commercial entitlement. */
 export interface ScenePreferences {
   modelId: string;
   sceneMode: "website" | "studio";
   style: "pink" | "white";
+  environment: EnvironmentPresetId;
+  spotLight: StudioSpotLightConfig;
   motion: "showcase" | "off";
   background: string;
   liquidColor: string;
@@ -39,6 +49,8 @@ export const DEFAULT_PREFERENCES: Readonly<ScenePreferences> = Object.freeze({
   modelId: "basil-strawberry",
   sceneMode: "website",
   style: "pink",
+  environment: DEFAULT_ENVIRONMENT_PRESET_ID,
+  spotLight: DEFAULT_SPOT_LIGHT,
   motion: "showcase",
   background: "#d53660",
   liquidColor: "#F14E78",
@@ -229,6 +241,8 @@ export function parsePreferences(value: unknown): ScenePreferences {
           ? sceneMode
           : defaults.sceneMode,
       style: style === "pink" || style === "white" ? style : defaults.style,
+      environment: normalizeEnvironmentPresetId(own("environment")),
+      spotLight: sanitizeSpotLightConfig(own("spotLight")),
       motion:
         motion === "showcase" || motion === "off" ? motion : defaults.motion,
       background: color(own("background"), defaults.background),
@@ -250,8 +264,8 @@ export function parsePreferences(value: unknown): ScenePreferences {
       liquidRoughness: bounded(own("liquidRoughness"), liquidDefaults.liquidRoughness, 0, 1),
       liquidIor: bounded(own("liquidIor"), liquidDefaults.liquidIor, 1, 1.6),
       labelOffset: bounded(own("labelOffset"), defaults.labelOffset, -100, 100),
-      roughness: bounded(own("roughness"), batch?.roughness ?? defaults.roughness, 0, 1),
-      metalness: bounded(own("metalness"), defaults.metalness, 0, 1),
+      roughness: bounded(own("roughness"), batch?.roughness ?? (can ? 0.15 : defaults.roughness), 0, 1),
+      metalness: bounded(own("metalness"), can ? 0 : defaults.metalness, 0, 1),
       frame:
         frame === "square" || frame === "portrait" || frame === "landscape" || frame === "story"
           ? frame

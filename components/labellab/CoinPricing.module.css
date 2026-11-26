@@ -63,6 +63,86 @@
 .markets button:disabled { opacity: .55; cursor: not-allowed; }
 .marketLabel { font-size: 15px; font-weight: 650; line-height: 1.2; }
 .marketCurrency { font-size: 14px; line-height: 1.2; opacity: .8; }
+.marketSingle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 38px;
+  padding: 6px 12px;
+  border-radius: 11px;
+  background: rgba(189, 71, 110, .09);
+  color: #8f2148;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+.marketSingle small {
+  color: #7c5265;
+  font-size: 12px;
+  font-weight: 500;
+}
+.receiptBox {
+  margin: 0 0 14px;
+  padding: 12px 16px;
+  border: 1px solid rgba(161, 46, 86, .18);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .64);
+}
+.receiptBox summary {
+  color: #872546;
+  font-size: 13.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.receiptGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 10px;
+  margin-top: 10px;
+}
+.receiptGrid input {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid rgba(161, 46, 86, .22);
+  border-radius: 9px;
+  background: #fff;
+  color: #462033;
+  font-size: 13px;
+}
+.receiptFull { grid-column: 1 / -1; }
+.receiptActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.receiptStatus {
+  font-size: 12.5px;
+  color: #186b42;
+  font-weight: 600;
+}
+.receiptError {
+  font-size: 12.5px;
+  color: #a32544;
+  font-weight: 600;
+}
+.receiptSaveBtn {
+  min-height: 34px;
+  padding: 5px 14px;
+  border: 1px solid rgba(161, 46, 86, .3);
+  border-radius: 9px;
+  background: #fff;
+  color: #872546;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.receiptSaveBtn:hover:not(:disabled) { background: #fdf1f5; border-color: #a12e56; }
+.receiptSaveBtn:disabled { opacity: .6; cursor: not-allowed; }
 
 .packs {
   display: grid;
@@ -147,7 +227,7 @@
 .checkoutHeader { display:flex; align-items:center; justify-content:space-between; gap:21px; padding-right:49px; }
 .checkoutHeader h3 { margin: 4px 0; font-size: clamp(28px, 5vw, 38px); line-height: 1.12; }
 .checkoutHeader p { margin: 0; color:#8a5a6d; font-size:14px; line-height:1.4; }
-.eyebrow { color:#a12e56; font-size:13px; font-weight:750; letter-spacing:.08em; text-transform:uppercase; }
+.eyebrow { color:#a12e56; font-size:13px; font-weight:750; letter-spacing:0; text-transform:uppercase; }
 .checkoutGrid { display:grid; grid-template-columns: 244px 1fr; gap:26px; align-items:center; margin:22px 0; }
 .qrWrap { display:flex; flex-direction:column; align-items:center; gap:9px; text-align:center; font-size:15px; }
 .qrWrap small { color:#8a5a6d; line-height:1.35; }

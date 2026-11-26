@@ -1,8 +1,8 @@
 # 290 ml Basil pull-cap import
 
-User-authorized import of the supplied pull-cap GLB, preserving its cap, label UVs and silhouette. Reference: Unity `Glass290WebAssetBuilder.cs`, `Glass290HighSeedFitAudit.cs` and `BasilSeedGelAssetBuilder.cs`.
+User-authorized import of the supplied pull-cap GLB, preserving its cap, label UVs and silhouette. Reference: source 3D `Glass290WebAssetBuilder.cs`, `Glass290HighSeedFitAudit.cs` and `BasilSeedGelAssetBuilder.cs`.
 
-1. Audit source topology, transforms and all 330 seed islands against Unity.
+1. Audit source topology, transforms and all 330 seed islands against source 3D.
 2. Fit source seed ellipsoids and store compact metadata; generate core/gel instances through the existing Basil web renderer. Match the existing physical hydrated offset, 0.832152 mm, with the source-to-metre root scale 0.1.
 3. Draco compress retained geometry with position/normal/UV precision 18/14/16; verify decoded surfaces, UVs and winding. Repair demonstrated closure defects without replacing the pull cap or neck.
 4. Add a separate 290 ml pull-cap family, native Basil optics, silver cap defaults and independent persisted edits. Use a real render for its poster.

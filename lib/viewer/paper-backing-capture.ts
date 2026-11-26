@@ -131,13 +131,12 @@ export function renderPaperBackingCapture(
   }
   hasActiveCapture.set(renderer, true);
   const target = renderer.getRenderTarget();
+  const activeCubeFace = renderer.getActiveCubeFace();
+  const activeMipmapLevel = renderer.getActiveMipmapLevel();
   const drawingBuffer = renderer.getDrawingBufferSize(new THREE.Vector2());
   const width = target?.width ?? drawingBuffer.x;
   const height = target?.height ?? drawingBuffer.y;
   const state = stateFor(renderer, Math.max(1, width), Math.max(1, height));
-  const viewport = renderer.getViewport(new THREE.Vector4());
-  const scissor = renderer.getScissor(new THREE.Vector4());
-  const scissorTest = renderer.getScissorTest();
   const clearColor = renderer.getClearColor(new THREE.Color());
   const clearAlpha = renderer.getClearAlpha();
   const background = scene instanceof THREE.Scene ? scene.background : null;
@@ -157,9 +156,13 @@ export function renderPaperBackingCapture(
       scene.background = null;
       scene.overrideMaterial = state.material;
     }
+    // Configure viewport/scissor on the offscreen render target directly in
+    // physical pixels. Calling renderer.setViewport() here would multiply by
+    // devicePixelRatio and overwrite Three's active tile/canvas viewport,
+    // shrinking or breaking tiled transmission exports (4K/8K) and HiDPI draws.
+    state.target.viewport.set(0, 0, state.width, state.height);
+    state.target.scissorTest = false;
     renderer.setRenderTarget(state.target);
-    renderer.setViewport(0, 0, state.width, state.height);
-    renderer.setScissorTest(false);
     renderer.setClearColor(0x000000, 0);
     renderer.clear(true, true, false);
     renderer.render(scene, camera);
@@ -172,13 +175,11 @@ export function renderPaperBackingCapture(
       scene.background = background;
       scene.overrideMaterial = override;
     }
-    renderer.setRenderTarget(target);
-    renderer.setViewport(viewport);
-    renderer.setScissor(scissor);
-    renderer.setScissorTest(scissorTest);
+    if (target) renderer.setRenderTarget(target, activeCubeFace, activeMipmapLevel);
+    else renderer.setRenderTarget(null);
     renderer.setClearColor(clearColor, clearAlpha);
-    draw();
   }
+  draw();
 }
 
 export function createPaperBackingUniforms(): PaperBackingUniforms {

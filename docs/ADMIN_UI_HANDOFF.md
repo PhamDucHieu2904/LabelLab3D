@@ -38,13 +38,13 @@ Các biểu mẫu dùng dialog tại trang; hỗ trợ Escape, nhãn trường v
 | Nhật ký | `lib/admin/activity-store.ts` | `labellab.admin.demo.activity.v1` |
 | Cài đặt/cảnh báo | `components/admin/OperationsPanel.tsx` | `labellab.admin.demo.settings.v1`, `labellab.admin.demo.alert-ack.v1` |
 
-Metadata của ba model lấy từ `lib/labellab/catalog.ts` (`LAB_MODELS`): Basil Strawberry, Mango Juice, Aloe Mango. Giữ geometry đã tối ưu của web Vinut. Không thay model bằng bản Unity nặng. Logo và coin dùng tài nguyên thương hiệu đã cung cấp.
+Metadata của ba model lấy từ `lib/labellab/catalog.ts` (`LAB_MODELS`): Basil Strawberry, Mango Juice, Aloe Mango. Giữ geometry đã tối ưu của web HyperMockup. Không thay model bằng bản source 3D nặng. Logo và coin dùng tài nguyên thương hiệu đã cung cấp.
 
 Local storage không phải dữ liệu kinh doanh. Có thể bị xóa/sửa bằng DevTools, khác nhau giữa thiết bị và không có giao dịch nguyên tử giữa các store. Không dùng cơ chế này để ghi nhận tiền hoặc quyền sở hữu coin thật.
 
 ## Đối chiếu project mẫu đã đọc
 
-Gốc Vinut: `D:/program project/3d display product website`.
+Gốc HyperMockup: `D:/program project/3d display product website`.
 
 - `components/admin/AdminApp.tsx:32`, `:59`: module/navigation và thao tác catalog; nguồn cho model, tài nguyên, nội dung, xuất bản, vận hành.
 - `components/admin/catalog/definitions.ts:62–63`: nhãn tương thích, model GLB/poster, UV, material slots, orientation, hiển thị/thứ tự Mockup.
@@ -55,15 +55,15 @@ Gốc Vinut: `D:/program project/3d display product website`.
 - `components/admin/HomepageLayoutConfig.tsx`: bật/tắt các lớp hiển thị trang chính.
 - `lib/server/admin-api.ts`, `lib/server/local-repository.ts`: session owner/editor và SQLite của mẫu. Chưa được nhập làm backend của Labellab.
 
-Vinut không có customer-user CRUD, coin, đơn nạp hoặc doanh thu. Các phần này được dựng mới cho Labellab, không phải chức năng có sẵn trong mẫu. Phân loại nước/hương vị/dinh dưỡng của Vinut không được bê thành menu nghiệp vụ riêng của nền tảng mockup.
+HyperMockup không có customer-user CRUD, coin, đơn nạp hoặc doanh thu. Các phần này được dựng mới cho Labellab, không phải chức năng có sẵn trong mẫu. Phân loại nước/hương vị/dinh dưỡng của HyperMockup không được bê thành menu nghiệp vụ riêng của nền tảng mockup.
 
-Gốc Label Lab desktop: `D:/program project/label-lab-administrator`, đối chiếu với `D:/UnityHubData/Unity_3D_Mockup_Project`.
+Gốc Label Lab desktop: `D:/program project/label-lab-administrator`, đối chiếu với `D:/source 3DHubData/source 3D_3D_Mockup_Project`.
 
-- `README.md`: xác nhận admin quản lý launcher Unity qua PlayFab và Cloudflare D1/R2.
+- `README.md`: xác nhận admin quản lý launcher source 3D qua PlayFab và Cloudflare D1/R2.
 - `app/api/admin/route.ts:143–320`, `playfab.ts:115–305`: quản lý tài khoản, khóa/mở khóa, hồ sơ và vai trò. Web giữ các luồng quản lý hồ sơ; phần xác thực web sẽ xây riêng.
 - `app/api/storage/route.ts:62–268`, `db/schema.ts:96–121`: file/thư mục, metadata và đồng bộ kho tài nguyên.
 - `db/schema.ts:125–170`, `app/components/AdminApp.tsx`: telemetry, nhật ký và trạng thái tích hợp; mẫu chưa nhận đủ telemetry launcher để có thống kê thật.
-- Unity `Assets/System/Script/IntroManager.cs:35–107` và `LauncherSessionValidator.cs:106–126`: xác minh phiên launcher qua PlayFab. Không mang cơ chế phiên launcher sang web.
+- source 3D `Assets/System/Script/IntroManager.cs:35–107` và `LauncherSessionValidator.cs:106–126`: xác minh phiên launcher qua PlayFab. Không mang cơ chế phiên launcher sang web.
 - Phát hành ZIP/manifest Stable/Beta và chữ ký RSA của launcher được đối chiếu về luồng quản lý; bản web hiện dùng snapshot catalog. Chưa có coin/payment/reward sẵn trong mẫu desktop để tái sử dụng.
 
 ## Hợp đồng backend cần làm tiếp

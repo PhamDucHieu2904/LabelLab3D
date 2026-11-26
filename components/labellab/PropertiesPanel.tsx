@@ -5,14 +5,17 @@ import { Check, ChevronDown, Circle, Droplets, Layers3, RotateCcw, Sticker } fro
 import { getModelMaterialDefaults, type LabModel } from "@/lib/labellab/catalog";
 import { getLiquidPresetSettings, getLiquidType, LIQUID_TYPES } from "@/lib/labellab/liquid-presets";
 import type { ScenePreferences } from "@/lib/labellab/preferences";
+import { useLocale } from "./LocaleProvider";
 import styles from "./PropertiesPanel.module.css";
 
-type Part = "liquid" | "cap" | "body" | "label";
+export type PropertiesPart = "liquid" | "cap" | "body" | "label";
 interface Props {
   model: LabModel;
   settings: ScenePreferences;
   onChange: (patch: Partial<ScenePreferences>) => void;
   artwork?: ReactNode;
+  /** Controlled active part when driven by the split left sidebar rail. */
+  activePart?: PropertiesPart;
 }
 
 /** Native sliders share bounded settings with optional direct numeric entry. */
@@ -72,19 +75,23 @@ function PropertyColor({ id, label, value, onChange }: { id: string; label: stri
   </div>;
 }
 
-export default function PropertiesPanel({ model, settings, onChange, artwork }: Props) {
+export default function PropertiesPanel({ model, settings, onChange, artwork, activePart: controlledPart }: Props) {
+  const { t } = useLocale();
+  const p = t.studio.properties;
   const hasLiquid = Boolean(model.asset.materialSlots?.liquid?.length);
   const hasCap = Boolean(model.asset.materialSlots?.cap?.length || model.asset.materialSlots?.tab?.length);
   const hasBody = Boolean(model.asset.materialSlots?.body?.length);
   const hasLabel = Boolean(model.asset.materialSlots?.label?.length);
-  const [part, setPart] = useState<Part>(hasLiquid ? "liquid" : "body");
+  const [internalPart, setInternalPart] = useState<PropertiesPart>(hasLiquid ? "liquid" : "body");
+  const isControlled = controlledPart !== undefined;
   const parts = [
-    { id: "liquid" as const, label: "Liquid", icon: Droplets, available: hasLiquid },
-    { id: "cap" as const, label: model.category === "can" ? "Top" : "Cap", icon: Circle, available: hasCap },
-    { id: "body" as const, label: model.category === "can" ? "Body" : "Bottle", icon: Layers3, available: hasBody },
-    { id: "label" as const, label: "Label", icon: Sticker, available: hasLabel },
+    { id: "label" as const, label: t.studio.rail.label, icon: Sticker, available: hasLabel },
+    { id: "liquid" as const, label: t.studio.rail.liquid, icon: Droplets, available: hasLiquid },
+    { id: "cap" as const, label: model.category === "can" ? t.studio.rail.top : t.studio.rail.cap, icon: Circle, available: hasCap },
+    { id: "body" as const, label: model.category === "can" ? t.studio.rail.body : t.studio.rail.bottle, icon: Layers3, available: hasBody },
   ].filter((item) => item.available);
-  const activePart = parts.find((item) => item.id === part) ?? parts[0];
+  const requestedPart = controlledPart ?? internalPart;
+  const activePart = parts.find((item) => item.id === requestedPart) ?? parts[0];
   const selected = activePart?.id;
   const liquid = getLiquidType(settings.liquidType);
   const defaults = getModelMaterialDefaults(model.id);
@@ -103,81 +110,87 @@ export default function PropertiesPanel({ model, settings, onChange, artwork }: 
     if (selected === "body") onChange({ bodyColor: defaults.bodyColor, bodyMetalness: defaults.bodyMetalness, bodyRoughness: defaults.bodyRoughness });
     if (selected === "label") onChange({ labelOffset: defaults.labelOffset, roughness: defaults.roughness, metalness: defaults.metalness });
   };
+  // Keep ArtworkLibrary mounted in the tree even when another part is active so direct 3D
+  // clicks on the bottle/can label always trigger the artwork editor modal seamlessly.
+  const showArtworkInline = !isControlled || selected === "label";
   return <section className={styles.root} data-tool-section="materials" data-theme={settings.sceneMode === "studio" ? "studio" : settings.style}>
-    {artwork}
-    {hasLabel && <div className={styles.artworkOffset}>
-      <PropertyNumber id="artwork-offset" label="Artwork offset" min={-100} max={100} step={0.1} scale={1}
-        value={settings.labelOffset} hint="Slide the artwork around the package. 0% is the original position."
-        onChange={(labelOffset) => onChange({ labelOffset })} />
-    </div>}
-    <div className={styles.parts} role="group" aria-label="Edit properties for">
-      {parts.map(({ id, label, icon: Icon }) => <button type="button" key={id} aria-pressed={selected === id} onClick={() => setPart(id)}>
-        <Icon size={15} aria-hidden="true" /><span>{label}</span>
-      </button>)}
+    <div style={showArtworkInline ? undefined : { display: "none" }}>
+      {artwork}
+      {hasLabel && <div className={styles.artworkOffset}>
+        <PropertyNumber id="artwork-offset" label={p.artworkOffset} min={-100} max={100} step={0.1} scale={1}
+          value={settings.labelOffset} hint={p.artworkOffsetHint}
+          onChange={(labelOffset) => onChange({ labelOffset })} />
+      </div>}
     </div>
-    <div className={styles.sectionHeading}>
-      <div><h3>{selected === "liquid" ? "Liquid appearance" : selected === "cap" ? model.category === "can" ? "Top & pull tab" : "Cap finish" : selected === "body" ? "Surface finish" : "Label finish"}</h3>
-        {selected !== "liquid" && <p>{selected === "label" ? "Texture & reflection." : "Fine-tune the way light feels."}</p>}</div>
-      <button type="button" className={styles.reset} onClick={reset} aria-label={`Reset ${activePart?.label.toLowerCase()} properties`} title="Restore model defaults"><RotateCcw size={14} aria-hidden="true" /></button>
+    {!isControlled && (
+      <div className={styles.parts} role="group" aria-label="Edit properties for">
+        {parts.map(({ id, label, icon: Icon }) => <button type="button" key={id} aria-pressed={selected === id} onClick={() => setInternalPart(id)}>
+          <Icon size={15} aria-hidden="true" /><span>{label}</span>
+        </button>)}
+      </div>
+    )}
+    <div className={`${styles.sectionHeading} ${isControlled && selected !== "label" ? styles.sectionHeadingFlush : ""}`}>
+      <div><h3>{selected === "liquid" ? p.liquidAppearance : selected === "cap" ? model.category === "can" ? p.topAndTab : p.capFinish : selected === "body" ? p.surfaceFinish : p.labelFinish}</h3>
+        {selected !== "liquid" && <p>{selected === "label" ? p.textureReflection : p.fineTuneLight}</p>}</div>
+      <button type="button" className={styles.reset} onClick={reset} aria-label={p.restoreModelDefaults} title={p.restoreModelDefaults}><RotateCcw size={14} aria-hidden="true" /></button>
     </div>
     {selected === "liquid" && <>
-      <label className={styles.typeField} htmlFor="liquid-type"><span>Liquid type</span>
+      <label className={styles.typeField} htmlFor="liquid-type"><span>{p.liquidType}</span>
         <span className={styles.selectWrap}><Droplets size={15} aria-hidden="true" /><select id="liquid-type" value={liquid.id} onChange={(event) => onChange(getLiquidPresetSettings(event.target.value))}>
           {LIQUID_TYPES.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
         </select><ChevronDown size={14} aria-hidden="true" /></span>
       </label>
       <p className={styles.typeDescription}>{liquid.description}</p>
-      <div className={styles.presetHeading}><span>Color presets</span><span>{preset?.name ?? "Custom"}</span></div>
-      <div className={styles.presets} role="group" aria-label={`${liquid.name} color presets`}>
+      <div className={styles.presetHeading}><span>{p.colorPresets}</span><span>{preset?.name ?? p.custom}</span></div>
+      <div className={styles.presets} role="group" aria-label={p.colorPresets}>
         {liquid.presets.map((item) => <button key={item.id} type="button" title={`${item.name} · ${item.color.toUpperCase()}`}
-          aria-label={`${item.name} preset`} aria-pressed={preset?.id === item.id}
+          aria-label={item.name} aria-pressed={preset?.id === item.id}
           onClick={() => onChange(getLiquidPresetSettings(liquid.id, item.id))}>
           <span className={styles.presetColor} style={{ backgroundColor: item.color }}>{preset?.id === item.id && <Check size={13} aria-hidden="true" />}</span>
           <span>{item.name}</span>
         </button>)}
       </div>
-      <PropertyColor id="liquid-color" label="Liquid color" value={settings.liquidColor} onChange={(liquidColor) => onChange({ liquidColor })} />
+      <PropertyColor id="liquid-color" label={p.liquidColor} value={settings.liquidColor} onChange={(liquidColor) => onChange({ liquidColor })} />
       <div className={styles.divider} />
       <div className={styles.controlGrid}>
-        <PropertyNumber id="liquid-clarity" label="Clarity" showInput={false} value={settings.liquidClarity} hint="How much of the background passes through the liquid." onChange={(liquidClarity) => changeLiquid({ liquidClarity })} />
-        <PropertyNumber id="liquid-density" label="Density" showInput={false} value={settings.liquidDensity} hint="Optical concentration: how strongly the liquid absorbs light." onChange={(liquidDensity) => changeLiquid({ liquidDensity })} />
-        <PropertyNumber id="liquid-turbidity" label="Turbidity" showInput={false} value={settings.liquidTurbidity} hint="Cloudiness from fine particles in the liquid." onChange={(liquidTurbidity) => changeLiquid({ liquidTurbidity })} />
-        <PropertyNumber id="liquid-brightness" label="Brightness" showInput={false} max={2} value={settings.liquidBrightness} hint="100% keeps the original color brightness." onChange={(liquidBrightness) => changeLiquid({ liquidBrightness })} />
+        <PropertyNumber id="liquid-clarity" label={p.clarity} showInput={false} value={settings.liquidClarity} onChange={(liquidClarity) => changeLiquid({ liquidClarity })} />
+        <PropertyNumber id="liquid-density" label={p.density} showInput={false} value={settings.liquidDensity} onChange={(liquidDensity) => changeLiquid({ liquidDensity })} />
+        <PropertyNumber id="liquid-turbidity" label={p.turbidity} showInput={false} value={settings.liquidTurbidity} onChange={(liquidTurbidity) => changeLiquid({ liquidTurbidity })} />
+        <PropertyNumber id="liquid-brightness" label={p.brightness} showInput={false} max={2} value={settings.liquidBrightness} onChange={(liquidBrightness) => changeLiquid({ liquidBrightness })} />
       </div>
-      {model.asset.sparkling && <PropertyNumber id="liquid-sparkling" label="Sparkling" step={.001} value={settings.liquidSparkling}
-        hint="Amount of rising gas bubbles inside the liquid. 0% turns them off."
+      {model.asset.sparkling && <PropertyNumber id="liquid-sparkling" label={p.sparkling} step={.001} value={settings.liquidSparkling}
         onChange={(liquidSparkling) => onChange({ liquidSparkling })} />}
       <details className={styles.advanced} key={liquid.id}>
-        <summary><span>Fine-tune {liquid.name.toLowerCase()}</span><ChevronDown size={14} aria-hidden="true" /></summary>
+        <summary><span>{p.fineTune(liquid.name)}</span><ChevronDown size={14} aria-hidden="true" /></summary>
         <div className={styles.advancedFields}>
-          {liquid.controls.includes("ior") && <PropertyNumber id="liquid-ior" label="Refraction (IOR)" min={1} max={1.6} step={0.001} scale={1} unit="" value={settings.liquidIor} hint="Higher values bend the background more strongly." onChange={(liquidIor) => changeLiquid({ liquidIor })} />}
-          {liquid.controls.includes("scattering") && <PropertyNumber id="liquid-scattering" label="Light scattering" value={settings.liquidScattering} hint="A soft, milky diffusion of light inside the liquid." onChange={(liquidScattering) => changeLiquid({ liquidScattering })} />}
-          {liquid.controls.includes("roughness") && <PropertyNumber id="liquid-roughness" label="Liquid roughness" value={settings.liquidRoughness} hint="Softens the liquid surface and transmitted reflections." onChange={(liquidRoughness) => changeLiquid({ liquidRoughness })} />}
+          {liquid.controls.includes("ior") && <PropertyNumber id="liquid-ior" label={p.ior} min={1} max={1.6} step={0.001} scale={1} unit="" value={settings.liquidIor} onChange={(liquidIor) => changeLiquid({ liquidIor })} />}
+          {liquid.controls.includes("scattering") && <PropertyNumber id="liquid-scattering" label={p.scattering} value={settings.liquidScattering} onChange={(liquidScattering) => changeLiquid({ liquidScattering })} />}
+          {liquid.controls.includes("roughness") && <PropertyNumber id="liquid-roughness" label={p.liquidRoughness} value={settings.liquidRoughness} onChange={(liquidRoughness) => changeLiquid({ liquidRoughness })} />}
         </div>
       </details>
     </>}
     {selected === "cap" && <>
-      <PropertyColor id="cap-color" label={model.category === "can" ? "Top color" : "Cap color"} value={settings.capColor} onChange={(capColor) => onChange({ capColor })} />
+      <PropertyColor id="cap-color" label={model.category === "can" ? p.topColor : p.capColor} value={settings.capColor} onChange={(capColor) => onChange({ capColor })} />
       <div className={styles.controlGrid}>
-        <PropertyNumber id="cap-metalness" label="Metallic" value={settings.capMetalness} onChange={(capMetalness) => onChange({ capMetalness })} />
-        <PropertyNumber id="cap-roughness" label="Roughness" value={settings.capRoughness} onChange={(capRoughness) => onChange({ capRoughness })} />
+        <PropertyNumber id="cap-metalness" label={p.metallic} value={settings.capMetalness} onChange={(capMetalness) => onChange({ capMetalness })} />
+        <PropertyNumber id="cap-roughness" label={p.roughness} value={settings.capRoughness} onChange={(capRoughness) => onChange({ capRoughness })} />
       </div>
-      <p className={styles.help}>Less roughness gives a polished finish. More adds a soft, matte look.</p>
+      <p className={styles.help}>{p.helpCap}</p>
     </>}
     {selected === "body" && <>
-      <PropertyColor id="body-color" label="Body color" value={settings.bodyColor} onChange={(bodyColor) => onChange({ bodyColor })} />
+      <PropertyColor id="body-color" label={p.bodyColor} value={settings.bodyColor} onChange={(bodyColor) => onChange({ bodyColor })} />
       <div className={styles.controlGrid}>
-        <PropertyNumber id="body-metalness" label="Metallic" value={settings.bodyMetalness} onChange={(bodyMetalness) => onChange({ bodyMetalness })} />
-        <PropertyNumber id="body-roughness" label="Roughness" value={settings.bodyRoughness} onChange={(bodyRoughness) => onChange({ bodyRoughness })} />
+        <PropertyNumber id="body-metalness" label={p.metallic} value={settings.bodyMetalness} onChange={(bodyMetalness) => onChange({ bodyMetalness })} />
+        <PropertyNumber id="body-roughness" label={p.roughness} value={settings.bodyRoughness} onChange={(bodyRoughness) => onChange({ bodyRoughness })} />
       </div>
-      <p className={styles.help}>Shape reflections with metallic, then soften them with roughness.</p>
+      <p className={styles.help}>{p.helpBody}</p>
     </>}
     {selected === "label" && <>
       <div className={styles.controlGrid}>
-        <PropertyNumber id="label-metalness" label="Metallic" value={settings.metalness} onChange={(metalness) => onChange({ metalness })} />
-        <PropertyNumber id="label-roughness" label="Roughness" value={settings.roughness} onChange={(roughness) => onChange({ roughness })} />
+        <PropertyNumber id="label-metalness" label={p.metallic} value={settings.metalness} onChange={(metalness) => onChange({ metalness })} />
+        <PropertyNumber id="label-roughness" label={p.roughness} value={settings.roughness} onChange={(roughness) => onChange({ roughness })} />
       </div>
-      <p className={styles.help}>Choose how the printed artwork reflects light.</p>
+      <p className={styles.help}>{p.helpLabel}</p>
     </>}
   </section>;
 }

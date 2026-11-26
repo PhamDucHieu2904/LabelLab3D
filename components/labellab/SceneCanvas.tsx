@@ -147,6 +147,8 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
           owned = createMockupRuntime(hostRef.current, {
             enableWheelZoom: interaction !== "drag-only",
             displayScale,
+            environmentPreset: propsRef.current.settings.environment,
+            spotLight: propsRef.current.settings.spotLight,
             qualityPreference: propsRef.current.qualityPreference,
             onQualityChange: (report) => {
               if (alive) propsRef.current.onQualityChange?.(report);
@@ -241,6 +243,14 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
   useEffect(() => {
     runtimeRef.current?.setQualityPreference(qualityPreference);
   }, [qualityPreference, readyVersion]);
+
+  useEffect(() => {
+    runtimeRef.current?.setEnvironment(settings.environment);
+  }, [settings.environment, readyVersion]);
+
+  useEffect(() => {
+    runtimeRef.current?.setSpotLight(settings.spotLight);
+  }, [settings.spotLight, readyVersion]);
 
   useEffect(() => {
     const runtime = runtimeRef.current;

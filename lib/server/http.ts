@@ -27,15 +27,16 @@ export async function assertSameOrigin() {
 export function json(data: unknown, init?: ResponseInit) { return Response.json(data, { headers: { "Cache-Control": "no-store", ...(init?.headers ?? {}) }, ...init }); }
 export function errorResponse(error: unknown) {
   const code = error instanceof Error ? error.message : "ERROR";
-  const status = code === "FORBIDDEN" || code === "CSRF" ? 403
+  const status = code === "FORBIDDEN" || code === "CSRF" || code === "REGION_RESTRICTED" ? 403
     : code === "INVALID_CREDENTIALS" ? 401
     : code === "AUTH_RATE_LIMIT" || code === "VERIFICATION_COOLDOWN" || code === "CODE_TOO_MANY_ATTEMPTS" ? 429
     : code === "NOT_FOUND" ? 404
     : ["PAYMENT_NOT_CONFIGURED", "PAYMENT_PUBLIC_URL_REQUIRED", "PAYMENT_ENV_MISMATCH", "POLAR_CHECKOUT_FAILED", "EMAIL_NOT_CONFIGURED", "EMAIL_SEND_FAILED", "CHECKIN_DISABLED", "REGISTRATIONS_DISABLED"].includes(code) ? 503
-    : ["EMAIL_EXISTS", "INSUFFICIENT_COINS", "WALLET_CONFLICT_RETRY", "CHECKIN_CONFLICT_RETRY", "IDEMPOTENCY_CONFLICT", "RESERVATION_CONFLICT", "RESERVATION_NOT_READY", "RESERVATION_EXPIRED", "RESERVATION_RELEASED", "RESERVATION_COMMITTED", "RESERVATION_REQUIRED"].includes(code) ? 409
+    : ["EMAIL_EXISTS", "INSUFFICIENT_COINS", "WALLET_CONFLICT_RETRY", "CHECKIN_CONFLICT_RETRY", "IDEMPOTENCY_CONFLICT", "RESERVATION_CONFLICT", "RESERVATION_NOT_READY", "RESERVATION_EXPIRED", "RESERVATION_RELEASED", "RESERVATION_COMMITTED", "RESERVATION_REQUIRED", "SHARE_LIMIT_REACHED", "PROJECT_LIMIT_REACHED"].includes(code) ? 409
+    : code === "PAYLOAD_TOO_LARGE" || code === "ASSET_TOO_LARGE" || code === "IMAGE_TOO_LARGE" ? 413
     : 400;
   const exposed = status === 400
-    ? (["INVALID_CODE", "CODE_EXPIRED", "INVALID_INPUT"].includes(code) ? code : "REQUEST_FAILED")
+    ? (["INVALID_CODE", "CODE_EXPIRED", "INVALID_INPUT", "CONSENT_REQUIRED"].includes(code) ? code : "REQUEST_FAILED")
     : code;
   if (status === 400 && exposed === "REQUEST_FAILED") {
     console.error("[api-error]", error instanceof Error ? `${error.name}: ${error.message}` : String(error));

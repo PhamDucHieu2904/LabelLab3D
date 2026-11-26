@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useLocale } from "@/components/labellab/LocaleProvider";
 
 type Order = { orderCode?: string; status: string; coins: number; amount: number; currency: string };
 
 export default function PaymentResult({ status, orderId }: { status: "success" | "error" | "cancel"; orderId: string }) {
+  const { t } = useLocale();
+  const m = t.paymentResult;
   const [order, setOrder] = useState<Order | null>(null);
   const [checking, setChecking] = useState(status === "success");
 
@@ -30,13 +33,24 @@ export default function PaymentResult({ status, orderId }: { status: "success" |
   }, [orderId, status]);
 
   const paid = order?.status === "paid";
-  return <main style={{ maxWidth: 640, margin: "80px auto", padding: 24, fontFamily: "system-ui, sans-serif" }}>
-    <p style={{ color: "#a12e56", fontWeight: 700, letterSpacing: ".08em" }}>HYPERMOCKUP · SEPAY</p>
-    <h1>{status === "success" ? (paid ? "Nạp coin thành công" : "Đang xác nhận thanh toán") : status === "cancel" ? "Bạn đã hủy thanh toán" : "Thanh toán chưa hoàn tất"}</h1>
-    {order?.orderCode && <p>Mã đơn: <code>{order.orderCode}</code></p>}
-    {status === "success" && checking && <p>SePay đang gửi xác nhận. Coin chỉ được cộng sau khi server nhận webhook hợp lệ.</p>}
-    {status === "success" && !checking && !paid && <p>Chưa nhận được xác nhận trong thời gian chờ. Bạn có thể mở lại ví sau ít phút hoặc liên hệ hỗ trợ kèm mã đơn.</p>}
-    {paid && order && <p>Đã cộng {order.coins} coins vào tài khoản của bạn.</p>}
-    <Link href="/">Về trang chủ</Link>
-  </main>;
+  const heading = status === "success"
+    ? (paid ? m.sepayTitlePaid : m.sepayTitleConfirming)
+    : status === "cancel"
+      ? m.sepayTitleCancel
+      : m.sepayTitleError;
+
+  return (
+    <main style={{ maxWidth: 560, margin: "80px auto", padding: 28, borderRadius: 24, border: "1px solid #f0d7e1", background: "#fff9fb", color: "#3d1e2e", fontFamily: "system-ui, sans-serif" }}>
+      <p style={{ margin: "0 0 8px", color: "#a12e56", fontSize: 12, fontWeight: 700, letterSpacing: 0 }}>{m.sepayEyebrow}</p>
+      <h1 style={{ margin: "0 0 12px", fontSize: 28 }}>{heading}</h1>
+      {order?.orderCode && <p style={{ margin: "0 0 12px", color: "#795464" }}>{m.orderCodeLabel} <code>{order.orderCode}</code></p>}
+      {status === "success" && checking && <p style={{ margin: "0 0 20px", lineHeight: 1.55 }}>{m.sepayChecking}</p>}
+      {status === "success" && !checking && !paid && <p style={{ margin: "0 0 20px", lineHeight: 1.55 }}>{m.sepayDelayed}</p>}
+      {paid && order && <p style={{ margin: "0 0 20px", color: "#1f7a4c", fontWeight: 600 }}>{m.sepayCredited(order.coins)}</p>}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <Link href="/" style={{ padding: "10px 20px", borderRadius: 12, background: "#a12e56", color: "#fff", textDecoration: "none", fontWeight: 650 }}>{m.backHome}</Link>
+        <Link href="/studio" style={{ padding: "10px 20px", borderRadius: 12, border: "1px solid #ddb8c7", color: "#7e2544", textDecoration: "none", fontWeight: 650 }}>{m.openStudio}</Link>
+      </div>
+    </main>
+  );
 }

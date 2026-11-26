@@ -179,7 +179,7 @@ test('custom project validation, legacy migration, and BottlePackConfig customPr
   const blob = new Blob(['pngdata'], { type: 'image/png' });
   const parsed = parseCustomProjectRecord({
     id: 'proj_123',
-    name: '  Vinut Gold Edition ',
+    name: '  HyperMockup Gold Edition ',
     kind: 'beverage',
     date: '2026-11-25T10:00:00.000Z',
     settings: {
@@ -196,7 +196,7 @@ test('custom project validation, legacy migration, and BottlePackConfig customPr
     thumbnailBlob: blob,
   });
   assert.ok(parsed);
-  assert.equal(parsed.name, 'Vinut Gold Edition');
+  assert.equal(parsed.name, 'HyperMockup Gold Edition');
   assert.equal(parsed.kind, 'beverage');
   assert.equal(parsed.settings.modelId, 'glass-290-chia');
   assert.equal(parsed.settings.liquidColor, '#123456');

@@ -13,16 +13,18 @@ import {
   Sparkles,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import MovingGrid from "./MovingGrid";
 import SiteHeader from "./SiteHeader";
 import CoinPricing from "./CoinPricing";
 import UserProfileCard from "./UserProfileCard";
 import { useAuthDialog } from "./AuthDialog";
 import HomeModelDemo from "./HomeModelDemo";
+import LegalFooter, { type PublicLegalInfo } from "./LegalFooter";
+import { useLocale } from "./LocaleProvider";
+import { fetchAccountMeCached, fetchCheckInCached, fetchSiteConfigCached } from "@/lib/client/api-cache";
 import { FEATURED_MODELS } from "@/lib/labellab/catalog";
-import { LABELLAB_UPDATES } from "@/lib/labellab/updates";
-import { PROFILE_PREVIEW } from "@/lib/labellab/profile-preview";
+import type { CoinRegion } from "@/lib/payments/packages";
 
 const noticeIcons = { pink: Gift, blue: Megaphone, mint: Sparkles } as const;
 
@@ -47,17 +49,8 @@ type CheckInState = {
 
 const DEFAULT_SCHEDULE = [10, 10, 10, 20, 10, 10, 30];
 
-const DEFAULT_ANNOUNCEMENTS: LiveAnnouncement[] = LABELLAB_UPDATES.map((item, idx) => ({
-  id: `default-${idx}`,
-  tone: item.tone,
-  title: item.title,
-  body: item.title,
-  time: item.time,
-  url: "/studio",
-  unread: item.unread,
-}));
-
-export default function HomePage() {
+export default function HomePage({ initialLegal }: { initialLegal?: Partial<PublicLegalInfo> }) {
+  const { t } = useLocale();
   const [checkIn, setCheckIn] = useState<CheckInState>({
     enabled: true,
     claimed: false,
@@ -66,43 +59,70 @@ export default function HomePage() {
     nextDayIndex: 0,
     todayReward: DEFAULT_SCHEDULE[0],
   });
-  const [announcements, setAnnouncements] = useState<LiveAnnouncement[]>(DEFAULT_ANNOUNCEMENTS);
+  const [liveAnnouncements, setLiveAnnouncements] = useState<LiveAnnouncement[] | null>(null);
+  const [visitorRegion, setVisitorRegion] = useState<CoinRegion>("vietnam");
   const [checkinBusy, setCheckinBusy] = useState(false);
   const [featuredModel, setFeaturedModel] = useState(FEATURED_MODELS[0]);
   const openAuth = useAuthDialog();
 
+  const defaultAnnouncements = useMemo<LiveAnnouncement[]>(
+    () =>
+      t.home.defaultUpdates.map((item, idx) => ({
+        id: `default-${idx}`,
+        tone: item.tone,
+        title: item.title,
+        body: item.title,
+        time: item.time,
+        url: "/studio",
+        unread: item.unread,
+      })),
+    [t.home.defaultUpdates],
+  );
+  const announcements = liveAnnouncements ?? defaultAnnouncements;
+
   const loadLiveHomeData = useCallback(async () => {
     try {
-      const [configRes, checkInRes] = await Promise.all([
-        fetch("/api/site/config", { cache: "no-store" }),
-        fetch("/api/account/check-in", { credentials: "same-origin", cache: "no-store" }),
-      ]);
-      if (configRes.ok) {
-        const cfg = await configRes.json() as {
+      const [cfg, me] = await Promise.all([
+        fetchSiteConfigCached<{
           announcements?: LiveAnnouncement[];
           checkIn?: { enabled: boolean; schedule: number[]; reward: number };
-        };
+          visitor?: { region?: CoinRegion };
+        }>(),
+        fetchAccountMeCached<{ user?: { id?: string } | null }>(),
+      ]);
+      const signedIn = Boolean(me?.user);
+      const checkInRes = signedIn
+        ? await fetchCheckInCached<{
+            claimed?: boolean;
+            streak?: number;
+            nextDayIndex?: number;
+            todayReward?: number;
+            config?: { enabled: boolean; schedule: number[]; reward: number };
+          }>()
+        : { ok: false, data: null };
+
+      if (cfg) {
         if (Array.isArray(cfg.announcements)) {
-          setAnnouncements(cfg.announcements);
+          setLiveAnnouncements(cfg.announcements);
+        }
+        if (cfg.visitor?.region === "international" || cfg.visitor?.region === "vietnam") {
+          setVisitorRegion(cfg.visitor.region);
         }
         if (cfg.checkIn && !checkInRes.ok) {
           const schedule = cfg.checkIn.schedule.length > 0 ? cfg.checkIn.schedule : DEFAULT_SCHEDULE;
           setCheckIn((prev) => ({
             ...prev,
             enabled: cfg.checkIn!.enabled,
+            claimed: false,
+            streak: 0,
+            nextDayIndex: 0,
             schedule,
             todayReward: schedule[0] ?? cfg.checkIn!.reward,
           }));
         }
       }
-      if (checkInRes.ok) {
-        const payload = await checkInRes.json() as {
-          claimed?: boolean;
-          streak?: number;
-          nextDayIndex?: number;
-          todayReward?: number;
-          config?: { enabled: boolean; schedule: number[]; reward: number };
-        };
+      if (checkInRes.ok && checkInRes.data) {
+        const payload = checkInRes.data;
         const schedule = payload.config?.schedule?.length ? payload.config.schedule : DEFAULT_SCHEDULE;
         setCheckIn({
           enabled: payload.config?.enabled ?? true,
@@ -164,7 +184,7 @@ export default function HomePage() {
   const weekItems = checkIn.schedule.slice(0, 7).map((coins, index) => {
     const isBonus = index === 6 || (coins > baseDayCoins && index > 0);
     return {
-      day: `Day ${index + 1}`,
+      day: t.home.dayLabel(index + 1),
       coins,
       reward: isBonus ? `+${coins}` : String(coins),
       icon: isBonus ? "gift" as const : "coin" as const,
@@ -178,11 +198,11 @@ export default function HomePage() {
         <SiteHeader activePage="home" />
 
         <div className="home-dashboard">
-          <h1 className="sr-only">HyperMockup 3D packaging mockup dashboard</h1>
-          <section className="home-card home-showcase" aria-label="Featured 3D mockup">
+          <h1 className="sr-only">{t.home.srTitle}</h1>
+          <section className="home-card home-showcase" aria-label={t.home.showcaseAria}>
             <div className="home-showcase-visual">
               <div className="home-showcase-topline">
-                <span className="home-glass-badge"><Zap size={12} /> Web optimized</span>
+                <span className="home-glass-badge"><Zap size={12} /> {t.home.webOptimized}</span>
               </div>
               <div className="home-hero-halo" aria-hidden="true" />
               <div className="home-orbit-ring home-orbit-ring-one" aria-hidden="true" />
@@ -192,16 +212,16 @@ export default function HomePage() {
             <div className="home-showcase-bottom">
               <div className="home-scene-row">
                 <div>
-                  <span className="home-section-eyebrow">Make it real</span>
-                  <h2>Bring your next label to life.</h2>
+                  <span className="home-section-eyebrow">{t.home.eyebrow}</span>
+                  <h2>{t.home.heroTitle}</h2>
                 </div>
-                <div className="home-scene-dots" role="group" aria-label="Featured mockup models">
+                <div className="home-scene-dots" role="group" aria-label={t.home.featuredModelsAria}>
                   {FEATURED_MODELS.map((model) => (
                     <button
                       key={model.id}
                       className={model.id === featuredModel.id ? "is-active" : ""}
                       type="button"
-                      aria-label={`Show ${model.name} 3D demo`}
+                      aria-label={t.home.showModelDemo(model.name)}
                       aria-pressed={model.id === featuredModel.id}
                       onClick={() => setFeaturedModel(model)}
                     />
@@ -210,7 +230,7 @@ export default function HomePage() {
               </div>
               <div style={{ display: "grid", gap: 8 }}>
                 <Link className="home-showcase-action home-sheen" href="/studio#workspace">
-                  <span>Start a new mockup</span><ArrowRight size={21} />
+                  <span>{t.home.startMockup}</span><ArrowRight size={21} />
                 </Link>
                 <Link
                   href="/studio?domain=packaging#workspace"
@@ -228,22 +248,22 @@ export default function HomePage() {
                     textDecoration: "none",
                   }}
                 >
-                  <span>Parametric Boxes &amp; Trays (mm CAD)</span>
+                  <span>{t.home.parametricCta}</span>
                   <ArrowRight size={16} />
                 </Link>
               </div>
             </div>
           </section>
 
-          <section className="home-center-column" aria-label="Coin packages and updates">
+          <section className="home-center-column" aria-label={t.home.centerColumnAria}>
             <CoinPricing />
 
             <article className="home-card home-notices-card" id="home-updates">
               <div className="home-card-heading">
                 <div>
-                  <h2>Admin updates <span className="home-count-badge">{announcements.length}</span></h2>
+                  <h2>{t.home.updatesHeading} <span className="home-count-badge">{announcements.length}</span></h2>
                 </div>
-                <Link className="home-text-action" href="/studio">Open Studio <ChevronRight size={14} /></Link>
+                <Link className="home-text-action" href="/studio">{t.home.openStudio} <ChevronRight size={14} /></Link>
               </div>
               <div className="home-notice-list">
                 {announcements.length > 0 ? announcements.slice(0, 3).map(({ id, tone, title, time, unread, url }) => {
@@ -253,53 +273,53 @@ export default function HomePage() {
                     <Link className={`home-notice ${unread ? "is-unread" : ""}`} href={safeHref} key={id}>
                       <span className={`home-notice-icon ${tone}`}><Icon size={16} /></span>
                       <span className="home-notice-copy"><strong>{title}</strong><small><Clock3 size={11} /> {time}</small></span>
-                      {unread && <span className="home-unread-dot" aria-label="Unread" />}
+                      {unread && <span className="home-unread-dot" aria-label={t.home.unreadLabel} />}
                       <ChevronRight size={16} className="home-notice-arrow" />
                     </Link>
                   );
                 }) : (
-                  <p style={{ margin: "10px 0", color: "#8a5c6f", fontSize: 14 }}>No announcements right now.</p>
+                  <p style={{ margin: "10px 0", color: "#8a5c6f", fontSize: 14 }}>{t.home.noAnnouncements}</p>
                 )}
               </div>
             </article>
 
             <article className="home-card home-promo-card">
-              <Image src="/home/promo-banner-3d.jpg" alt="Colorful 3D packaging mockups" fill loading="eager" sizes="(max-width: 1240px) 70vw, 48vw" />
+              <Image src="/home/promo-banner-3d.jpg" alt={t.home.promoAlt} fill loading="eager" sizes="(max-width: 1240px) 70vw, 48vw" />
               <div className="home-promo-overlay" />
               <div className="home-promo-content">
-                <span className="home-promo-tag"><Sparkles size={12} /> Studio 3D</span>
-                <h2>Render more. Pay less.</h2>
-                <p>Instant VietQR coin top-up with automatic credit confirmation.</p>
-                <Link href="/studio#workspace" className="home-promo-cta home-sheen">Open Studio <ArrowRight size={15} /></Link>
+                <span className="home-promo-tag"><Sparkles size={12} /> {t.home.promoTag}</span>
+                <h2>{t.home.promoTitle}</h2>
+                <p>{visitorRegion === "international" ? t.home.promoDescInternational : t.home.promoDescVietnam}</p>
+                <Link href="/studio#workspace" className="home-promo-cta home-sheen">{t.home.promoCta} <ArrowRight size={15} /></Link>
               </div>
-              <div className="home-promo-dots" aria-label="Promotion slides"><span className="is-active" /><span /><span /></div>
+              <div className="home-promo-dots" aria-label={t.home.promoDotsAria}><span className="is-active" /><span /><span /></div>
             </article>
           </section>
 
-          <aside className="home-right-column" aria-label="Account and daily rewards">
-            <UserProfileCard profile={PROFILE_PREVIEW} notificationCount={announcements.length} />
+          <aside className="home-right-column" aria-label={t.home.rightColumnAria}>
+            <UserProfileCard notificationCount={announcements.length} visitorRegion={visitorRegion} />
 
             <article className="home-card home-checkin-card">
               <div className="home-checkin-heading">
-                <h2>Daily check-in</h2>
+                <h2>{t.home.checkinTitle}</h2>
                 <p>
                   {!checkIn.enabled
-                    ? "Daily check-in is temporarily paused"
+                    ? t.home.checkinPausedDesc
                     : checkIn.streak > 0
-                      ? `${checkIn.streak}-day streak · Missing a day resets to Day 1`
-                      : "Check in daily — missing a day resets to Day 1"}
+                      ? t.home.checkinStreakDesc(checkIn.streak)
+                      : t.home.checkinDefaultDesc}
                 </p>
               </div>
-              <div className="home-week" role="group" aria-label="Seven day check-in progress">
+              <div className="home-week" role="group" aria-label={t.home.checkinGroupAria}>
                 {weekItems.map((item, index) => {
                   const isToday = index === checkIn.nextDayIndex;
                   const isCompleted = index < checkIn.nextDayIndex || (isToday && checkIn.claimed);
                   return (
-                    <div className={`home-day-wrap ${isToday ? "today" : ""}`} key={`${item.day}-${index}`}>
+                    <div className={`home-day-wrap ${isToday ? "today" : ""}`} key={`${index}`}>
                       <button
                         className={`home-day ${isToday ? "today" : ""} ${item.icon === "gift" ? "is-bonus" : ""}`}
                         type="button"
-                        aria-label={`${item.day}, ${item.coins} coins${isCompleted ? ", claimed" : ""}`}
+                        aria-label={t.home.dayAria(item.day, item.coins, isCompleted)}
                         onClick={() => { if (isToday && !checkIn.claimed && checkIn.enabled) void claimCheckIn(); }}
                       >
                         <span className={`home-day-icon ${item.icon === "gift" ? "is-gift" : ""}`}>
@@ -313,7 +333,7 @@ export default function HomePage() {
                         </span>
                         <strong className="home-day-reward">{item.reward}</strong>
                       </button>
-                      <small>{isToday ? "Today" : item.day}</small>
+                      <small>{isToday ? t.home.today : item.day}</small>
                     </div>
                   );
                 })}
@@ -326,16 +346,18 @@ export default function HomePage() {
                 aria-live="polite"
               >
                 {!checkIn.enabled ? (
-                  <>Check-in paused</>
+                  <>{t.home.checkinPausedCta}</>
                 ) : checkIn.claimed ? (
-                  <><Check size={18} /> {`Reward claimed (+${checkIn.todayReward})`}</>
+                  <><Check size={18} /> {t.home.checkinClaimedCta(checkIn.todayReward)}</>
                 ) : (
-                  <><CalendarCheck size={18} /> {`Claim today's +${checkIn.todayReward}`}</>
+                  <><CalendarCheck size={18} /> {t.home.checkinClaimCta(checkIn.todayReward)}</>
                 )}
               </button>
             </article>
           </aside>
         </div>
+
+        <LegalFooter initialLegal={initialLegal} />
       </div>
     </main>
   );

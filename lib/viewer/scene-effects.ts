@@ -1,5 +1,5 @@
-export const SCENE_EFFECTS_STORAGE_KEY = 'vinut.scene-effects.v1';
-export const SCENE_HINT_STORAGE_KEY = 'vinut.scene-effects-hint.v1';
+export const SCENE_EFFECTS_STORAGE_KEY = 'hypermockup.scene-effects.v1';
+export const SCENE_HINT_STORAGE_KEY = 'hypermockup.scene-effects-hint.v1';
 const listeners = new Set<() => void>();
 let enabled: boolean | undefined, acknowledged: boolean | undefined;
 export function sceneEffectsSnapshot() {
