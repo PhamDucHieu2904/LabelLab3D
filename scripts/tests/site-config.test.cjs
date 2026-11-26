@@ -204,13 +204,20 @@ test('live coin packages and announcements sanitize admin edits safely', () => {
 
   const active = siteConfig.extractLiveAnnouncements({
     announcements: [
-      { id: 'a1', name: 'Live update', status: 'Đang bật', updated: '24/11/2026', values: { text: 'Hello', start: '2026-11-01', end: '2026-12-31', url: '/studio' } },
+      { id: 'a1', name: 'Live update', status: 'Đang bật', updated: '24/11/2026', values: { category: 'Ưu đãi', pinned: 'Không', text: 'Hello', titleEn: 'Live update EN', textEn: 'Hello EN', start: '2026-11-01', end: '2026-12-31', url: '/studio' } },
+      { id: 'a-pin', name: 'Pinned feature', status: 'Đang bật', updated: '25/11/2026', values: { category: 'Tính năng mới', pinned: 'Có', text: 'New CAD boxes', url: '/studio?domain=packaging' } },
       { id: 'a2', name: 'Expired', status: 'Đang bật', updated: '24/11/2026', values: { text: 'Old', start: '2025-01-01', end: '2025-12-31', url: '/studio' } },
       { id: 'a3', name: 'Off', status: 'Đang tắt', updated: '24/11/2026', values: { text: 'Off' } },
     ],
   }, '2026-11-24');
-  assert.equal(active.length, 1);
-  assert.equal(active[0].title, 'Live update');
+  assert.equal(active.length, 2);
+  assert.equal(active[0].id, 'a-pin');
+  assert.equal(active[0].pinned, true);
+  assert.equal(active[0].tone, 'mint');
+  assert.equal(active[1].title, 'Live update');
+  assert.equal(active[1].tone, 'pink');
+  assert.equal(active[1].titleEn, 'Live update EN');
+  assert.equal(active[1].bodyEn, 'Hello EN');
 });
 
 test('site settings default to HyperMockup Coming Soon mode and sanitize pricing toggles', () => {
@@ -285,7 +292,7 @@ test('coin reserve API charges 5/10/20/40 coins for renders and 20 coins for 1:1
     body: JSON.stringify({
       action: 'dieline',
       idempotencyKey: 'reserve_dieline_svg_1234567890',
-      modelId: 'mailer-fefco-0427',
+      modelId: 'fefco-0421-tray',
       format: 'svg',
     }),
   }));
@@ -293,7 +300,7 @@ test('coin reserve API charges 5/10/20/40 coins for renders and 20 coins for 1:1
   const dielineBody = await dielineRes.json();
   assert.equal(dielineBody.quote.amount, 20);
   assert.equal(dielineBody.quote.action, 'dieline');
-  assert.equal(reservedCalls.at(-1).reference, 'dieline:mailer-fefco-0427:svg');
+  assert.equal(reservedCalls.at(-1).reference, 'dieline:fefco-0421-tray:svg');
 
   // Invalid dieline format rejected
   const badFormat = await POST(new Request('https://hypermockup.com/api/account/coin/reserve', {
@@ -302,7 +309,7 @@ test('coin reserve API charges 5/10/20/40 coins for renders and 20 coins for 1:1
     body: JSON.stringify({
       action: 'dieline',
       idempotencyKey: 'reserve_dieline_bad_1234567890',
-      modelId: 'mailer-fefco-0427',
+      modelId: 'fefco-0421-tray',
       format: 'exe',
     }),
   }));

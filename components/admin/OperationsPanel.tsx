@@ -295,7 +295,7 @@ export default function OperationsPanel({ section }: { section: "activity" | "se
                     )}
                   </strong>
                   <small style={{ color: "#5e6270" }}>
-                    Tự động đối chiếu giữa lượt dùng công cụ (Render 3D + Dieline 1:1 mm), coin dự kiến burn, coin thực tế trừ trên sổ cái, tỷ lệ hủy giữ xu, hành vi sao chép DOM SVG và trùng IP đăng ký.
+                    Tự động đối chiếu giữa lượt dùng công cụ (Render 3D + Dieline 1:1 mm), coin dự kiến burn, coin thực tế trừ trên sổ cái, tỷ lệ hủy giữ xu, hành vi sao chép DOM SVG và trùng IP đăng ký (tự động loại trừ tài khoản Admin).
                   </small>
                 </div>
                 <button type="button" className={s.button} onClick={() => void load()} disabled={loading}>

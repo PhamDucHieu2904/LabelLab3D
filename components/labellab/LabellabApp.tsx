@@ -672,7 +672,7 @@ export default function LabellabApp() {
 
   useEffect(() => {
     const initial = loadPreferences();
-    const initialPackaging = loadPackagingParams();
+    const initialPackaging = { ...loadPackagingParams(), showDimensions: false };
     const initialBottlePack = loadBottlePackConfig(VALID_BEVERAGE_MODEL_IDS, initial.modelId);
     // Respect an explicit model or domain deep link without accepting external URLs.
     const params = new URLSearchParams(location.search);
@@ -1333,6 +1333,7 @@ export default function LabellabApp() {
     try {
       await deleteCloudProjectApi(projectId);
       setCloudProjects((prev) => prev.filter((p) => p.id !== projectId));
+      setSharedProjects((prev) => prev.filter((s) => s.localProjectId !== projectId));
       if (loadedCloudProjectId === projectId) {
         setLoadedCloudProjectId(undefined);
         setLoadedCloudItemId(undefined);
@@ -1347,6 +1348,7 @@ export default function LabellabApp() {
       const res = await deleteCloudProjectItemApi(projectId, itemId);
       if (res.projectDeleted || !res.project) {
         setCloudProjects((prev) => prev.filter((p) => p.id !== projectId));
+        setSharedProjects((prev) => prev.filter((s) => s.localProjectId !== projectId));
       } else {
         setCloudProjects((prev) => prev.map((p) => (p.id === projectId ? res.project! : p)));
       }

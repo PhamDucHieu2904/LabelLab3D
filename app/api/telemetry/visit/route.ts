@@ -50,7 +50,11 @@ export async function POST(request: Request) {
 
     // Operational anti-cheat summary (1 batched sendBeacon on studio exit;
     // essential for billing integrity even if marketing analytics are disabled).
+    // Admin accounts are excluded from anti-cheat tracking.
     if (body.kind === "tool_summary") {
+      if (user?.role === "admin") {
+        return json({ ok: true, skipped: true });
+      }
       const visitorHash = await sha256(`u:${user?.id ?? ip ?? "anon"}`).catch(() => "anon");
       await recordToolUsageSummary(runtimeEnv, {
         userId: user?.id ?? null,

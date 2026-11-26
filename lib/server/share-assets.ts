@@ -298,24 +298,149 @@ export async function getShareAsset(env: AppEnv, contentHash: string): Promise<S
   };
 }
 
-/** Decrement ref_count and garbage-collect unreferenced assets from R2 & D1. */
+async function countLiveAssetReferences(env: AppEnv, contentHash: string): Promise<number> {
+  const db = requireDb(env);
+  let total = 0;
+  try {
+    const shareRow = await db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM shared_project_items WHERE thumbnail_hash=? OR instr(payload_json, ?) > 0",
+      )
+      .bind(contentHash, contentHash)
+      .first<{ count: number }>();
+    total += Number(shareRow?.count ?? 0);
+  } catch {
+    // shared_project_items may not exist yet in isolated asset-only tests.
+  }
+  try {
+    const cloudRow = await db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM cloud_project_items WHERE thumbnail_hash=? OR instr(payload_json, ?) > 0",
+      )
+      .bind(contentHash, contentHash)
+      .first<{ count: number }>();
+    total += Number(cloudRow?.count ?? 0);
+  } catch {
+    // cloud_project_items may not exist yet in share-only databases/tests.
+  }
+  return total;
+}
+
+async function deleteStoredAssetRow(
+  env: AppEnv,
+  row: { contentHash: string; storageBackend: "r2" | "d1"; r2Key: string | null },
+): Promise<void> {
+  const db = requireDb(env);
+  if (row.storageBackend === "r2" && row.r2Key && env.SHARE_BUCKET) {
+    await env.SHARE_BUCKET.delete(row.r2Key).catch(() => {});
+  }
+  await db.batch([
+    db.prepare("DELETE FROM shared_asset_blobs WHERE content_hash=?").bind(row.contentHash),
+    db.prepare("DELETE FROM shared_assets WHERE content_hash=?").bind(row.contentHash),
+  ]);
+}
+
+/**
+ * Reconcile live references across `cloud_project_items` & `shared_project_items`
+ * and garbage-collect truly unreferenced assets from R2 & D1 (`shared_assets` +
+ * cascading `shared_asset_blobs`).
+ *
+ * Checking live references instead of blindly decrementing `ref_count - 1` prevents
+ * both permanent orphan leaks (when an asset was saved across separate requests for
+ * items in the same project) and premature deletion (when deleting one item whose
+ * artwork is still referenced by another item in the same project).
+ */
 export async function releaseShareAssets(env: AppEnv, hashes: readonly string[]): Promise<void> {
   if (!hashes.length) return;
   const db = requireDb(env);
   const unique = [...new Set(hashes.map((h) => h.toLowerCase()).filter((h) => /^[a-f0-9]{64}$/.test(h)))];
   for (const hash of unique) {
-    await db
-      .prepare("UPDATE shared_assets SET ref_count=MAX(0, ref_count-1) WHERE content_hash=?")
-      .bind(hash)
-      .run();
     const row = await db
-      .prepare("SELECT ref_count AS refCount, storage_backend AS storageBackend, r2_key AS r2Key FROM shared_assets WHERE content_hash=?")
+      .prepare(
+        "SELECT content_hash AS contentHash, storage_backend AS storageBackend, r2_key AS r2Key FROM shared_assets WHERE content_hash=?",
+      )
       .bind(hash)
-      .first<{ refCount: number; storageBackend: "r2" | "d1"; r2Key: string | null }>();
-    if (!row || Number(row.refCount) > 0) continue;
-    if (row.storageBackend === "r2" && row.r2Key && env.SHARE_BUCKET) {
-      await env.SHARE_BUCKET.delete(row.r2Key).catch(() => {});
+      .first<{ contentHash: string; storageBackend: "r2" | "d1"; r2Key: string | null }>();
+    if (!row) continue;
+
+    const liveRefs = await countLiveAssetReferences(env, hash);
+    if (liveRefs > 0) {
+      await db
+        .prepare("UPDATE shared_assets SET ref_count=? WHERE content_hash=?")
+        .bind(liveRefs, hash)
+        .run();
+      continue;
     }
-    await db.prepare("DELETE FROM shared_assets WHERE content_hash=? AND ref_count <= 0").bind(hash).run();
+
+    await deleteStoredAssetRow(env, row);
   }
+}
+
+/**
+ * Opportunistic garbage collector for any historical orphaned rows in `shared_assets`
+ * (and their R2 objects / `shared_asset_blobs`) that are no longer referenced by any
+ * cloud project or share link. Enforces a grace age (`minAgeMs`, default 10 minutes)
+ * so in-flight uploads that have not yet committed their item rows are never touched.
+ */
+export async function pruneOrphanShareAssets(
+  env: AppEnv,
+  options?: { limit?: number; minAgeMs?: number; nowMs?: number },
+): Promise<number> {
+  const db = requireDb(env);
+  const nowMs = options?.nowMs ?? Date.now();
+  const minAgeMs = Math.max(0, options?.minAgeMs ?? 10 * 60_000);
+  const cutoffIso = new Date(nowMs - minAgeMs).toISOString();
+  const limit = Math.max(1, Math.min(100, options?.limit ?? 20));
+
+  type OrphanRow = { contentHash: string; storageBackend: "r2" | "d1"; r2Key: string | null };
+  let rows: OrphanRow[] = [];
+
+  try {
+    const res = await db
+      .prepare(
+        `SELECT a.content_hash AS contentHash, a.storage_backend AS storageBackend, a.r2_key AS r2Key
+         FROM shared_assets a
+         WHERE a.created_at <= ?
+           AND NOT EXISTS (
+             SELECT 1 FROM shared_project_items si
+             WHERE si.thumbnail_hash = a.content_hash OR instr(si.payload_json, a.content_hash) > 0
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM cloud_project_items ci
+             WHERE ci.thumbnail_hash = a.content_hash OR instr(ci.payload_json, a.content_hash) > 0
+           )
+         ORDER BY a.created_at ASC
+         LIMIT ?`,
+      )
+      .bind(cutoffIso, limit)
+      .all<OrphanRow>();
+    rows = res.results ?? [];
+  } catch {
+    try {
+      const res = await db
+        .prepare(
+          `SELECT a.content_hash AS contentHash, a.storage_backend AS storageBackend, a.r2_key AS r2Key
+           FROM shared_assets a
+           WHERE a.created_at <= ?
+             AND NOT EXISTS (
+               SELECT 1 FROM shared_project_items si
+               WHERE si.thumbnail_hash = a.content_hash OR instr(si.payload_json, a.content_hash) > 0
+             )
+           ORDER BY a.created_at ASC
+           LIMIT ?`,
+        )
+        .bind(cutoffIso, limit)
+        .all<OrphanRow>();
+      rows = res.results ?? [];
+    } catch {
+      return 0;
+    }
+  }
+
+  let deleted = 0;
+  for (const row of rows) {
+    await deleteStoredAssetRow(env, row);
+    deleted += 1;
+  }
+  return deleted;
 }

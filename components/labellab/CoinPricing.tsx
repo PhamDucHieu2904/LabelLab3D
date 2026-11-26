@@ -204,6 +204,18 @@ export default function CoinPricing() {
     ?? fallbackRegionPackages[0];
   const selectedPrice = prices.format(regionId === "vietnam" ? selectedPackage.vnd : selectedPackage.usd);
   const selectedCoinsText = selectedPackage.coins.toLocaleString(numLocale);
+  const minFiveCoinValue = (() => {
+    const rates = visiblePackages
+      .filter((item) => item.coins > 0)
+      .map((item) => ((regionId === "vietnam" ? item.vnd : item.usd) / item.coins) * 5)
+      .filter((value) => Number.isFinite(value) && value > 0);
+    const lowest = rates.length > 0 ? Math.min(...rates) : (regionId === "vietnam" ? 250 : 0.03);
+    if (regionId === "vietnam") {
+      const rounded = Math.max(10, Math.round(lowest / 10) * 10);
+      return rounded.toLocaleString(numLocale);
+    }
+    return `$${lowest.toFixed(2)}`;
+  })();
 
   const createPaymentOrder = useCallback(async (pkg: CoinPackage, targetRegion: RegionId) => {
     if (!user) {
@@ -444,7 +456,7 @@ export default function CoinPricing() {
                     : p.descSepayGateway(isSandbox)}
               </p>
             </div>
-            <Image src="/branding/LLCoin.svg" alt="" width={46} height={46} unoptimized />
+            <Image src="/branding/hypermockup-coin.svg" alt="" width={46} height={46} unoptimized />
           </div>
 
           <div className={styles.checkoutGrid}>
@@ -775,9 +787,9 @@ export default function CoinPricing() {
       <div className={styles.headingRow}>
         <div className={styles.titleBlock}>
           <h2 id="coin-pricing-title">{p.title}</h2>
-          <p>{regionId === "international" ? p.subtitleInternational : p.subtitleVietnam}</p>
+          <p>{regionId === "international" ? p.subtitleInternational(minFiveCoinValue) : p.subtitleVietnam(minFiveCoinValue)}</p>
         </div>
-        <Image className={styles.coinArt} src="/branding/LLCoin.svg" alt="" width={56} height={56} />
+        <Image className={styles.coinArt} src="/branding/hypermockup-coin.svg" alt="" width={56} height={56} />
       </div>
 
       {allowRegionSwitch ? (
@@ -806,7 +818,7 @@ export default function CoinPricing() {
       ) : (
         <div className={styles.marketSingle} aria-label={p.activeCurrencyAria}>
           <span>{regionId === "international" ? p.singleInternationalTitle : p.singleVietnamTitle}</span>
-          <small>{regionId === "international" ? p.singleInternationalSub : p.singleVietnamSub}</small>
+          {regionId === "international" && <small>{p.singleInternationalSub}</small>}
         </div>
       )}
 
@@ -855,7 +867,7 @@ export default function CoinPricing() {
             >
               <span className={`${styles.packBadge} ${badgeTone}`}>{badgeLabel}</span>
               <span className={styles.coinRow}>
-                <Image src="/branding/LLCoin.svg" alt="" width={18} height={18} />
+                <Image src="/branding/hypermockup-coin.svg" alt="" width={18} height={18} />
                 <strong>{coinsText}</strong>
               </span>
               <strong className={styles.price}>{price}</strong>

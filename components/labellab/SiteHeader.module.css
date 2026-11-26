@@ -32,11 +32,21 @@
 .notificationButton::-webkit-details-marker { display: none; }
 .notificationButton i { position: absolute; top: 7px; right: 7px; width: 5px; height: 5px; border-radius: 50%; background: #d7195c; box-shadow: 0 0 0 2px #fff; }
 .notificationButton:hover, .notifications[open] .notificationButton { background: #fbe8ef; }
-.notificationPanel { position: absolute; top: calc(100% + 10px); right: 0; width: min(340px, calc(100cqw - 32px)); padding: 20px; border: 1px solid #eadce2; border-radius: 16px; background: #fffafb; box-shadow: 0 14px 40px #47172d26; font-size: 15px; font-weight: 400; line-height: 1.4; }
-.notificationPanel > strong { font-size: 17px; font-weight: 650; }
-.notificationPanel ul { display: grid; gap: 14px; padding: 0; margin: 16px 0 0; list-style: none; }
-.notificationPanel li { display: grid; gap: 4px; }
-.notificationPanel small { color: #765d69; font-size: 13px; }
+.notificationPanel { position: absolute; top: calc(100% + 10px); right: 0; width: min(360px, calc(100cqw - 32px)); padding: 16px; border: 1px solid #eadce2; border-radius: 16px; background: #fffafb; box-shadow: 0 14px 40px #47172d26; font-size: 14px; font-weight: 400; line-height: 1.4; }
+.notificationHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.notificationHeader > strong { font-size: 16px; font-weight: 650; color: #281d25; }
+.markReadBtn { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border: 0; border-radius: 7px; background: transparent; color: #b2124c; font-size: 12px; font-weight: 600; cursor: pointer; }
+.markReadBtn:hover { background: #fbe8ef; }
+.notificationPanel ul { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 0; margin: 12px 0 0; list-style: none; max-height: 410px; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
+.notificationPanel li { display: block; }
+.notificationItem { width: 100%; display: grid; gap: 4px; padding: 10px 12px; border: 1px solid transparent; border-radius: 11px; background: #fff; text-align: left; color: inherit; cursor: pointer; }
+.notificationItem:hover { background: #fdf1f6; border-color: #d7195c26; }
+.notificationItemUnread { background: #fff7fa; border-color: #d7195c1c; }
+.notificationTitle { display: flex; align-items: flex-start; gap: 7px; font-size: 13.5px; font-weight: 650; color: #2a1a23; line-height: 1.3; }
+.notificationItemDot { width: 6px; height: 6px; margin-top: 6px; border-radius: 50%; background: #d7195c; flex-shrink: 0; }
+.notificationBody { margin: 0; color: #6b525e; font-size: 12.5px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.notificationPanel small { color: #8c707e; font-size: 11.5px; }
+.notificationEmpty { margin: 12px 0 2px; color: #765d69; font-size: 13.5px; }
 .langSwitch { display: inline-flex; align-items: center; gap: 2px; height: 44px; padding: 4px; border: 1px solid #6c4c5b29; border-radius: 10px; background: #ffffff99; flex-shrink: 0; }
 .langSwitch button { min-width: 34px; height: 34px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: #6e5863; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; cursor: pointer; }
 .langSwitch button:hover:not(.langActive) { background: #fbe8ef; color: #a90f45; }

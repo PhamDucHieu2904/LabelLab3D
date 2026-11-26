@@ -15,7 +15,23 @@ export const managementTabs: Record<ManagementSection, ManagementTab[]> = {
   assets:[{id:'assets',name:'Kho tài nguyên',columns:['type','size','file'],fields:[f('type','Loại','select',['Model GLB','Texture','HDRI','Thumbnail','Template']),{...f('file','Đường dẫn / tên file'),required:true},f('size','Dung lượng'),f('usage','Sử dụng tại')]}],
   content:[
     {id:'banners',name:'Banner',columns:['placement','order'],fields:[f('placement','Vị trí','select',['Trang chủ · đầu trang','Trang chủ · cuối trang','Thư viện']),{...f('image','Đường dẫn ảnh'),required:true},f('url','Liên kết'),f('alt','Mô tả ảnh'),f('order','Thứ tự','number')]},
-    {id:'announcements',name:'Thông báo',columns:['start','end'],fields:[{...f('text','Nội dung','textarea'),required:true},f('start','Bắt đầu','date'),f('end','Kết thúc','date'),f('url','Liên kết')]},
+    {
+      id:'announcements',
+      name:'Thông báo',
+      columns:['category','start','end'],
+      fields:[
+        f('category','Phân loại','select',['Tính năng mới','Nâng cấp','Ưu đãi','Hệ thống']),
+        f('pinned','Ghim đầu danh sách','select',['Không','Có']),
+        {...f('text','Nội dung (VI)','textarea'),required:true},
+        f('titleEn','Tiêu đề (EN — tùy chọn)'),
+        f('textEn','Nội dung (EN — tùy chọn)','textarea'),
+        f('ctaLabel','Nhãn nút hành động (VI)'),
+        f('ctaLabelEn','Nhãn nút hành động (EN)'),
+        f('url','Liên kết đích (vd: /studio)'),
+        f('start','Bắt đầu','date'),
+        f('end','Kết thúc','date'),
+      ],
+    },
     {id:'layout',name:'Trang chủ',columns:['placement','order'],fields:[f('placement','Khu vực'),f('order','Thứ tự','number')]},
   ],
   promotions:[
@@ -40,7 +56,7 @@ export function createManagementData():Record<string,ManagementRecord[]> {
  displays:LAB_MODELS.map((m,i)=>row(`display-${m.id}`,m.name,{model:m.name,mode:'3D',label:`Nhãn ${m.name}`,order:String(i+1)})),
  assets:LAB_MODELS.map(m=>({...row(`asset-${m.id}`,m.name,{type:'Model GLB',file:m.asset.src,size:'—',usage:'Studio / Demo'}),poster:m.poster})),
  banners:[row('banner-1','Bộ sưu tập mới',{placement:'Trang chủ · đầu trang',image:'/branding/hypermockup-logo.svg',url:'/studio',alt:'HyperMockup',order:'1'},'Đang tắt')],
- announcements:[row('notice-1','Chào mừng đến HyperMockup',{text:'Create your next packaging mockup.',start:'2026-10-31',end:'2026-12-31',url:'/studio'},'Đang tắt')],
+ announcements:[row('notice-1','Chào mừng đến HyperMockup',{category:'Hệ thống',pinned:'Không',text:'Tạo mockup bao bì 3D và bản vẽ dieline 1:1 mm trực tiếp trên trình duyệt.',titleEn:'Welcome to HyperMockup',textEn:'Create 3D packaging mockups and 1:1 mm dielines right in your browser.',ctaLabel:'Mở Studio',ctaLabelEn:'Open Studio',start:'2026-10-31',end:'2026-12-31',url:'/studio'},'Đang tắt')],
  layout:['Demo 3D','Thư viện model','Thông tin người dùng','Điểm danh','Bảng giá coin'].map((name,i)=>row(`layout-${i}`,name,{placement:'Trang chủ',order:String(i+1)})),
  rewards:[row('checkin','Điểm danh hằng ngày',{reward:'10',limit:'1',schedule:'10, 10, 10, 20, 10, 10, 30',condition:'Điểm danh liên tiếp 7 ngày; bỏ lỡ 1 ngày đặt lại về Ngày 1.'}),row('wheel','Vòng quay hằng ngày',{reward:'0',limit:'1',schedule:'0, 1, 2, 3, 5, 10',condition:'Cấu hình mẫu; xác suất sẽ thiết lập khi nối backend.'},'Đang tắt'),row('share','Chia sẻ website',{reward:'2',limit:'1',schedule:'Hằng ngày',condition:'Chia sẻ hợp lệ sau khi xác minh.'},'Đang tắt'),row('free-download','Lượt tải miễn phí',{reward:'0',limit:'1',schedule:'Hằng ngày',condition:'Một lượt tải mỗi ngày.'})],
  campaigns:[row('welcome','Quà thành viên mới',{start:'2026-10-31',end:'2026-12-31',reward:'20',limit:'1000',condition:'Xác minh email lần đầu.'},'Đang tắt')],

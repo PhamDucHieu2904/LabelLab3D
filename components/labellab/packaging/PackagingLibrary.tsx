@@ -1,17 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, Search } from "lucide-react";
 import type { PackagingTemplateCategory, PackagingTemplateDefinition } from "@/lib/packaging-cad/types";
 import {
-  createDefaultPackagingParams,
   filterPackagingTemplates,
   PACKAGING_TEMPLATES,
-  solvePackagingTemplate,
 } from "@/lib/packaging-cad/templates/registry";
-import { exportDielineSvg } from "@/lib/packaging-cad/exporters/vector-dieline";
+import { renderPackagingTemplateThumbnails } from "@/lib/packaging-cad/thumbnail-renderer";
 import LibrarySearchFilterBar, { type LibraryFilterOption } from "../LibrarySearchFilterBar";
 import { useLocale } from "../LocaleProvider";
+import modelLibrary from "../ModelLibrary.module.css";
 import styles from "./PackagingStudio.module.css";
 
 interface Props {
@@ -31,6 +30,15 @@ export default function PackagingLibrary({
   const lib = t.studio.library;
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<"all" | PackagingTemplateCategory>("all");
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
+
+  // Render crisp finished-3D WebP thumbnails directly from our parametric CAD engine once per session.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      setThumbnails(renderPackagingTemplateThumbnails(PACKAGING_TEMPLATES));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = { all: PACKAGING_TEMPLATES.length };
@@ -52,23 +60,6 @@ export default function PackagingLibrary({
 
   const templates = useMemo(() => filterPackagingTemplates(query, category), [query, category]);
 
-  // Pre-compute razor-sharp miniature SVG dieline previews directly from the CAD solver!
-  const thumbnails = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const tpl of PACKAGING_TEMPLATES) {
-      const solved = solvePackagingTemplate(createDefaultPackagingParams(tpl.id));
-      map[tpl.id] = exportDielineSvg(solved, {
-        side: "outside",
-        marginMm: 10,
-        includeDimensions: false,
-        includeLabels: false,
-        includeBleed: false,
-        includeFill: true,
-      });
-    }
-    return map;
-  }, []);
-
   return (
     <div className={styles.templateLibrary} data-tone={tone}>
       <LibrarySearchFilterBar
@@ -89,35 +80,45 @@ export default function PackagingLibrary({
       />
 
       <div className={styles.templateScroll}>
-        <div className={styles.templateGrid} role="list" aria-label="Parametric box templates">
+        <div
+          className={`models-grid ${modelLibrary.grid} ${styles.packagingModelsGrid}`}
+          data-tone={tone}
+          role="list"
+          aria-label={lib.boxTemplates}
+        >
           {templates.map((tpl) => {
             const selected = tpl.id === activeTemplateId;
+            const thumbSrc = thumbnails[tpl.id];
+            const dims = `${tpl.defaultDimensions.length}×${tpl.defaultDimensions.width}×${tpl.defaultDimensions.height} mm`;
             return (
               <button
                 key={tpl.id}
                 type="button"
-                className={styles.templateCard}
+                className={`model-card ${modelLibrary.card} ${selected ? "selected" : ""}`}
+                aria-label={`${tpl.shortName} (${tpl.code}), ${dims}`}
                 aria-pressed={selected}
                 disabled={disabled}
                 onClick={() => onSelectTemplate(tpl)}
-                title={tpl.description}
+                title={`${tpl.name} · ${dims} — ${tpl.description}`}
               >
-                <div className={styles.templateThumb}>
-                  <span className={styles.templateCode}>{tpl.code}</span>
+                <div className={`model-image ${modelLibrary.image}`}>
+                  {thumbSrc ? (
+                    <img
+                      src={thumbSrc}
+                      alt=""
+                      className={styles.packagingThumbImg}
+                    />
+                  ) : (
+                    <span className={styles.packagingThumbPlaceholder} aria-hidden="true" />
+                  )}
                   {selected && (
-                    <span className={styles.templateCheck} aria-hidden="true">
-                      <Check size={11} />
+                    <span className="selected-check">
+                      <Check size={12} />
                     </span>
                   )}
-                  <div
-                    style={{ width: "100%", height: "100%" }}
-                    dangerouslySetInnerHTML={{ __html: thumbnails[tpl.id] }}
-                  />
                 </div>
-                <strong className={styles.templateName}>{tpl.shortName}</strong>
-                <span className={styles.templateMeta}>
-                  {tpl.defaultDimensions.length}×{tpl.defaultDimensions.width}×{tpl.defaultDimensions.height} mm
-                </span>
+                <strong className={modelLibrary.name}>{tpl.shortName}</strong>
+                <span className={modelLibrary.caption}>({tpl.code})</span>
               </button>
             );
           })}

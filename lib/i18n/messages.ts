@@ -29,10 +29,29 @@ export type UiMessages = {
     showModelDemo: (name: string) => string;
     startMockup: string;
     parametricCta: string;
+    live3d: string;
+    tryLabel: string;
+    resetLabel: string;
+    foldPlay: string;
+    foldPause: string;
+    dragOrbitHint: string;
+    dragOrbitBoxHint: string;
+    dropLabelHint: string;
+    lightMoodStudio: string;
+    lightMoodDramatic: string;
+    lightMoodDaylight: string;
+    switchLightAria: string;
     centerColumnAria: string;
     updatesHeading: string;
     openStudio: string;
     unreadLabel: string;
+    markAllRead: string;
+    allRead: string;
+    viewAllUpdates: (count: number) => string;
+    collapseUpdates: string;
+    closeNotice: string;
+    prevNotice: string;
+    nextNotice: string;
     noAnnouncements: string;
     promoAlt: string;
     promoTag: string;
@@ -57,14 +76,13 @@ export type UiMessages = {
   };
   pricing: {
     title: string;
-    subtitleVietnam: string;
-    subtitleInternational: string;
+    subtitleVietnam: (amount: string) => string;
+    subtitleInternational: (amount: string) => string;
     regionSwitchAria: string;
     regionVietnam: string;
     regionInternational: string;
     activeCurrencyAria: string;
     singleVietnamTitle: string;
-    singleVietnamSub: string;
     singleInternationalTitle: string;
     singleInternationalSub: string;
     packsAria: (regionLabel: string) => string;
@@ -376,10 +394,29 @@ const VI_MESSAGES: UiMessages = {
     showModelDemo: (name) => `Xem mẫu 3D ${name}`,
     startMockup: "Tạo mockup mới",
     parametricCta: "Hộp & khay tham số (mm CAD)",
+    live3d: "LIVE 3D",
+    tryLabel: "Thử nhãn",
+    resetLabel: "Nhãn mẫu",
+    foldPlay: "Gấp 3D",
+    foldPause: "Dừng gấp",
+    dragOrbitHint: "Kéo để xoay 360° · Kéo thả ảnh nhãn vào đây",
+    dragOrbitBoxHint: "Kéo để xoay 360° · Bấm Gấp 3D để xem mở hộp",
+    dropLabelHint: "Thả ảnh nhãn hàng để bọc thử trực tiếp lên mẫu 3D",
+    lightMoodStudio: "Studio",
+    lightMoodDramatic: "Tương phản",
+    lightMoodDaylight: "Ánh sáng tự nhiên",
+    switchLightAria: "Đổi ánh sáng studio 3D",
     centerColumnAria: "Gói nạp coin và cập nhật",
     updatesHeading: "Cập nhật hệ thống",
     openStudio: "Mở Studio",
     unreadLabel: "Chưa đọc",
+    markAllRead: "Đã đọc hết",
+    allRead: "Đã đọc tất cả thông báo",
+    viewAllUpdates: (count) => `Xem tất cả (${count})`,
+    collapseUpdates: "Thu gọn",
+    closeNotice: "Đóng",
+    prevNotice: "Thông báo trước",
+    nextNotice: "Thông báo tiếp theo",
     noAnnouncements: "Hiện chưa có thông báo mới.",
     promoAlt: "Các mẫu mockup bao bì 3D sống động",
     promoTag: "Studio 3D",
@@ -402,21 +439,20 @@ const VI_MESSAGES: UiMessages = {
     checkinClaimedCta: (reward) => `Đã nhận thưởng (+${reward})`,
     checkinClaimCta: (reward) => `Nhận ngay +${reward} coin`,
     defaultUpdates: [
-      { tone: "pink", title: "Ưu đãi tặng thêm coin cuối tuần đang diễn ra", time: "2 giờ trước", unread: true },
-      { tone: "blue", title: "Bổ sung thêm nhiều mẫu chai bao bì 3D mới vào thư viện", time: "Hôm qua", unread: true },
-      { tone: "mint", title: "Công cụ hộp CAD tham số & xuất Dieline đã sẵn sàng", time: "11/2026", unread: false },
+      { tone: "mint", title: "Ra mắt Hộp CAD 3D: FEFCO 0201, 0201E & Vách tổ ong", time: "26/11/2026", unread: true },
+      { tone: "blue", title: "Ánh sáng HDRI + Spotlight 3D, Lưu Cloud & Link chia sẻ", time: "26/11/2026", unread: true },
+      { tone: "pink", title: "Điểm danh 7 ngày nhận chuỗi thưởng đến +100 coin miễn phí", time: "26/11/2026", unread: false },
     ],
   },
   pricing: {
     title: "Gói nạp coin",
-    subtitleVietnam: "10 coins = 1 ảnh render 2K · Giá VND đã gồm nghĩa vụ thuế (nếu có).",
-    subtitleInternational: "10 coins = 1 ảnh render 2K · Giá USD qua Polar.sh (MoR).",
+    subtitleVietnam: (amount) => `Render ảnh 3D và nhiều công cụ hữu dụng khác chỉ từ 5 coins, chỉ tương đương ${amount} VNĐ.`,
+    subtitleInternational: (amount) => `Render ảnh 3D và nhiều công cụ hữu dụng khác chỉ từ 5 coins, chỉ tương đương ${amount}.`,
     regionSwitchAria: "Chọn khu vực giá (Xem trước Admin)",
     regionVietnam: "Việt Nam",
     regionInternational: "Quốc tế",
     activeCurrencyAria: "Tiền tệ thanh toán áp dụng",
     singleVietnamTitle: "Việt Nam · VND (VietQR)",
-    singleVietnamSub: "Tự động cộng coin qua SePay",
     singleInternationalTitle: "Quốc tế · USD",
     singleInternationalSub: "Polar.sh (Merchant of Record)",
     packsAria: (regionLabel) => `Danh sách gói coin ${regionLabel}`,
@@ -739,10 +775,29 @@ const EN_MESSAGES: UiMessages = {
     showModelDemo: (name) => `Show ${name} 3D demo`,
     startMockup: "Start a new mockup",
     parametricCta: "Parametric Boxes & Trays (mm CAD)",
+    live3d: "LIVE 3D",
+    tryLabel: "Try label",
+    resetLabel: "Reset art",
+    foldPlay: "Fold 3D",
+    foldPause: "Pause fold",
+    dragOrbitHint: "Drag to orbit 360° · Drop your label image here",
+    dragOrbitBoxHint: "Drag to orbit 360° · Click Fold 3D to animate",
+    dropLabelHint: "Drop your label artwork to wrap it live in 3D",
+    lightMoodStudio: "Studio",
+    lightMoodDramatic: "Contrast",
+    lightMoodDaylight: "Daylight",
+    switchLightAria: "Switch 3D studio lighting preset",
     centerColumnAria: "Coin packages and updates",
-    updatesHeading: "Admin updates",
+    updatesHeading: "System updates",
     openStudio: "Open Studio",
     unreadLabel: "Unread",
+    markAllRead: "Mark all read",
+    allRead: "All updates read",
+    viewAllUpdates: (count) => `View all (${count})`,
+    collapseUpdates: "Show less",
+    closeNotice: "Close",
+    prevNotice: "Previous update",
+    nextNotice: "Next update",
     noAnnouncements: "No announcements right now.",
     promoAlt: "Colorful 3D packaging mockups",
     promoTag: "Studio 3D",
@@ -765,21 +820,20 @@ const EN_MESSAGES: UiMessages = {
     checkinClaimedCta: (reward) => `Reward claimed (+${reward})`,
     checkinClaimCta: (reward) => `Claim today's +${reward}`,
     defaultUpdates: [
-      { tone: "pink", title: "Weekend top-up bonus is live", time: "2h ago", unread: true },
-      { tone: "blue", title: "New 3D packaging bottles added to the library", time: "Yesterday", unread: true },
-      { tone: "mint", title: "Parametric CAD boxes & dielines ready in Studio", time: "Nov 2026", unread: false },
+      { tone: "mint", title: "Parametric 3D CAD Boxes: FEFCO 0201, 0201E & Honeycomb Dividers", time: "26/11/2026", unread: true },
+      { tone: "blue", title: "HDRI + Spotlight Rig, Cloud Projects & 3D Share Links", time: "26/11/2026", unread: true },
+      { tone: "pink", title: "7-Day Check-In Streak: Claim Free Studio Coins Daily", time: "26/11/2026", unread: false },
     ],
   },
   pricing: {
     title: "Coin packages",
-    subtitleVietnam: "10 coins = 1 standard 2K render · VND prices include applicable taxes.",
-    subtitleInternational: "10 coins = 1 standard 2K render · Prices in USD via Polar.sh MoR.",
+    subtitleVietnam: (amount) => `Render 3D images and other useful tools from just 5 coins, equivalent to only ${amount} VND.`,
+    subtitleInternational: (amount) => `Render 3D images and other useful tools from just 5 coins, equivalent to only ${amount}.`,
     regionSwitchAria: "Pricing region (Admin preview)",
     regionVietnam: "Vietnam",
     regionInternational: "International",
     activeCurrencyAria: "Active payment currency",
     singleVietnamTitle: "Vietnam · VND (VietQR)",
-    singleVietnamSub: "Auto coin credit via SePay",
     singleInternationalTitle: "International · USD",
     singleInternationalSub: "Polar.sh Merchant of Record",
     packsAria: (regionLabel) => `${regionLabel} coin packages`,

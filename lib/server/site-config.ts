@@ -9,7 +9,7 @@ import {
   type CoinPackageBadge,
   type CoinRegion,
 } from "@/lib/payments/packages";
-import { LABELLAB_UPDATES } from "@/lib/labellab/updates";
+import { LABELLAB_UPDATES, LEGACY_DEMO_ANNOUNCEMENT_TITLES } from "@/lib/labellab/updates";
 import { nowIso, requireDb, type AppEnv } from "./db";
 
 export type LiveCheckInConfig = {
@@ -23,8 +23,14 @@ export type LiveCheckInConfig = {
 export type LiveAnnouncement = {
   id: string;
   tone: "pink" | "blue" | "mint";
+  category: string;
+  pinned: boolean;
   title: string;
   body: string;
+  titleEn?: string;
+  bodyEn?: string;
+  ctaLabel?: string;
+  ctaLabelEn?: string;
   time: string;
   url: string;
   unread: boolean;
@@ -159,26 +165,48 @@ export function createInitialProductionManagement(): Record<string, ManagementRe
         }
       : row,
   );
-  base.announcements = LABELLAB_UPDATES.map((item, idx) => ({
-    id: `notice-${idx + 1}`,
+  base.announcements = LABELLAB_UPDATES.map((item) => ({
+    id: item.id,
     name: item.title,
     status: "Đang bật",
     updated: today,
     values: {
-      text: item.title,
+      category: item.category,
+      pinned: item.pinned ? "Có" : "Không",
+      text: item.body,
+      titleEn: item.titleEn,
+      textEn: item.bodyEn,
+      ctaLabel: item.ctaLabel,
+      ctaLabelEn: item.ctaLabelEn,
       start: "",
       end: "",
-      url: "/studio",
+      url: item.url,
     },
   }));
   return persistentManagementData(base);
+}
+
+function isLegacyDemoAnnouncementSet(list: ManagementRecord[] | undefined): boolean {
+  if (!Array.isArray(list) || list.length === 0) return false;
+  return list.every(
+    (row) =>
+      /^notice-\d+$/.test(row.id) &&
+      LEGACY_DEMO_ANNOUNCEMENT_TITLES.has(row.name.trim()) &&
+      (!row.values?.text || row.values.text.trim() === row.name.trim()),
+  );
 }
 
 export async function loadManagementData(env: AppEnv): Promise<Record<string, ManagementRecord[]>> {
   const initial = createInitialProductionManagement();
   const saved = await readConfigJson<Record<string, ManagementRecord[]>>(env, "management");
   if (!saved || typeof saved !== "object") return initial;
-  return persistentManagementData(migrateManagementData(initial, saved));
+  const migrated = migrateManagementData(initial, saved);
+  // Automatically replace untouched early English demo placeholders with current bilingual HyperMockup updates.
+  // Any announcement created or customized by the admin is preserved verbatim.
+  if (isLegacyDemoAnnouncementSet(migrated.announcements)) {
+    migrated.announcements = initial.announcements;
+  }
+  return persistentManagementData(migrated);
 }
 
 export function parseCheckInSchedule(rawSchedule: string | undefined, fallbackReward: number): number[] {
@@ -236,10 +264,18 @@ export async function getLiveCheckInConfig(env: AppEnv): Promise<LiveCheckInConf
   return extractCheckInConfig(management);
 }
 
+function resolveAnnouncementTone(category: string | undefined, fallbackIdx: number): "pink" | "blue" | "mint" {
+  const normalized = (category ?? "").trim().toLowerCase();
+  if (normalized.includes("ưu đãi") || normalized.includes("promo") || normalized.includes("khuyến")) return "pink";
+  if (normalized.includes("tính năng") || normalized.includes("feature") || normalized.includes("ra mắt")) return "mint";
+  if (normalized.includes("nâng cấp") || normalized.includes("hệ thống") || normalized.includes("upgrade") || normalized.includes("system")) return "blue";
+  const tones: Array<"pink" | "blue" | "mint"> = ["mint", "blue", "pink"];
+  return tones[fallbackIdx % tones.length];
+}
+
 export function extractLiveAnnouncements(management: Record<string, ManagementRecord[]>, todayIso?: string): LiveAnnouncement[] {
   const list = Array.isArray(management.announcements) ? management.announcements : [];
   const today = todayIso ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
-  const tones: Array<"pink" | "blue" | "mint"> = ["pink", "blue", "mint"];
   const active = list.filter((row) => {
     if (row.status !== "Đang bật") return false;
     const start = row.values?.start?.trim();
@@ -248,17 +284,33 @@ export function extractLiveAnnouncements(management: Record<string, ManagementRe
     if (end && /^\d{4}-\d{2}-\d{2}$/.test(end) && today > end) return false;
     return Boolean(row.name.trim());
   });
-  return active.slice(0, 6).map((row, idx) => {
+  // Keep pinned announcements at the top while preserving admin ordering within each group.
+  const ordered = [
+    ...active.filter((row) => row.values?.pinned === "Có"),
+    ...active.filter((row) => row.values?.pinned !== "Có"),
+  ];
+  return ordered.slice(0, 8).map((row, idx) => {
     const rawUrl = row.values?.url?.trim() || "";
     const safeUrl = /^\/(?!\/)/.test(rawUrl) || /^https:\/\/[^\s]+$/i.test(rawUrl) ? rawUrl : "/studio";
+    const category = row.values?.category?.trim() || "Hệ thống";
+    const titleEn = row.values?.titleEn?.trim() || undefined;
+    const bodyEn = row.values?.textEn?.trim() || undefined;
+    const ctaLabel = row.values?.ctaLabel?.trim() || undefined;
+    const ctaLabelEn = row.values?.ctaLabelEn?.trim() || undefined;
     return {
       id: row.id,
-      tone: tones[idx % tones.length],
+      tone: resolveAnnouncementTone(category, idx),
+      category,
+      pinned: row.values?.pinned === "Có",
       title: row.name.trim(),
       body: row.values?.text?.trim() || row.name.trim(),
+      ...(titleEn ? { titleEn } : {}),
+      ...(bodyEn ? { bodyEn } : {}),
+      ...(ctaLabel ? { ctaLabel } : {}),
+      ...(ctaLabelEn ? { ctaLabelEn } : {}),
       time: row.updated || today,
       url: safeUrl,
-      unread: idx < 2,
+      unread: true,
     };
   });
 }

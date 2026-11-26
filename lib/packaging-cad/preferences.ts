@@ -135,7 +135,9 @@ export function loadPackagingParams(storage?: Pick<Storage, 'getItem'>): Packagi
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return createDefaultPackagingParams();
     const env = parsed as Record<string, unknown>;
-    return env.version === 1 ? parsePackagingParams(env.params) : createDefaultPackagingParams();
+    if (env.version === 2) return parsePackagingParams(env.params);
+    if (env.version === 1) return { ...parsePackagingParams(env.params), showDimensions: false };
+    return createDefaultPackagingParams();
   } catch {
     return createDefaultPackagingParams();
   }
@@ -147,7 +149,7 @@ export function savePackagingParams(params: PackagingParams, storage?: Pick<Stor
     if (!target) return false;
     target.setItem(
       PACKAGING_PREFERENCES_KEY,
-      JSON.stringify({ version: 1, params: parsePackagingParams(params) }),
+      JSON.stringify({ version: 2, params: parsePackagingParams(params) }),
     );
     return true;
   } catch {

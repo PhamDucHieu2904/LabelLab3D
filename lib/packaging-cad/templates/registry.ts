@@ -9,14 +9,12 @@ import { getBoardMaterialPreset } from '../materials/paper-presets';
 import { FEFCO_0421_TRAY_TEMPLATE } from './fefco-0421-tray';
 import { FEFCO_0201_RSC_TEMPLATE } from './fefco-0201-rsc';
 import { FEFCO_0201E_BEER_CASE_TEMPLATE } from './fefco-0201e-beer-case';
-import { FEFCO_0427_MAILER_TEMPLATE } from './fefco-0427-mailer';
 import { RIGID_LID_BASE_TEMPLATE } from './rigid-lid-base';
 
 export const PACKAGING_TEMPLATES: readonly PackagingTemplateDefinition[] = Object.freeze([
   FEFCO_0421_TRAY_TEMPLATE,
   FEFCO_0201E_BEER_CASE_TEMPLATE,
   FEFCO_0201_RSC_TEMPLATE,
-  FEFCO_0427_MAILER_TEMPLATE,
   RIGID_LID_BASE_TEMPLATE,
 ]);
 
@@ -104,7 +102,7 @@ export function createDefaultPackagingParams(
     bleedMm: 3,
 
     foldProgress: tpl.heroFold,
-    showDimensions: true,
+    showDimensions: false,
     showFaceLabels: false,
     showCreaseLines: true,
   };

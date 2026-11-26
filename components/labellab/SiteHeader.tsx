@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
-import { Bell, Layers3, LogIn, LogOut } from "lucide-react";
+import { Bell, CheckCheck, Layers3, LogIn, LogOut } from "lucide-react";
+import { fetchSiteConfigCached } from "@/lib/client/api-cache";
+import {
+  DEFAULT_PUBLIC_ANNOUNCEMENTS,
+  localizeAnnouncement,
+  OPEN_ANNOUNCEMENT_EVENT,
+  useAnnouncementReadState,
+  type PublicAnnouncement,
+} from "@/lib/client/announcements";
 import { useAccount, useAuthDialog } from "./AuthDialog";
 import { readAnalyticsConsent } from "./CookieConsentBanner";
 import { useLocale } from "./LocaleProvider";
@@ -27,6 +35,44 @@ export default function SiteHeader({ activePage, disabled = false, onOpenProject
   const signedIn = isLoggedIn ?? (Boolean(user) || status === "authenticated");
   const accountLabel = signedIn ? t.header.logout : t.header.login;
   const AccountIcon = signedIn ? LogOut : LogIn;
+  const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>(DEFAULT_PUBLIC_ANNOUNCEMENTS);
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const { unreadCount, isUnread, markRead, markAllRead } = useAnnouncementReadState(announcements);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && detailsRef.current?.open) {
+        detailsRef.current.open = false;
+        detailsRef.current.querySelector("summary")?.focus();
+      }
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      const el = detailsRef.current;
+      if (el?.open && !el.contains(event.target as Node | null)) {
+        el.open = false;
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void fetchSiteConfigCached<{ announcements?: PublicAnnouncement[] }>()
+      .then((cfg) => {
+        if (active && Array.isArray(cfg?.announcements)) {
+          setAnnouncements(cfg.announcements);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const kind = activePage === "studio" ? "studio_session" : "pageview";
@@ -75,22 +121,82 @@ export default function SiteHeader({ activePage, disabled = false, onOpenProject
         >
           <Layers3 className={styles.icon} aria-hidden="true" /><span>{t.header.myProjects}</span>
         </Link>
-        <details className={styles.notifications} onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            event.currentTarget.open = false;
-            event.currentTarget.querySelector("summary")?.focus();
-          }
-        }}>
+        <details
+          ref={detailsRef}
+          className={styles.notifications}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.currentTarget.open = false;
+              event.currentTarget.querySelector("summary")?.focus();
+            }
+          }}
+        >
           <summary className={styles.notificationButton} aria-label={t.header.openNotifications}>
-            <Bell className={styles.icon} aria-hidden="true" /><i aria-hidden="true" />
+            <Bell className={styles.icon} aria-hidden="true" />
+            {unreadCount > 0 && <i aria-hidden="true" />}
           </summary>
           <div className={styles.notificationPanel} role="region" aria-label={t.header.notificationsRegion}>
-            <strong>{t.header.adminUpdates}</strong>
-            <ul>
-              {t.home.defaultUpdates.map((notice) => (
-                <li key={notice.title}><span>{notice.title}</span><small>{notice.time}</small></li>
-              ))}
-            </ul>
+            <div className={styles.notificationHeader}>
+              <strong>{t.header.adminUpdates}</strong>
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  className={styles.markReadBtn}
+                  onClick={() => markAllRead(announcements)}
+                >
+                  <CheckCheck size={13} aria-hidden="true" />
+                  <span>{t.home.markAllRead}</span>
+                </button>
+              )}
+            </div>
+            {announcements.length > 0 ? (
+              <ul>
+                {announcements.slice(0, 5).map((notice) => {
+                  const localized = localizeAnnouncement(notice, locale);
+                  const unread = isUnread(notice);
+                  return (
+                    <li key={notice.id}>
+                      {activePage === "home" ? (
+                        <button
+                          type="button"
+                          className={`${styles.notificationItem} ${unread ? styles.notificationItemUnread : ""}`}
+                          onClick={() => {
+                            markRead(notice);
+                            if (detailsRef.current) detailsRef.current.open = false;
+                            window.dispatchEvent(new CustomEvent(OPEN_ANNOUNCEMENT_EVENT, { detail: { id: notice.id } }));
+                          }}
+                        >
+                          <span className={styles.notificationTitle}>
+                            {unread && <span className={styles.notificationItemDot} aria-hidden="true" />}
+                            <span>{localized.title}</span>
+                          </span>
+                          <p className={styles.notificationBody}>{localized.body}</p>
+                          <small>{notice.time}</small>
+                        </button>
+                      ) : (
+                        <Link
+                          href={localized.href}
+                          className={`${styles.notificationItem} ${unread ? styles.notificationItemUnread : ""}`}
+                          onClick={() => {
+                            markRead(notice);
+                            if (detailsRef.current) detailsRef.current.open = false;
+                          }}
+                        >
+                          <span className={styles.notificationTitle}>
+                            {unread && <span className={styles.notificationItemDot} aria-hidden="true" />}
+                            <span>{localized.title}</span>
+                          </span>
+                          <p className={styles.notificationBody}>{localized.body}</p>
+                          <small>{notice.time}</small>
+                        </Link>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className={styles.notificationEmpty}>{t.home.noAnnouncements}</p>
+            )}
           </div>
         </details>
         <div className={styles.langSwitch} role="group" aria-label={t.header.langSwitchAria}>

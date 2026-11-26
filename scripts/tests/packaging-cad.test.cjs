@@ -98,7 +98,7 @@ test('multi-domain registry exposes beverage, packaging and future apparel slot 
 });
 
 test('all registered packaging templates solve valid 2D dielines, finite 3D rigs, and zero-NaN geometry across extreme sizes', () => {
-  assert.equal(PACKAGING_TEMPLATES.length, 5);
+  assert.equal(PACKAGING_TEMPLATES.length, 4);
   for (const tpl of PACKAGING_TEMPLATES) {
     const configs = [
       createDefaultPackagingParams(tpl.id),
@@ -235,7 +235,7 @@ test('packaging preferences sanitize hostile inputs, clamp bounds and round-trip
   const storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
 
   const custom = {
-    ...createDefaultPackagingParams('fefco-0427-mailer'),
+    ...createDefaultPackagingParams('fefco-0201-rsc'),
     lengthMm: 280,
     widthMm: 195,
     heightMm: 75,
@@ -246,10 +246,18 @@ test('packaging preferences sanitize hostile inputs, clamp bounds and round-trip
   assert.equal(savePackagingParams(custom, storage), true);
   assert.ok(store.has(PACKAGING_PREFERENCES_KEY));
   const restored = loadPackagingParams(storage);
-  assert.equal(restored.templateId, 'fefco-0427-mailer');
+  assert.equal(restored.templateId, 'fefco-0201-rsc');
   assert.equal(restored.lengthMm, 280);
   assert.equal(restored.windowCutout, true);
   assert.equal(restored.foldProgress, 0.65);
+  assert.equal(restored.showDimensions, false);
+
+  // Legacy v1 persisted state with old default showDimensions: true migrates to off by default.
+  store.set(
+    PACKAGING_PREFERENCES_KEY,
+    JSON.stringify({ version: 1, params: { ...custom, showDimensions: true } }),
+  );
+  assert.equal(loadPackagingParams(storage).showDimensions, false);
 
   // Hostile / extreme values must clamp or fall back safely.
   const hostile = parsePackagingParams({
@@ -266,11 +274,11 @@ test('packaging preferences sanitize hostile inputs, clamp bounds and round-trip
   assert.equal(hostile.thicknessMm, 8);
   assert.equal(hostile.outsideColor, getBoardMaterialPreset('kraft-e').outsideColor);
   assert.equal(BOARD_MATERIAL_PRESETS.length, 8);
-  assert.equal(filterPackagingTemplates('mailer').length, 1);
+  assert.equal(filterPackagingTemplates('mailer').length, 0);
   assert.equal(filterPackagingTemplates('', 'rigid-box').length, 1);
   assert.equal(filterPackagingTemplates('', 'carton').length, 2);
   // Removed template IDs safely fall back to the default template without crashing.
-  for (const removedId of ['beverage-carrier', 'ecma-a20-tuck', 'rigid-magnetic-box', 'rigid-drawer-sleeve']) {
+  for (const removedId of ['beverage-carrier', 'ecma-a20-tuck', 'fefco-0427-mailer', 'rigid-magnetic-box', 'rigid-drawer-sleeve']) {
     assert.equal(parsePackagingParams({ templateId: removedId }).templateId, 'fefco-0421-tray');
   }
 });

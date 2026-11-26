@@ -88,7 +88,7 @@ export default function RenderPanel({
         </span>
         <span className="render-panel-cost" aria-label={renderCost === 0 ? r.free : `${renderCost} coins`}>
           <strong>{renderCost}</strong>
-          <Image src="/branding/LLCoin.svg" alt="" width={17} height={17} aria-hidden="true" />
+          <Image src="/branding/hypermockup-coin.svg" alt="" width={22} height={22} aria-hidden="true" />
         </span>
       </button>
       <div className="render-panel-progress" role="status" aria-live="polite">
@@ -111,7 +111,7 @@ export default function RenderPanel({
               r.free
             ) : (
               <>
-                <Image src="/branding/LLCoin.svg" alt="" width={13} height={13} aria-hidden="true" />
+                <Image src="/branding/hypermockup-coin.svg" alt="" width={13} height={13} aria-hidden="true" />
                 <span>{dielineExport.cost}</span>
               </>
             )}

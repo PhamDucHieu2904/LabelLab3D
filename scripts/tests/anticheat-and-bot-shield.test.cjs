@@ -229,6 +229,91 @@ test('Anti-cheat engine detects coin burn shortfall, release abuse, DOM dieline 
   assert.ok(drift.signals.some((s) => s.code === 'LEDGER_WALLET_DRIFT'));
 });
 
+test('Anti-cheat engine excludes admin accounts from fraud alerts and reports', async () => {
+  const adminEval = anticheat.evaluateUserFraudRisk({
+    userId: 'usr_admin',
+    name: 'LabelLab Admin',
+    email: 'labellab3d@gmail.com',
+    role: 'admin',
+    status: 'active',
+    rendersCommitted: 1,
+    dielinesCommitted: 0,
+    committedCoinSum: 40,
+    openReservedCoins: 0,
+    actualCoinBurn: 40,
+    rendersStartedReported: 4,
+    rendersCompletedReported: 1,
+    dielinesStartedReported: 0,
+    dielinesCompletedReported: 0,
+    reportedExpectedCoins: 40,
+    walletBalance: 9999,
+    ledgerBalance: 9999,
+    reservesTotal: 4,
+    reservesReleased: 3,
+    reservesExpiredOpen: 0,
+    domSvgCopies: 5,
+    sameIpAccountCount: 5,
+  });
+  assert.equal(adminEval.riskLevel, 'ok');
+  assert.equal(adminEval.signals.length, 0);
+
+  // Also verify buildAntiCheatReport queries non-admin users only and filters out any admin row.
+  const executedSql = [];
+  const fakeDb = {
+    batch: async () => [],
+    prepare(sql) {
+      executedSql.push(sql);
+      const runQuery = async () => {
+        if (sql.includes('FROM users u')) {
+          return {
+            results: [
+              { id: 'usr_admin', name: 'LabelLab Admin', email: 'labellab3d@gmail.com', role: 'admin', status: 'active', walletBalance: 1000 },
+              { id: 'usr_normal', name: 'Normal User', email: 'user@example.com', role: 'user', status: 'active', walletBalance: 100 },
+            ],
+          };
+        }
+        if (sql.includes('FROM coin_reservations')) {
+          return {
+            results: [
+              { userId: 'usr_admin', reservesTotal: 4, rendersCommitted: 1, dielinesCommitted: 0, committedCoinSum: 40, openReservedCoins: 0, reservesReleased: 3, reservesExpiredOpen: 0 },
+              { userId: 'usr_normal', reservesTotal: 1, rendersCommitted: 1, dielinesCommitted: 0, committedCoinSum: 10, openReservedCoins: 0, reservesReleased: 0, reservesExpiredOpen: 0 },
+            ],
+          };
+        }
+        if (sql.includes('FROM coin_ledger')) {
+          return {
+            results: [
+              { userId: 'usr_admin', ledgerBalance: 1000, actualCoinBurn: 40 },
+              { userId: 'usr_normal', ledgerBalance: 100, actualCoinBurn: 10 },
+            ],
+          };
+        }
+        return { results: [] };
+      };
+      return {
+        bind: () => ({ all: runQuery, run: async () => ({}) }),
+        all: runQuery,
+        run: async () => ({}),
+      };
+    },
+  };
+
+  const report = await anticheat.buildAntiCheatReport({ DB: fakeDb }, 100);
+  assert.ok(
+    executedSql.some((sql) => sql.includes('FROM users u') && sql.includes("<> 'admin'")),
+    'users query excludes admin role at SQL level',
+  );
+  assert.ok(
+    executedSql.some((sql) => sql.includes('FROM legal_consents') && sql.includes("<> 'admin'")),
+    'IP farming query excludes admin accounts from inflating same-IP counts',
+  );
+  assert.equal(report.users.length, 1);
+  assert.equal(report.users[0].userId, 'usr_normal');
+  assert.equal(report.alerts.length, 0);
+  assert.equal(report.summary.flaggedUsersCount, 0);
+  assert.equal(report.summary.totalUsersChecked, 1);
+});
+
 test('Worker request metering computes average requests per user/visitor and quota upgrade status', () => {
   const snapshot = requestMeter.buildWorkerQuotaSnapshot(
     [

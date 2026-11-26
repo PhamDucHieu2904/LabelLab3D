@@ -111,6 +111,36 @@
   width: 100%;
 }
 
+/* Keep PackagingLibrary cards 100% unified with Beverage ModelLibrary cards */
+.packagingModelsGrid {
+  width: 100%;
+  grid-template-rows: auto !important;
+  align-items: start !important;
+}
+
+.packagingModelsGrid :global(.model-card) {
+  height: auto !important;
+}
+
+.packagingModelsGrid :global(.model-image) {
+  flex: 0 0 auto !important;
+  aspect-ratio: 102.52 / 117.16 !important;
+}
+
+.packagingThumbImg {
+  width: 92% !important;
+  height: 92% !important;
+  object-fit: contain;
+}
+
+.packagingThumbPlaceholder {
+  width: 62%;
+  height: 54%;
+  border-radius: 10px;
+  background: linear-gradient(110deg, #f3f1f3 8%, #faf8fa 18%, #f3f1f3 33%);
+  background-size: 200% 100%;
+}
+
 .filterBarRoot {
   display: flex;
   flex-direction: column;

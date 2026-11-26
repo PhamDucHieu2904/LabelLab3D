@@ -551,6 +551,7 @@ export async function createSharedProject(
   userId: string,
   input: CreateSharedProjectInput,
 ): Promise<SharedProjectSummary> {
+  await sweepExpiredSharedProjects(env, { userId }).catch(() => {});
   const db = await ensureShareTables(env);
   if (!Array.isArray(input.items) || input.items.length === 0 || input.items.length > SHARE_LIMITS.maxItems) {
     throw new Error("INVALID_INPUT");
@@ -710,6 +711,7 @@ export async function listUserSharedProjects(
   env: AppEnv,
   userId: string,
 ): Promise<SharedProjectSummary[]> {
+  await sweepExpiredSharedProjects(env, { userId }).catch(() => {});
   const db = await ensureShareTables(env);
   const res = await db
     .prepare(
@@ -829,26 +831,58 @@ export async function updateSharedProject(
     // Safely release old asset references after new items commit
     await releaseShareAssets(env, prevHashes).catch(() => {});
   } else {
-    await db
-      .prepare(
-        `UPDATE shared_projects
-         SET title=?, description=?, brand_name=?, passcode_hash=?, status=?, options_json=?,
-             expires_at=?, updated_at=?
-         WHERE id=? AND user_id=?`,
-      )
-      .bind(
-        nextTitle,
-        nextDescription,
-        nextBrandName,
-        nextPasscodeHash,
-        nextStatus,
-        JSON.stringify(nextOptions),
-        nextExpiresAt,
-        updatedAt,
-        existing.id,
-        userId,
-      )
-      .run();
+    const revokingNow = nextStatus === "revoked" && existing.status !== "revoked";
+    const prevHashesToRelease = revokingNow
+      ? collectPayloadAssetHashes(await readShareItems(env, existing.id))
+      : [];
+    if (revokingNow) {
+      await db.batch([
+        db.prepare("DELETE FROM shared_project_items WHERE share_id=?").bind(existing.id),
+        db
+          .prepare(
+            `UPDATE shared_projects
+             SET title=?, description=?, brand_name=?, passcode_hash=?, status=?, options_json=?,
+                 item_count=0, total_bytes=0, expires_at=?, updated_at=?
+             WHERE id=? AND user_id=?`,
+          )
+          .bind(
+            nextTitle,
+            nextDescription,
+            nextBrandName,
+            nextPasscodeHash,
+            nextStatus,
+            JSON.stringify(nextOptions),
+            nextExpiresAt,
+            updatedAt,
+            existing.id,
+            userId,
+          ),
+      ]);
+      if (prevHashesToRelease.length > 0) {
+        await releaseShareAssets(env, prevHashesToRelease).catch(() => {});
+      }
+    } else {
+      await db
+        .prepare(
+          `UPDATE shared_projects
+           SET title=?, description=?, brand_name=?, passcode_hash=?, status=?, options_json=?,
+               expires_at=?, updated_at=?
+           WHERE id=? AND user_id=?`,
+        )
+        .bind(
+          nextTitle,
+          nextDescription,
+          nextBrandName,
+          nextPasscodeHash,
+          nextStatus,
+          JSON.stringify(nextOptions),
+          nextExpiresAt,
+          updatedAt,
+          existing.id,
+          userId,
+        )
+        .run();
+    }
   }
 
   const refreshed = await readOwnedShare(env, userId, existing.id);
@@ -867,6 +901,89 @@ export async function deleteSharedProject(env: AppEnv, userId: string, shareId: 
     db.prepare("DELETE FROM shared_projects WHERE id=? AND user_id=?").bind(existing.id, userId),
   ]);
   await releaseShareAssets(env, prevHashes).catch(() => {});
+}
+
+/**
+ * Delete all share links linked to a cloud project (`local_project_id = projectId`)
+ * so manually deleting a cloud project never leaves behind unreachable orphan shares
+ * or holds unreferenced R2/D1 assets alive.
+ */
+export async function deleteLinkedSharesForProject(
+  env: AppEnv,
+  userId: string,
+  localProjectId: string,
+): Promise<{ deletedShareIds: string[]; releasedHashes: string[] }> {
+  const db = await ensureShareTables(env);
+  const rows = await db
+    .prepare("SELECT id FROM shared_projects WHERE user_id=? AND local_project_id=?")
+    .bind(userId, localProjectId)
+    .all<{ id: string }>();
+  const shares = rows.results ?? [];
+  if (shares.length === 0) return { deletedShareIds: [], releasedHashes: [] };
+
+  const deletedShareIds: string[] = [];
+  const allHashes = new Set<string>();
+  for (const row of shares) {
+    const items = await readShareItems(env, row.id);
+    for (const h of collectPayloadAssetHashes(items)) allHashes.add(h);
+    await db.batch([
+      db.prepare("DELETE FROM shared_project_items WHERE share_id=?").bind(row.id),
+      db.prepare("DELETE FROM shared_projects WHERE id=? AND user_id=?").bind(row.id, userId),
+    ]);
+    deletedShareIds.push(row.id);
+  }
+
+  return { deletedShareIds, releasedHashes: [...allHashes] };
+}
+
+/**
+ * Sweep expired (`expires_at <= now`) or `revoked` shared projects, removing their
+ * rows and garbage-collecting any unreferenced assets from R2 & D1.
+ */
+export async function sweepExpiredSharedProjects(
+  env: AppEnv,
+  options?: { userId?: string; nowMs?: number; limit?: number },
+): Promise<{ deletedIds: string[] }> {
+  const db = await ensureShareTables(env);
+  const nowMs = options?.nowMs ?? Date.now();
+  const cutoffIso = new Date(nowMs).toISOString();
+  const limit = Math.max(1, Math.min(100, options?.limit ?? 25));
+
+  const query = options?.userId
+    ? db
+        .prepare(
+          `SELECT id FROM shared_projects
+           WHERE user_id=? AND (status='revoked' OR (expires_at IS NOT NULL AND expires_at <= ?))
+           ORDER BY updated_at ASC LIMIT ?`,
+        )
+        .bind(options.userId, cutoffIso, limit)
+    : db
+        .prepare(
+          `SELECT id FROM shared_projects
+           WHERE status='revoked' OR (expires_at IS NOT NULL AND expires_at <= ?)
+           ORDER BY updated_at ASC LIMIT ?`,
+        )
+        .bind(cutoffIso, limit);
+
+  const stale = await query.all<{ id: string }>();
+  const rows = stale.results ?? [];
+  if (rows.length === 0) return { deletedIds: [] };
+
+  const deletedIds: string[] = [];
+  for (const row of rows) {
+    const items = await readShareItems(env, row.id);
+    const hashes = collectPayloadAssetHashes(items);
+    await db.batch([
+      db.prepare("DELETE FROM shared_project_items WHERE share_id=?").bind(row.id),
+      db.prepare("DELETE FROM shared_projects WHERE id=?").bind(row.id),
+    ]);
+    if (hashes.length > 0) {
+      await releaseShareAssets(env, hashes).catch(() => {});
+    }
+    deletedIds.push(row.id);
+  }
+
+  return { deletedIds };
 }
 
 export async function readShareByToken(env: AppEnv, token: string): Promise<ShareRow | null> {

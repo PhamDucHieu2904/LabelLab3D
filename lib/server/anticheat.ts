@@ -27,6 +27,7 @@ export type UserUsageMetrics = {
   userId: string;
   name: string;
   email: string;
+  role?: "user" | "admin";
   status: string;
   rendersCommitted: number;
   dielinesCommitted: number;
@@ -199,6 +200,35 @@ export function evaluateUserFraudRisk(metrics: UserUsageMetrics): UserAntiCheatR
 
   const signals: FraudSignal[] = [];
 
+  // Admin accounts are trusted operators (often testing renders, DevTools, or multiple accounts)
+  // and must never trigger customer anti-cheat alerts.
+  if (metrics.role === "admin") {
+    return {
+      userId: metrics.userId,
+      name: metrics.name,
+      email: metrics.email,
+      status: metrics.status,
+      rendersCommitted: metrics.rendersCommitted,
+      dielinesCommitted: metrics.dielinesCommitted,
+      toolUsesCommitted,
+      toolUsesReported,
+      expectedCoinBurn,
+      actualCoinBurn: settledActualBurn,
+      coinDiscrepancy,
+      walletBalance: metrics.walletBalance,
+      ledgerBalance: metrics.ledgerBalance,
+      walletDrift,
+      reservesTotal: metrics.reservesTotal,
+      reservesReleased: metrics.reservesReleased,
+      reservesExpiredOpen: metrics.reservesExpiredOpen,
+      releaseRatePct,
+      domSvgCopies: metrics.domSvgCopies,
+      sameIpAccountCount: metrics.sameIpAccountCount,
+      riskLevel: "ok",
+      signals,
+    };
+  }
+
   // 1. Coin burn shortfall: tool uses/expected coins exceed actual ledger burn.
   const serverBurnShortfall = metrics.committedCoinSum - settledActualBurn;
   const reportedBurnShortfall = metrics.reportedExpectedCoins - settledActualBurn;
@@ -299,10 +329,11 @@ export async function buildAntiCheatReport(env: AppEnv, limit = 300): Promise<An
 
   const [usersRes, resAggRes, ledgerAggRes, usageAggRes, ipFarmRes] = await Promise.all([
     db.prepare(
-      `SELECT u.id,u.name,u.email,u.status,COALESCE(w.balance,0) AS walletBalance
+      `SELECT u.id,u.name,u.email,u.role,u.status,COALESCE(w.balance,0) AS walletBalance
        FROM users u LEFT JOIN wallets w ON w.user_id=u.id
+       WHERE COALESCE(u.role, 'user') <> 'admin'
        ORDER BY u.created_at DESC LIMIT ?`,
-    ).bind(limit).all<{ id: string; name: string; email: string; status: string; walletBalance: number }>(),
+    ).bind(limit).all<{ id: string; name: string; email: string; role: "user" | "admin"; status: string; walletBalance: number }>(),
 
     db.prepare(
       `SELECT user_id AS userId,
@@ -358,14 +389,18 @@ export async function buildAntiCheatReport(env: AppEnv, limit = 300): Promise<An
     db.prepare(
       `SELECT lc.user_id AS userId, MAX(ip_counts.account_count) AS sameIpAccountCount
        FROM legal_consents lc
+       JOIN users u ON u.id = lc.user_id
        JOIN (
-         SELECT ip_hash, COUNT(DISTINCT user_id) AS account_count
-         FROM legal_consents
-         WHERE consent_type IN ('register_email','oauth_google')
-           AND ip_hash IS NOT NULL AND ip_hash <> '' AND user_id IS NOT NULL
-         GROUP BY ip_hash
+         SELECT lc2.ip_hash, COUNT(DISTINCT lc2.user_id) AS account_count
+         FROM legal_consents lc2
+         JOIN users u2 ON u2.id = lc2.user_id
+         WHERE lc2.consent_type IN ('register_email','oauth_google')
+           AND lc2.ip_hash IS NOT NULL AND lc2.ip_hash <> '' AND lc2.user_id IS NOT NULL
+           AND COALESCE(u2.role, 'user') <> 'admin'
+         GROUP BY lc2.ip_hash
        ) ip_counts ON ip_counts.ip_hash = lc.ip_hash
        WHERE lc.user_id IS NOT NULL
+         AND COALESCE(u.role, 'user') <> 'admin'
        GROUP BY lc.user_id`,
     ).all<{ userId: string; sameIpAccountCount: number }>().catch(() => ({ results: [] as Array<{ userId: string; sameIpAccountCount: number }> })),
   ]);
@@ -375,7 +410,9 @@ export async function buildAntiCheatReport(env: AppEnv, limit = 300): Promise<An
   const usageMap = new Map((usageAggRes.results ?? []).map((r) => [r.userId, r]));
   const ipFarmMap = new Map((ipFarmRes.results ?? []).map((r) => [r.userId, Number(r.sameIpAccountCount ?? 1)]));
 
-  const evaluated: UserAntiCheatRow[] = (usersRes.results ?? []).map((u) => {
+  const evaluated: UserAntiCheatRow[] = (usersRes.results ?? [])
+    .filter((u) => u.role !== "admin")
+    .map((u) => {
     const r = resMap.get(u.id);
     const l = ledgerMap.get(u.id);
     const us = usageMap.get(u.id);
@@ -383,6 +420,7 @@ export async function buildAntiCheatReport(env: AppEnv, limit = 300): Promise<An
       userId: u.id,
       name: u.name,
       email: u.email,
+      role: u.role,
       status: u.status,
       rendersCommitted: Number(r?.rendersCommitted ?? 0),
       dielinesCommitted: Number(r?.dielinesCommitted ?? 0),

@@ -168,7 +168,7 @@ export default function UserProfileCard({
             <div className={`${styles.stat} ${styles.balance}`}>
               <dt>{pr.coinBalance}</dt>
               <dd>
-                <Image src="/branding/LLCoin.svg" alt="" width={28} height={28} />
+                <Image src="/branding/hypermockup-coin.svg" alt="" width={28} height={28} />
                 {(account?.balance ?? 0).toLocaleString(numLocale)}
               </dd>
             </div>
@@ -196,7 +196,7 @@ export default function UserProfileCard({
                     <span className={styles.usageWhen}>{relativeTime(entry.createdAt, pr)}</span>
                     <span className={`${styles.usageAmount} ${entry.amount > 0 ? styles.positive : ""}`} aria-label={pr.coinsAria(entry.amount)}>
                       <span aria-hidden="true">{entry.amount > 0 ? "+" : "−"}{Math.abs(entry.amount).toLocaleString(numLocale)}</span>
-                      <Image src="/branding/LLCoin.svg" alt="" width={18} height={18} />
+                      <Image src="/branding/hypermockup-coin.svg" alt="" width={18} height={18} />
                     </span>
                   </li>
                 ))}
@@ -216,7 +216,7 @@ export default function UserProfileCard({
             <div className={`${styles.stat} ${styles.balance}`}>
               <dt>{pr.coinBalance}</dt>
               <dd className={styles.guestMetric}>
-                <Image src="/branding/LLCoin.svg" alt="" width={24} height={24} />
+                <Image src="/branding/hypermockup-coin.svg" alt="" width={24} height={24} />
                 —
               </dd>
             </div>

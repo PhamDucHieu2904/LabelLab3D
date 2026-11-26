@@ -93,7 +93,7 @@ export default function PackagingDielineViewport({
           </button>
           {dielineCost > 0 && (
             <span className={styles.dielineCostBadge} aria-label={`${dielineCost} coins per dieline export`}>
-              <Image src="/branding/LLCoin.svg" alt="" width={12} height={12} aria-hidden="true" />
+              <Image src="/branding/hypermockup-coin.svg" alt="" width={12} height={12} aria-hidden="true" />
               <span>{dielineCost}</span>
             </span>
           )}

@@ -79,7 +79,7 @@ function todayVnIso() {
 export function CoinValue({ value }: { value: number }) {
   return (
     <span className={s.coinValue}>
-      <img src="/branding/LLCoin.svg" width="18" height="18" alt="coin" />
+      <img src="/branding/hypermockup-coin.svg" width="18" height="18" alt="coin" />
       {formatNumber(value)}
     </span>
   );
@@ -361,7 +361,7 @@ export default function OverviewPanel({ detailed = false }: { detailed?: boolean
           <article className={s.stat} key={stat.title}>
             <div className={s.statTop}>
               <span>{stat.title}</span>
-              {stat.icon ? <stat.icon size={18} aria-hidden="true" /> : <img src="/branding/LLCoin.svg" alt="" width="20" height="20" />}
+              {stat.icon ? <stat.icon size={18} aria-hidden="true" /> : <img src="/branding/hypermockup-coin.svg" alt="" width="20" height="20" />}
             </div>
             <div className={s.statValue}>{formatNumber(stat.value)}</div>
             <div className={s.statBottom}><Trend value={stat.value} previous={stat.prev} /></div>

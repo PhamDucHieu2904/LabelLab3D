@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
+  Check,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -13,6 +14,8 @@ import {
   Milk,
   Minus,
   Package,
+  PanelRightClose,
+  PanelRightOpen,
   Pause,
   Play,
   Plus,
@@ -27,6 +30,7 @@ import {
 import SceneCanvas, { type SceneCanvasHandle } from "@/components/labellab/SceneCanvas";
 import MovingGrid from "@/components/labellab/MovingGrid";
 import { getLabModel } from "@/lib/labellab/catalog";
+import { createLocalArtwork, releaseLocalArtwork } from "@/lib/labellab/local-artwork";
 import { DEFAULT_PREFERENCES, type ScenePreferences } from "@/lib/labellab/preferences";
 import type { MockupCameraPreset, MockupStatus } from "@/lib/mockup/contracts";
 import { QUALITY_PREFERENCE_OPTIONS, type QualityPreference } from "@/lib/mockup/quality-tier";
@@ -94,6 +98,7 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
     Boolean(initialItem && initialItem.payload.kind === "beverage" && initialItem.payload.settings.motion !== "off"),
   );
   const [showInfo, setShowInfo] = useState(false);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [foldProgress, setFoldProgress] = useState<number>(() =>
     initialItem?.payload.kind === "packaging" ? initialItem.payload.packagingParams.foldProgress : 1,
   );
@@ -107,6 +112,7 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
 
   const sceneRef = useRef<SceneCanvasHandle>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const activeItemBtnRef = useRef<HTMLButtonElement | null>(null);
   const packagingSubjectRef = useRef<PackagingSubjectController | null>(null);
   const [packagingEntry, setPackagingEntry] = useState<{
     itemId: string;
@@ -134,7 +140,8 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
           });
           if (!res.ok) return [hash, ""] as const;
           const blob = await res.blob();
-          const url = URL.createObjectURL(blob);
+          // Register via createLocalArtwork so viewer-config's isLocalArtwork() gate accepts the label texture URL.
+          const url = createLocalArtwork(blob);
           created.push(url);
           return [hash, url] as const;
         } catch {
@@ -143,7 +150,7 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
       }),
     ).then((pairs) => {
       if (cancelled) {
-        created.forEach((u) => URL.revokeObjectURL(u));
+        created.forEach((u) => releaseLocalArtwork(u));
         return;
       }
       const next: Record<string, string> = {};
@@ -156,7 +163,7 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
 
     return () => {
       cancelled = true;
-      created.forEach((u) => URL.revokeObjectURL(u));
+      created.forEach((u) => releaseLocalArtwork(u));
     };
   }, [data.state, hashes, hashesKey, token]);
 
@@ -192,6 +199,20 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
     if (filterTab === "all") return items;
     return items.filter((item) => item.kind === filterTab);
   }, [items, filterTab]);
+
+  const activeFilteredIndex = useMemo(() => {
+    if (!activeItem) return -1;
+    return filteredItems.findIndex((i) => i.id === activeItem.id);
+  }, [filteredItems, activeItem]);
+
+  useEffect(() => {
+    activeItemBtnRef.current?.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+  }, [activeItem?.id, filterTab]);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => sceneRef.current?.requestFrame());
+    return () => cancelAnimationFrame(id);
+  }, [panelCollapsed]);
 
   // Build and dispose PackagingSubjectController cleanly whenever viewing a packaging item
   useEffect(() => {
@@ -293,6 +314,7 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
     return () => {
       cancelAnimationFrame(frame);
       subject.setFoldPlaying(false);
+      subject.dispose();
       packagingSubjectRef.current = null;
     };
   }, [activeItem, assetUrls, assetsReady]);
@@ -580,223 +602,306 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
         </aside>
       )}
 
-      {/* Full-Bleed Interactive 3D Viewport */}
-      <section className={styles.stageWrap} aria-label={`Interactive 3D viewer for ${activeItem.name}`}>
-        {assetsReady ? (
-          <SceneCanvas
-            ref={sceneRef}
-            model={beverageModel}
-            proceduralSubject={isPackaging ? packagingSubject : null}
-            subjectName={activeItem.name}
-            qualityPreference={quality}
-            settings={effectiveSettings}
-            artwork={beverageLabelUrl}
-            onStatus={(s) => setSceneStatus(s.phase)}
-          />
-        ) : (
-          <div className={styles.loadingOverlay}>Loading 3D review assets…</div>
-        )}
-
-        {/* Contextual Controls (Fold/Dimensions for CAD, Angles/Spin for Bottles, Zoom/Reset for all) */}
-        <div className={styles.floatingControls}>
-          {isPackaging && readyShare.options.allowFold && (
-            <div className={styles.foldCard}>
-              <button
-                type="button"
-                className={styles.foldPlayBtn}
-                onClick={handleToggleFoldPlay}
-                aria-label={foldPlaying ? "Pause fold animation" : "Play fold animation"}
-              >
-                {foldPlaying ? <Pause size={14} /> : <Play size={14} />}
-              </button>
-              <label className={styles.foldSliderLabel}>
-                <span>Fold {Math.round(foldProgress * 100)}%</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={foldProgress}
-                  onChange={(e) => handleFoldSlider(Number(e.target.value))}
-                />
-              </label>
-              {readyShare.options.allowDimensions && (
-                <button
-                  type="button"
-                  className={`${styles.miniToggle} ${showDimensions ? styles.miniToggleOn : ""}`}
-                  onClick={handleToggleDimensions}
-                  title="Toggle 3D millimeter dimensions"
-                >
-                  <Ruler size={13} /> mm
-                </button>
-              )}
-            </div>
+      {/* Main Workspace: 3D Stage + Desktop Rounded Right Panel (Bottom Dock on Mobile) */}
+      <div className={styles.viewerBody}>
+        <section className={styles.stageWrap} aria-label={`Interactive 3D viewer for ${activeItem.name}`}>
+          {assetsReady ? (
+            <SceneCanvas
+              ref={sceneRef}
+              model={beverageModel}
+              proceduralSubject={isPackaging ? packagingSubject : null}
+              deferSelection={isPackaging && !packagingSubject}
+              subjectName={activeItem.name}
+              qualityPreference={quality}
+              settings={effectiveSettings}
+              artwork={beverageLabelUrl}
+              onStatus={(s) => setSceneStatus(s.phase)}
+            />
+          ) : (
+            <div className={styles.loadingOverlay}>Loading 3D review assets…</div>
           )}
 
-          <div className={styles.cameraRow}>
-            {isPackaging ? (
-              PACKAGING_CAMERAS.map((cam) => (
+          {panelCollapsed && (
+            <button
+              type="button"
+              className={styles.panelReopenBtn}
+              onClick={() => setPanelCollapsed(false)}
+              aria-label="Show 3D objects panel"
+            >
+              <PanelRightOpen size={15} />
+              <span>Objects ({items.length})</span>
+            </button>
+          )}
+
+          {/* Contextual Controls (Fold/Dimensions for CAD, Angles/Spin for Bottles, Zoom/Reset for all) */}
+          <div className={styles.floatingControls}>
+            {isPackaging && readyShare.options.allowFold && (
+              <div className={styles.foldCard}>
                 <button
-                  key={cam.id}
                   type="button"
-                  className={styles.camPill}
-                  onClick={() => sceneRef.current?.cameraAngles(cam.yaw, cam.pitch, cam.fov, true)}
+                  className={styles.foldPlayBtn}
+                  onClick={handleToggleFoldPlay}
+                  aria-label={foldPlaying ? "Pause fold animation" : "Play fold animation"}
                 >
-                  {cam.label}
+                  {foldPlaying ? <Pause size={14} /> : <Play size={14} />}
                 </button>
-              ))
-            ) : (
-              <>
-                {BEVERAGE_CAMERAS.map((cam) => (
+                <label className={styles.foldSliderLabel}>
+                  <span>Fold {Math.round(foldProgress * 100)}%</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={foldProgress}
+                    onChange={(e) => handleFoldSlider(Number(e.target.value))}
+                  />
+                </label>
+                {readyShare.options.allowDimensions && (
+                  <button
+                    type="button"
+                    className={`${styles.miniToggle} ${showDimensions ? styles.miniToggleOn : ""}`}
+                    onClick={handleToggleDimensions}
+                    title="Toggle 3D millimeter dimensions"
+                  >
+                    <Ruler size={13} /> mm
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className={styles.cameraRow}>
+              {isPackaging ? (
+                PACKAGING_CAMERAS.map((cam) => (
                   <button
                     key={cam.id}
                     type="button"
                     className={styles.camPill}
-                    onClick={() => {
-                      setAutoSpin(false);
-                      sceneRef.current?.camera(cam.id);
-                    }}
+                    onClick={() => sceneRef.current?.cameraAngles(cam.yaw, cam.pitch, cam.fov, true)}
                   >
                     {cam.label}
                   </button>
-                ))}
-                <button
-                  type="button"
-                  className={`${styles.camPill} ${autoSpin ? styles.camPillActive : ""}`}
-                  onClick={() => setAutoSpin((v) => !v)}
-                >
-                  <RotateCw size={12} /> Spin
-                </button>
-              </>
-            )}
+                ))
+              ) : (
+                <>
+                  {BEVERAGE_CAMERAS.map((cam) => (
+                    <button
+                      key={cam.id}
+                      type="button"
+                      className={styles.camPill}
+                      onClick={() => {
+                        setAutoSpin(false);
+                        sceneRef.current?.camera(cam.id);
+                      }}
+                    >
+                      {cam.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className={`${styles.camPill} ${autoSpin ? styles.camPillActive : ""}`}
+                    onClick={() => setAutoSpin((v) => !v)}
+                  >
+                    <RotateCw size={12} /> Spin
+                  </button>
+                </>
+              )}
 
-            <span className={styles.divider} aria-hidden="true" />
-            <button
-              type="button"
-              className={styles.camIcon}
-              aria-label="Zoom out"
-              onClick={() => sceneRef.current?.zoom(1 / 1.18)}
-            >
-              <Minus size={14} />
-            </button>
-            <button
-              type="button"
-              className={styles.camIcon}
-              aria-label="Zoom in"
-              onClick={() => sceneRef.current?.zoom(1.18)}
-            >
-              <Plus size={14} />
-            </button>
-            <button
-              type="button"
-              className={styles.camIcon}
-              aria-label="Reset camera"
-              title="Reset view"
-              onClick={() => sceneRef.current?.reset()}
-            >
-              <RotateCcw size={13} />
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* Bottom Multi-Object Switcher Dock */}
-      <footer className={styles.switcherDock} aria-label="Switch 3D objects in this project">
-        <div className={styles.dockTop}>
-          {beverageCount > 0 && packagingCount > 0 ? (
-            <div className={styles.filterTabs} role="tablist" aria-label="Filter objects by category">
+              <span className={styles.divider} aria-hidden="true" />
               <button
                 type="button"
-                role="tab"
-                aria-selected={filterTab === "all"}
-                onClick={() => setFilterTab("all")}
+                className={styles.camIcon}
+                aria-label="Zoom out"
+                onClick={() => sceneRef.current?.zoom(1 / 1.18)}
               >
-                All ({items.length})
+                <Minus size={14} />
               </button>
               <button
                 type="button"
-                role="tab"
-                aria-selected={filterTab === "beverage"}
-                onClick={() => setFilterTab("beverage")}
+                className={styles.camIcon}
+                aria-label="Zoom in"
+                onClick={() => sceneRef.current?.zoom(1.18)}
               >
-                <Milk size={12} /> Bottles &amp; Cans ({beverageCount})
+                <Plus size={14} />
               </button>
               <button
                 type="button"
-                role="tab"
-                aria-selected={filterTab === "packaging"}
-                onClick={() => setFilterTab("packaging")}
+                className={styles.camIcon}
+                aria-label="Reset camera"
+                title="Reset view"
+                onClick={() => sceneRef.current?.reset()}
               >
-                <Package size={12} /> Boxes &amp; Trays ({packagingCount})
+                <RotateCcw size={13} />
               </button>
             </div>
-          ) : (
-            <span className={styles.dockCount}>
-              {items.length} {items.length === 1 ? "3D object" : "3D objects"} in project
-            </span>
-          )}
-
-          <span className={styles.dragHint}>
-            {sceneStatus === "ready" ? "Drag to rotate · Scroll / pinch to zoom" : "Preparing 3D…"}
-          </span>
-        </div>
-
-        <div className={styles.switcherRow}>
-          {filteredItems.length > 1 && (
-            <button
-              type="button"
-              className={styles.navArrow}
-              aria-label="Previous 3D object"
-              onClick={() => stepItem(-1)}
-            >
-              <ChevronLeft size={16} />
-            </button>
-          )}
-          <div className={styles.objectStrip}>
-            {filteredItems.map((item) => {
-              const selected = item.id === activeItem.id;
-              const thumb =
-                (item.thumbnailHash && assetUrls[item.thumbnailHash]) ||
-                (item.payload.kind === "beverage"
-                  ? getLabModel(item.payload.settings.modelId).poster
-                  : undefined);
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`${styles.objectBtn} ${selected ? styles.objectBtnActive : ""}`}
-                  aria-pressed={selected}
-                  onClick={() => applyItemSelection(item)}
-                >
-                  <span className={styles.objectThumb}>
-                    {thumb ? (
-                      <img src={thumb} alt="" />
-                    ) : item.kind === "packaging" ? (
-                      <Package size={18} />
-                    ) : (
-                      <Milk size={18} />
-                    )}
-                  </span>
-                  <span className={styles.objectMeta}>
-                    <strong>{item.name}</strong>
-                    <small>{item.kind === "packaging" ? "Box / Tray" : "Bottle / Can"}</small>
-                  </span>
-                </button>
-              );
-            })}
           </div>
-          {filteredItems.length > 1 && (
-            <button
-              type="button"
-              className={styles.navArrow}
-              aria-label="Next 3D object"
-              onClick={() => stepItem(1)}
-            >
-              <ChevronRight size={16} />
-            </button>
-          )}
-        </div>
-      </footer>
+        </section>
+
+        {/* Multi-Object Switcher: Rounded Right Panel on Desktop, Bottom Dock on Mobile */}
+        <aside
+          className={`${styles.switcherDock} ${panelCollapsed ? styles.switcherDockCollapsed : ""}`}
+          aria-label="Switch 3D objects in this project"
+        >
+          <div className={styles.panelHead}>
+            <div className={styles.panelHeadTitle}>
+              <span className={styles.panelTitle}>3D Objects</span>
+              <span className={styles.panelCounter}>
+                {activeFilteredIndex >= 0
+                  ? `${activeFilteredIndex + 1} / ${filteredItems.length}`
+                  : filteredItems.length}
+              </span>
+            </div>
+            <div className={styles.panelHeadActions}>
+              {filteredItems.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    className={styles.panelIconBtn}
+                    aria-label="Previous 3D object"
+                    title="Previous object"
+                    onClick={() => stepItem(-1)}
+                  >
+                    <ChevronLeft size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.panelIconBtn}
+                    aria-label="Next 3D object"
+                    title="Next object"
+                    onClick={() => stepItem(1)}
+                  >
+                    <ChevronRight size={15} />
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                className={styles.panelIconBtn}
+                aria-label="Collapse 3D objects panel"
+                title="Hide panel"
+                onClick={() => setPanelCollapsed(true)}
+              >
+                <PanelRightClose size={15} />
+              </button>
+            </div>
+          </div>
+
+          <div
+            className={`${styles.dockTop} ${
+              !(beverageCount > 0 && packagingCount > 0) ? styles.dockTopMobileOnly : ""
+            }`}
+          >
+            {beverageCount > 0 && packagingCount > 0 ? (
+              <div className={styles.filterTabs} role="tablist" aria-label="Filter objects by category">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={filterTab === "all"}
+                  onClick={() => setFilterTab("all")}
+                >
+                  All ({items.length})
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={filterTab === "beverage"}
+                  onClick={() => setFilterTab("beverage")}
+                >
+                  <Milk size={12} /> Bottles &amp; Cans ({beverageCount})
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={filterTab === "packaging"}
+                  onClick={() => setFilterTab("packaging")}
+                >
+                  <Package size={12} /> Boxes &amp; Trays ({packagingCount})
+                </button>
+              </div>
+            ) : (
+              <span className={styles.dockCount}>
+                {items.length} {items.length === 1 ? "3D object" : "3D objects"} in project
+              </span>
+            )}
+
+            <span className={styles.dragHint}>
+              {sceneStatus === "ready" ? "Drag to rotate · Scroll / pinch to zoom" : "Preparing 3D…"}
+            </span>
+          </div>
+
+          <div className={styles.switcherRow}>
+            {filteredItems.length > 1 && (
+              <button
+                type="button"
+                className={styles.navArrow}
+                aria-label="Previous 3D object"
+                onClick={() => stepItem(-1)}
+              >
+                <ChevronLeft size={16} />
+              </button>
+            )}
+            <div className={styles.objectStrip}>
+              {filteredItems.map((item) => {
+                const selected = item.id === activeItem.id;
+                const thumb =
+                  (item.thumbnailHash && assetUrls[item.thumbnailHash]) ||
+                  (item.payload.kind === "beverage"
+                    ? getLabModel(item.payload.settings.modelId).poster
+                    : undefined);
+                return (
+                  <button
+                    key={item.id}
+                    ref={selected ? activeItemBtnRef : undefined}
+                    type="button"
+                    className={`${styles.objectBtn} ${selected ? styles.objectBtnActive : ""}`}
+                    aria-pressed={selected}
+                    onClick={() => applyItemSelection(item)}
+                  >
+                    <span className={styles.objectThumb}>
+                      {thumb ? (
+                        <img src={thumb} alt="" />
+                      ) : item.kind === "packaging" ? (
+                        <Package size={18} />
+                      ) : (
+                        <Milk size={18} />
+                      )}
+                    </span>
+                    <span className={styles.objectMeta}>
+                      <strong>{item.name}</strong>
+                      <small>{item.kind === "packaging" ? "Box / Tray" : "Bottle / Can"}</small>
+                      {item.subtitle && <span className={styles.objectSubtitle}>{item.subtitle}</span>}
+                    </span>
+                    {selected && (
+                      <span className={styles.objectActiveCheck} aria-hidden="true">
+                        <Check size={13} />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {filteredItems.length > 1 && (
+              <button
+                type="button"
+                className={styles.navArrow}
+                aria-label="Next 3D object"
+                onClick={() => stepItem(1)}
+              >
+                <ChevronRight size={16} />
+              </button>
+            )}
+          </div>
+
+          <div className={styles.panelFooter}>
+            <span
+              className={`${styles.statusDot} ${sceneStatus === "ready" ? styles.statusDotReady : ""}`}
+              aria-hidden="true"
+            />
+            <span>
+              {sceneStatus === "ready" ? "Drag to rotate · Scroll / pinch to zoom" : "Preparing 3D…"}
+            </span>
+          </div>
+        </aside>
+      </div>
     </main>
   );
 }

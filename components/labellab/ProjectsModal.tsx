@@ -466,7 +466,7 @@ export default function ProjectsModal({
                       {detailBusyKind === "extend" ? (
                         <Loader2 size={12} className={styles.spin} />
                       ) : extendCost > 0 ? (
-                        <Image src="/branding/LLCoin.svg" alt="" width={12} height={12} aria-hidden="true" />
+                        <Image src="/branding/hypermockup-coin.svg" alt="" width={12} height={12} aria-hidden="true" />
                       ) : (
                         <Clock size={12} />
                       )}
@@ -778,7 +778,7 @@ export default function ProjectsModal({
                                 <Loader2 size={12} className={styles.spin} />
                               ) : extendCost > 0 ? (
                                 <Image
-                                  src="/branding/LLCoin.svg"
+                                  src="/branding/hypermockup-coin.svg"
                                   alt=""
                                   width={12}
                                   height={12}

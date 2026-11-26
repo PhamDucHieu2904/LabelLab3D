@@ -336,3 +336,124 @@ test('share asset store rejects disguised HTML/SVG payloads and shareCost saniti
   assert.equal(siteConfig.sanitizeSiteSettings({ shareCost: 35 }).shareCost, 35);
   assert.equal(siteConfig.sanitizeSiteSettings({ shareCost: -5 }).shareCost, 20);
 });
+
+test('SharedProjectViewer registers downloaded share blobs via createLocalArtwork so beverage labels pass texture validation', () => {
+  const viewerSrc = fs.readFileSync(path.resolve(ROOT, 'components/share/SharedProjectViewer.tsx'), 'utf8');
+  assert.ok(
+    viewerSrc.includes('createLocalArtwork(blob)'),
+    'SharedProjectViewer must register fetched share asset blobs with createLocalArtwork',
+  );
+  assert.ok(
+    viewerSrc.includes('releaseLocalArtwork('),
+    'SharedProjectViewer must release registered artwork URLs via releaseLocalArtwork',
+  );
+  assert.equal(
+    viewerSrc.includes('URL.createObjectURL('),
+    false,
+    'SharedProjectViewer must not bypass createLocalArtwork with raw URL.createObjectURL',
+  );
+
+  // Verify end-to-end that resolveMaterialOverride accepts a createLocalArtwork URL and rejects an unregistered blob URL.
+  const load = createLoader();
+  const localArtwork = load(path.resolve(ROOT, 'lib/labellab/local-artwork.ts'));
+  const viewerConfig = load(path.resolve(ROOT, 'lib/viewer-config.ts'));
+
+  const registeredUrl = localArtwork.createLocalArtwork(new Blob([FAKE_WEBP_1], { type: 'image/webp' }));
+  try {
+    assert.equal(
+      viewerConfig.resolveMaterialOverride({ baseColorMap: registeredUrl }).baseColorMap,
+      registeredUrl,
+    );
+    assert.equal(
+      viewerConfig.resolveMaterialOverride({ baseColorMap: 'blob:https://hypermockup.com/unregistered-id' }).baseColorMap,
+      '',
+    );
+  } finally {
+    localArtwork.releaseLocalArtwork(registeredUrl);
+  }
+});
+
+test('sweepExpiredSharedProjects and pruneOrphanShareAssets garbage-collect expired, revoked, and orphaned assets', async () => {
+  const load = createLoader();
+  const shares = load(path.resolve(ROOT, 'lib/server/shares.ts'));
+  const shareAssets = load(path.resolve(ROOT, 'lib/server/share-assets.ts'));
+  const prefs = load(path.resolve(ROOT, 'lib/labellab/preferences.ts'));
+
+  const { DB, sqlite } = createSqliteD1();
+  const r2 = createMockR2();
+  const env = { DB, SHARE_BUCKET: r2.bucket, SHARE_UNLOCK_SECRET: 'gc-secret' };
+
+  const hash1 = await shareAssets.sha256Hex(FAKE_WEBP_1);
+  const hash2 = await shareAssets.sha256Hex(FAKE_WEBP_2);
+
+  const soonIso = new Date(Date.now() + 2 * 3_600_000).toISOString();
+  const expiring = await shares.createSharedProject(env, 'user_1', {
+    title: 'Short-lived Share',
+    expiresAt: soonIso,
+    items: [
+      {
+        name: 'Bottle 1',
+        kind: 'beverage',
+        subtitle: '',
+        sortOrder: 0,
+        payload: { kind: 'beverage', settings: prefs.DEFAULT_PREFERENCES, labelHash: hash1 },
+      },
+    ],
+    assets: [{ expectedHash: hash1, bytes: FAKE_WEBP_1 }],
+  });
+
+  const revocable = await shares.createSharedProject(env, 'user_1', {
+    title: 'Revocable Share',
+    items: [
+      {
+        name: 'Bottle 2',
+        kind: 'beverage',
+        subtitle: '',
+        sortOrder: 0,
+        payload: { kind: 'beverage', settings: prefs.DEFAULT_PREFERENCES, labelHash: hash2 },
+      },
+    ],
+    assets: [{ expectedHash: hash2, bytes: FAKE_WEBP_2 }],
+  });
+  assert.equal(r2.objects.size, 2);
+
+  // Revoking immediately releases its heavy asset even before the sweep removes the row
+  await shares.updateSharedProject(env, 'user_1', revocable.id, { status: 'revoked' });
+  assert.equal(r2.objects.size, 1);
+  assert.equal(await shareAssets.getShareAsset(env, hash2), null);
+
+  // Fast-forward past expiring.expiresAt and sweep -> both revoked & expired rows and R2 objects are removed
+  const swept = await shares.sweepExpiredSharedProjects(env, { nowMs: Date.parse(soonIso) + 60_000 });
+  assert.equal(swept.deletedIds.includes(expiring.id), true);
+  assert.equal(swept.deletedIds.includes(revocable.id), true);
+  assert.equal(r2.objects.size, 0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS c FROM shared_projects').get().c, 0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS c FROM shared_assets').get().c, 0);
+
+  // Simulate a historical orphan asset (e.g. from pre-fix ref_count leak)
+  await shareAssets.putShareAsset(env, { bytes: FAKE_WEBP_1 });
+  assert.equal(r2.objects.size, 1);
+  // Fresh orphan inside grace window (minAgeMs = 10 min) is spared so in-flight uploads stay safe
+  assert.equal(await shareAssets.pruneOrphanShareAssets(env, { nowMs: Date.now() }), 0);
+  assert.equal(r2.objects.size, 1);
+  // Once older than grace window, orphan is pruned from both R2 and D1
+  assert.equal(await shareAssets.pruneOrphanShareAssets(env, { nowMs: Date.now() + 15 * 60_000 }), 1);
+  assert.equal(r2.objects.size, 0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS c FROM shared_assets').get().c, 0);
+});
+
+test('SharedProjectViewer renders desktop right-side rounded panel while keeping mobile bottom bar', () => {
+  const viewerCss = fs.readFileSync(
+    path.resolve(ROOT, 'components/share/SharedProjectViewer.module.css'),
+    'utf8',
+  );
+  const viewerTsx = fs.readFileSync(
+    path.resolve(ROOT, 'components/share/SharedProjectViewer.tsx'),
+    'utf8',
+  );
+  assert.ok(viewerTsx.includes('styles.viewerBody'), 'Uses split viewerBody workspace container');
+  assert.ok(viewerTsx.includes('styles.panelHead'), 'Renders desktop panel header with controls');
+  assert.ok(viewerTsx.includes('styles.panelReopenBtn'), 'Provides reopen button when desktop panel is collapsed');
+  assert.ok(viewerCss.includes('border-radius: 20px'), 'Desktop right panel uses rounded corners');
+  assert.ok(viewerCss.includes('@media (max-width: 900px)'), 'Preserves mobile bottom-bar layout below 900px');
+});

@@ -4858,11 +4858,11 @@ select {
 .render-panel-toggle input::after { content: ""; position: absolute; top: 50%; left: 2px; display: block; width: var(--toggle-thumb); height: var(--toggle-thumb); border-radius: 50%; background: #fff; box-shadow: 0 1px 3px #14251b26; transform: translateY(-50%); transition: transform 150ms ease; }
 .render-panel-toggle input:checked { background: #f3b7ce; border-color: #f3b7ce; }
 .render-panel-toggle input:checked::after { transform: translate(calc(var(--toggle-width) - var(--toggle-thumb) - 8px), -50%); }
-.render-panel-submit { position: relative; justify-content: center; width: 100%; min-height: clamp(58px, 14cqw, 108px); padding: 12px clamp(16px, 4.2cqw, 30px); border: 1px solid transparent; border-radius: clamp(18px, 3.6cqw, 28px); background: #f3b7ce; color: #b32c59; font-size: clamp(18px, 4.2cqw, 31px); line-height: 1; font-weight: 700; letter-spacing: -.025em; cursor: pointer; box-shadow: none; transition: transform 180ms ease, background 180ms ease; }
-.render-panel-submit-label { display: inline-flex; align-items: center; justify-content: center; gap: 10px; margin: 0; }
-.render-panel-cost { position: absolute; right: clamp(16px, 4.2cqw, 30px); top: 50%; display: inline-flex; align-items: center; gap: 6px; margin: 0; transform: translateY(-50%); color: #a52250; font-size: clamp(12px, 2.25cqw, 16px); font-weight: 650; letter-spacing: 0; }
+.render-panel-submit { position: relative; justify-content: space-between; gap: 12px; width: 100%; min-height: clamp(58px, 14cqw, 108px); padding: 12px clamp(18px, 5cqw, 30px); border: 1px solid transparent; border-radius: clamp(18px, 3.6cqw, 28px); background: #f3b7ce; color: #b32c59; font-size: clamp(18px, 4.2cqw, 31px); line-height: 1; font-weight: 700; letter-spacing: -.025em; cursor: pointer; box-shadow: none; transition: transform 180ms ease, background 180ms ease; }
+.render-panel-submit-label { display: inline-flex; align-items: center; justify-content: flex-start; gap: 10px; min-width: 0; margin: 0; text-align: left; }
+.render-panel-cost { display: inline-flex; align-items: center; flex: 0 0 auto; gap: 6px; margin: 0; color: #a52250; font-size: clamp(16px, 3.6cqw, 24px); line-height: 1; font-weight: 700; letter-spacing: 0; }
 .render-panel-cost svg { color: #b77722; fill: #f5c04d; stroke: #a8661a; }
-.render-panel-cost img { width: 17px; height: 17px; object-fit: contain; }
+.render-panel-cost img { width: clamp(22px, 5cqw, 30px); height: clamp(22px, 5cqw, 30px); flex: 0 0 auto; object-fit: contain; }
 .render-panel-cost strong { font-variant-numeric: tabular-nums; }
 .render-panel-submit:not(:disabled):hover { transform: translateY(-2px); background: #f7c1d6; box-shadow: none; }
 .render-panel-submit:disabled { opacity: .55; cursor: default; box-shadow: none; }

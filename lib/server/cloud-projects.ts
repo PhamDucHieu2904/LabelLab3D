@@ -15,11 +15,17 @@ import {
 } from "@/lib/share/contracts";
 import { nowIso, randomId, requireDb, type AppEnv } from "./db";
 import {
+  pruneOrphanShareAssets,
   putShareAsset,
   releaseShareAssets,
   retainExistingShareAssets,
 } from "./share-assets";
-import { ensureShareTables, type UploadedShareAssetInput } from "./shares";
+import {
+  deleteLinkedSharesForProject,
+  ensureShareTables,
+  sweepExpiredSharedProjects,
+  type UploadedShareAssetInput,
+} from "./shares";
 import { getLiveSiteSettings } from "./site-config";
 import { appendLedgerEntry, commitCoins, releaseCoins, reserveCoins } from "./wallet";
 
@@ -509,6 +515,7 @@ export async function sweepExpiredCloudProjects(
         .bind(row.id, cutoffIso)
         .run();
       if ((del.meta?.changes as number | undefined) === 1) {
+        await db.prepare("DELETE FROM cloud_project_items WHERE project_id=?").bind(row.id).run();
         if (hashes.length > 0) {
           await releaseShareAssets(env, hashes).catch(() => {});
         }
@@ -527,8 +534,10 @@ export async function listUserCloudProjects(
 ): Promise<CloudProjectSummary[]> {
   await sweepExpiredCloudProjects(env, { userId, nowMs: options?.nowMs });
   if (options?.includeGlobalSweep) {
-    // Bounded background-safe opportunistic cleanup for stale projects of inactive accounts.
+    // Bounded background-safe opportunistic cleanup for stale projects, expired shares, and orphaned assets.
     await sweepExpiredCloudProjects(env, { nowMs: options?.nowMs, limit: 5 }).catch(() => {});
+    await sweepExpiredSharedProjects(env, { nowMs: options?.nowMs, limit: 5 }).catch(() => {});
+    await pruneOrphanShareAssets(env, { nowMs: options?.nowMs, limit: 10 }).catch(() => {});
   }
 
   const db = await ensureCloudProjectTables(env);
@@ -885,7 +894,11 @@ export async function extendCloudProject(
   }
 }
 
-export async function deleteCloudProject(env: AppEnv, userId: string, projectId: string): Promise<void> {
+export async function deleteCloudProject(
+  env: AppEnv,
+  userId: string,
+  projectId: string,
+): Promise<{ deletedShareIds: string[] }> {
   const db = await ensureCloudProjectTables(env);
   const existing = await db
     .prepare("SELECT id FROM cloud_projects WHERE id=? AND user_id=?")
@@ -893,11 +906,21 @@ export async function deleteCloudProject(env: AppEnv, userId: string, projectId:
     .first<{ id: string }>();
   if (!existing) throw new Error("NOT_FOUND");
 
-  const hashes = await collectProjectAssetHashes(env, projectId);
-  await db.prepare("DELETE FROM cloud_projects WHERE id=? AND user_id=?").bind(projectId, userId).run();
-  if (hashes.length > 0) {
-    await releaseShareAssets(env, hashes).catch(() => {});
+  const projectHashes = await collectProjectAssetHashes(env, projectId);
+  const { deletedShareIds, releasedHashes: shareHashes } = await deleteLinkedSharesForProject(
+    env,
+    userId,
+    projectId,
+  );
+  await db.batch([
+    db.prepare("DELETE FROM cloud_project_items WHERE project_id=?").bind(projectId),
+    db.prepare("DELETE FROM cloud_projects WHERE id=? AND user_id=?").bind(projectId, userId),
+  ]);
+  const allHashes = [...new Set([...projectHashes, ...shareHashes])];
+  if (allHashes.length > 0) {
+    await releaseShareAssets(env, allHashes).catch(() => {});
   }
+  return { deletedShareIds };
 }
 
 export async function deleteCloudProjectItem(
@@ -905,7 +928,7 @@ export async function deleteCloudProjectItem(
   userId: string,
   projectId: string,
   itemId: string,
-): Promise<{ projectDeleted: boolean; project: CloudProjectSummary | null }> {
+): Promise<{ projectDeleted: boolean; project: CloudProjectSummary | null; deletedShareIds?: string[] }> {
   const db = await ensureCloudProjectTables(env);
   const existingProject = await db
     .prepare("SELECT id FROM cloud_projects WHERE id=? AND user_id=?")
@@ -929,11 +952,17 @@ export async function deleteCloudProjectItem(
   const remainingCount = Number(remaining?.count ?? 0);
 
   if (remainingCount <= 0) {
+    const { deletedShareIds, releasedHashes: shareHashes } = await deleteLinkedSharesForProject(
+      env,
+      userId,
+      projectId,
+    );
     await db.prepare("DELETE FROM cloud_projects WHERE id=? AND user_id=?").bind(projectId, userId).run();
-    if (itemHashes.length > 0) {
-      await releaseShareAssets(env, itemHashes).catch(() => {});
+    const allHashes = [...new Set([...itemHashes, ...shareHashes])];
+    if (allHashes.length > 0) {
+      await releaseShareAssets(env, allHashes).catch(() => {});
     }
-    return { projectDeleted: true, project: null };
+    return { projectDeleted: true, project: null, deletedShareIds };
   }
 
   const totalBytes = await computeProjectTotalBytes(env, projectId);

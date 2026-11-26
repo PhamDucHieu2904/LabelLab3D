@@ -292,3 +292,136 @@ test('Cloud Projects 30-day TTL, owner isolation, zero-reupload Share 3D, 10-coi
   assert.equal(r2.objects.size, 0);
   assert.equal(r2.deletedCount, 2);
 });
+
+test('deleteCloudProject cascades linked shares, fixes shared-asset ref_count leaks across multi-item saves, and preserves shared assets on single-item delete', async () => {
+  const load = createLoader();
+  const cloudMod = load(path.resolve(ROOT, 'lib/server/cloud-projects.ts'));
+  const sharesMod = load(path.resolve(ROOT, 'lib/server/shares.ts'));
+  const assetsMod = load(path.resolve(ROOT, 'lib/server/share-assets.ts'));
+
+  // Test both D1 blob fallback (no SHARE_BUCKET) and exact DB cleanup
+  const db = createSqliteD1();
+  const env = { DB: db };
+  seedUser(db, 'user_clean', 'clean@hypermockup.com', 50);
+
+  const labelBytes = makeWebpVp8x(1024, 512, 31);
+  const labelHash = await assetsMod.sha256Hex(labelBytes);
+  const thumb1Bytes = makeWebpVp8x(320, 320, 32);
+  const thumb1Hash = await assetsMod.sha256Hex(thumb1Bytes);
+  const thumb2Bytes = makeWebpVp8x(320, 320, 33);
+  const thumb2Hash = await assetsMod.sha256Hex(thumb2Bytes);
+
+  // Save Item 1 (bottle) first
+  const { project: p1 } = await cloudMod.saveCloudProjectItems(env, 'user_clean', {
+    name: 'Test Share',
+    items: [
+      {
+        name: 'Glass 290ml',
+        kind: 'beverage',
+        subtitle: 'Glass - 290 mL',
+        sortOrder: 0,
+        thumbnailHash: thumb1Hash,
+        payload: { kind: 'beverage', settings: { modelId: 'glass-290-basil' }, labelHash },
+      },
+    ],
+    assets: [
+      { expectedHash: labelHash, bytes: labelBytes },
+      { expectedHash: thumb1Hash, bytes: thumb1Bytes },
+    ],
+  });
+
+  // Save Item 2 (carton packed with the SAME bottle labelHash) in a SEPARATE request
+  const { project: p2 } = await cloudMod.saveCloudProjectItems(env, 'user_clean', {
+    projectId: p1.id,
+    items: [
+      {
+        name: 'Top-Open Carton',
+        kind: 'packaging',
+        subtitle: 'FEFCO 0201',
+        sortOrder: 1,
+        thumbnailHash: thumb2Hash,
+        payload: {
+          kind: 'packaging',
+          settings: { modelId: 'glass-290-basil' },
+          packagingParams: { templateId: 'fefco-0201-rsc', lengthMm: 360, widthMm: 240, heightMm: 220 },
+          bottlePack: { enabled: true, modelId: 'glass-290-basil', cols: 3, rows: 2 },
+          packedBottle: { modelId: 'glass-290-basil', name: 'Glass 290ml', labelHash },
+        },
+      },
+    ],
+    assets: [{ expectedHash: thumb2Hash, bytes: thumb2Bytes }],
+  });
+  assert.equal(p2.itemCount, 2);
+
+  // Create a linked 3D Share pointing to this cloud project
+  const linkedShare = await sharesMod.createSharedProject(env, 'user_clean', {
+    localProjectId: p2.id,
+    title: 'Test Share',
+    items: p2.items.map((it) => ({
+      name: it.name,
+      kind: it.kind,
+      subtitle: it.subtitle,
+      sortOrder: it.sortOrder,
+      thumbnailHash: it.thumbnailHash,
+      payload: it.payload,
+    })),
+    assets: [],
+  });
+
+  // Delete the entire cloud project -> must ALSO delete the linked share AND clear 100% of D1 asset rows/blobs!
+  const delRes = await cloudMod.deleteCloudProject(env, 'user_clean', p2.id);
+  assert.deepEqual(delRes.deletedShareIds, [linkedShare.id]);
+  assert.equal((await sharesMod.getPublicSharedProject(env, linkedShare.token)).state, 'not_found');
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS c FROM cloud_projects').get().c, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS c FROM cloud_project_items').get().c, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS c FROM shared_projects').get().c, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS c FROM shared_project_items').get().c, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS c FROM shared_assets').get().c, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS c FROM shared_asset_blobs').get().c, 0);
+
+  // Reverse scenario: save BOTH items in ONE batch sharing labelHash, then delete ONLY Item 1.
+  // labelHash must stay intact for Item 2, while thumb1Hash is immediately cleaned up!
+  const { project: batchProj, savedItemIds } = await cloudMod.saveCloudProjectItems(env, 'user_clean', {
+    name: 'Batch Shared Asset Project',
+    items: [
+      {
+        name: 'Bottle A',
+        kind: 'beverage',
+        subtitle: '',
+        sortOrder: 0,
+        thumbnailHash: thumb1Hash,
+        payload: { kind: 'beverage', settings: { modelId: 'glass-290-basil' }, labelHash },
+      },
+      {
+        name: 'Carton A',
+        kind: 'packaging',
+        subtitle: '',
+        sortOrder: 1,
+        thumbnailHash: thumb2Hash,
+        payload: {
+          kind: 'packaging',
+          settings: { modelId: 'glass-290-basil' },
+          packagingParams: { templateId: 'fefco-0201-rsc', lengthMm: 360, widthMm: 240, heightMm: 220 },
+          packedBottle: { modelId: 'glass-290-basil', labelHash },
+        },
+      },
+    ],
+    assets: [
+      { expectedHash: labelHash, bytes: labelBytes },
+      { expectedHash: thumb1Hash, bytes: thumb1Bytes },
+      { expectedHash: thumb2Hash, bytes: thumb2Bytes },
+    ],
+  });
+
+  const item1Del = await cloudMod.deleteCloudProjectItem(env, 'user_clean', batchProj.id, savedItemIds[0]);
+  assert.equal(item1Del.projectDeleted, false);
+  assert.equal(await assetsMod.getShareAsset(env, thumb1Hash), null, 'Deleted item thumbnail is freed');
+  assert.notEqual(await assetsMod.getShareAsset(env, labelHash), null, 'Shared label asset stays alive for Item 2');
+  assert.notEqual(await assetsMod.getShareAsset(env, thumb2Hash), null, 'Item 2 thumbnail stays alive');
+
+  // Deleting last item deletes project and cleans up remaining assets completely
+  const item2Del = await cloudMod.deleteCloudProjectItem(env, 'user_clean', batchProj.id, savedItemIds[1]);
+  assert.equal(item2Del.projectDeleted, true);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS c FROM shared_assets').get().c, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS c FROM shared_asset_blobs').get().c, 0);
+});
