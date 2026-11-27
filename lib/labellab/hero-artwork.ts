@@ -65,8 +65,8 @@ export const HERO_SHOWCASE_SCENES: readonly HeroShowcaseScene[] = Object.freeze(
     shortEn: "Can 330",
     badgeVi: "Can 330 mL",
     badgeEn: "Can 330 mL",
-    specVi: "Kim loại PBR · In bọc 360°",
-    specEn: "PBR Aluminum · 360° Wrap",
+    specVi: "Kim loại PBR · In màng",
+    specEn: "PBR Aluminum · Sleeve Print",
     studioHref: "/studio?model=can-mango#workspace",
     accent: "#ffb84d",
     stageGradient:

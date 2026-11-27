@@ -99,15 +99,11 @@ export default function SystemUpdatesCard({
       <div className={styles.header}>
         <div className={styles.titleRow}>
           <h2>{t.home.updatesHeading}</h2>
-          {unreadCount > 0 ? (
+          {unreadCount > 0 && (
             <span className={styles.unreadBadge} aria-label={`${unreadCount} ${t.home.unreadLabel}`}>
               {unreadCount}
             </span>
-          ) : announcements.length > 0 ? (
-            <span className={styles.allReadBadge} title={t.home.allRead}>
-              <CheckCheck size={13} aria-hidden="true" />
-            </span>
-          ) : null}
+          )}
         </div>
 
         <div className={styles.headerActions}>

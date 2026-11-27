@@ -307,10 +307,10 @@ export type StudioMessages = {
     clientNote: string;
     clientNotePlaceholder: string;
     linkExpiry: string;
+    exp1d: string;
     exp7d: string;
+    exp14d: string;
     exp30d: string;
-    exp90d: string;
-    expNever: string;
     accessProtection: string;
     requirePasscode: string;
     newPasscodeHint: string;
@@ -868,10 +868,10 @@ export const VI_STUDIO_MESSAGES: StudioMessages = {
     clientNote: "Ghi chú cho người xem (tùy chọn)",
     clientNotePlaceholder: "VD: Kéo xoay xem chai 3D và kéo thanh gập mở nắp khay 6 chai.",
     linkExpiry: "Thời hạn link",
+    exp1d: "1 ngày",
     exp7d: "7 ngày",
-    exp30d: "30 ngày (Khuyên dùng)",
-    exp90d: "90 ngày",
-    expNever: "Không hết hạn",
+    exp14d: "14 ngày",
+    exp30d: "30 ngày (Tối đa)",
     accessProtection: "Bảo mật truy cập",
     requirePasscode: "Yêu cầu mật khẩu khi mở link",
     newPasscodeHint: "Mật khẩu mới (để trống nếu giữ nguyên)",
@@ -1539,10 +1539,10 @@ export const EN_STUDIO_MESSAGES: StudioMessages = {
     clientNote: "Note for viewers (optional)",
     clientNotePlaceholder: "e.g. Drag to inspect bottle optics and slide to open the 6-pack tray.",
     linkExpiry: "Link expiry",
+    exp1d: "1 day",
     exp7d: "7 days",
-    exp30d: "30 days (Recommended)",
-    exp90d: "90 days",
-    expNever: "No expiration",
+    exp14d: "14 days",
+    exp30d: "30 days (Max)",
     accessProtection: "Access protection",
     requirePasscode: "Require passcode to view",
     newPasscodeHint: "New passcode (leave blank to keep current)",

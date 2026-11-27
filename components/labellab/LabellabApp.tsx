@@ -944,6 +944,7 @@ export default function LabellabApp() {
           mode: "panel",
           panelOverlays: nextOverlays,
         };
+        packagingArtworkRef.current = hydratedState;
         setPackagingArtwork(hydratedState);
         void packagingSubjectRef.current?.syncArtwork(hydratedState);
       })
@@ -1231,6 +1232,7 @@ export default function LabellabApp() {
         suppressPackagingHydrateRef.current = true;
         revokePackagingArtworkUrls(packagingArtworkRef.current);
         const hydratedArt = hydratePackagingArtworkSnapshot(project.packagingArtwork);
+        packagingArtworkRef.current = hydratedArt;
         setPackagingArtwork(hydratedArt);
         void packagingSubjectRef.current?.syncArtwork(hydratedArt);
       }
@@ -1486,6 +1488,7 @@ export default function LabellabApp() {
         },
       },
     };
+    packagingArtworkRef.current = next;
     setPackagingArtwork(next);
     void packagingSubjectRef.current?.syncArtwork(next);
     const panelMeta = solvedPackaging.flatPanels.find((p) => p.id === panelId);
@@ -1514,6 +1517,7 @@ export default function LabellabApp() {
       nextOverlays[key] = updatedOverlay;
     }
     const next: PackagingArtworkState = { ...current, mode: "panel", panelOverlays: nextOverlays };
+    packagingArtworkRef.current = next;
     setPackagingArtwork(next);
     void packagingSubjectRef.current?.syncArtwork(next);
     const panelMeta = solvedPackaging.flatPanels.find((p) => p.id === panelId);
@@ -1732,6 +1736,7 @@ export default function LabellabApp() {
   };
 
   const handlePackagingArtworkChange = (next: PackagingArtworkState) => {
+    packagingArtworkRef.current = next;
     setPackagingArtwork(next);
     void packagingSubjectRef.current?.syncArtwork(next);
   };
@@ -1745,6 +1750,7 @@ export default function LabellabApp() {
       finishMaskUrl: url,
       finishMaskName: file.name,
     };
+    packagingArtworkRef.current = next;
     setPackagingArtwork(next);
     void packagingSubjectRef.current?.syncArtwork(next);
     setToast(`Applied custom Spot UV / Foil mask: ${file.name}`);
@@ -1759,6 +1765,7 @@ export default function LabellabApp() {
       finishMaskUrl: undefined,
       finishMaskName: undefined,
     };
+    packagingArtworkRef.current = next;
     setPackagingArtwork(next);
     void packagingSubjectRef.current?.syncArtwork(next);
   };
@@ -1767,6 +1774,7 @@ export default function LabellabApp() {
     void clearArtworkSelectionsByPrefix(packagingTemplateScopePrefix(packagingParams.templateId)).catch(() => {});
     revokePackagingArtworkUrls(packagingArtworkRef.current);
     const cleared: PackagingArtworkState = { mode: "panel", panelOverlays: {} };
+    packagingArtworkRef.current = cleared;
     setPackagingArtwork(cleared);
     void packagingSubjectRef.current?.syncArtwork(cleared);
     setToast(st.toasts.clearedBoxArtworks);
@@ -2502,7 +2510,7 @@ export default function LabellabApp() {
                   )}
                 </div>
               </div>
-              {hoverTarget && !activeArtworkTarget && !saveDialogOpen && !modal && !artworkEditing && (
+              {hoverTarget && !activeArtworkTarget && !saveDialogOpen && !modal && !artworkEditing && !(isPackaging && packagingViewMode === "2d") && (
                 <div className={pkgStyles.hoverPill} role="status" aria-live="polite">
                   <MousePointerClick size={14} aria-hidden="true" color="#60a5fa" />
                   {hoverTarget.kind === "packaging-face" ? (
@@ -2572,39 +2580,41 @@ export default function LabellabApp() {
                   </div>
                 </div>
                 <div className="vertical-tools">
-                  <div className="camera-dpad" aria-label="Camera navigation">
-                    <button
-                      aria-label="Narrow field of view"
-                      title="Narrow field of view"
-                      onClick={() => sceneRef.current?.fov(-2)}
-                    >
-                      <ArrowUp size={17} />
-                    </button>
-                    <div className="camera-dpad-row">
+                  {!(isPackaging && packagingViewMode === "2d") && (
+                    <div className="camera-dpad" aria-label="Camera navigation">
                       <button
-                        aria-label="Rotate left"
-                        title="Rotate left"
-                        onClick={() => sceneRef.current?.orbit(-0.3, 0)}
+                        aria-label="Narrow field of view"
+                        title="Narrow field of view"
+                        onClick={() => sceneRef.current?.fov(-2)}
                       >
-                        <ArrowLeft size={17} />
+                        <ArrowUp size={17} />
                       </button>
-                      <span aria-hidden="true">FOV</span>
+                      <div className="camera-dpad-row">
+                        <button
+                          aria-label="Rotate left"
+                          title="Rotate left"
+                          onClick={() => sceneRef.current?.orbit(-0.3, 0)}
+                        >
+                          <ArrowLeft size={17} />
+                        </button>
+                        <span aria-hidden="true">FOV</span>
+                        <button
+                          aria-label="Rotate right"
+                          title="Rotate right"
+                          onClick={() => sceneRef.current?.orbit(0.3, 0)}
+                        >
+                          <ArrowRight size={17} />
+                        </button>
+                      </div>
                       <button
-                        aria-label="Rotate right"
-                        title="Rotate right"
-                        onClick={() => sceneRef.current?.orbit(0.3, 0)}
+                        aria-label="Widen field of view"
+                        title="Widen field of view"
+                        onClick={() => sceneRef.current?.fov(2)}
                       >
-                        <ArrowRight size={17} />
+                        <ArrowDown size={17} />
                       </button>
                     </div>
-                    <button
-                      aria-label="Widen field of view"
-                      title="Widen field of view"
-                      onClick={() => sceneRef.current?.fov(2)}
-                    >
-                      <ArrowDown size={17} />
-                    </button>
-                  </div>
+                  )}
                   <button
                     aria-label={st.viewport.fullscreen}
                     title={st.viewport.fullscreen}
@@ -2656,7 +2666,10 @@ export default function LabellabApp() {
                       disabled={exportBusy}
                       onFoldChange={handlePackagingFoldChange}
                       onToggleFoldPlay={togglePackagingFoldPlay}
-                      onViewModeChange={setPackagingViewMode}
+                      onViewModeChange={(mode) => {
+                        setPackagingViewMode(mode);
+                        if (mode === "2d") setHoverTarget(null);
+                      }}
                       onToggleDimensions={() => {
                         const next = !packagingParams.showDimensions;
                         setPackagingParams((cur) => ({ ...cur, showDimensions: next }));

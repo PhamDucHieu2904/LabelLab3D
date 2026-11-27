@@ -18,7 +18,7 @@ export type CoinPackage = {
  * (~600 VND at Vietnam base, ~$0.08 USD at International base).
  */
 export const DEFAULT_RENDER_COIN_COST = 10;
-export const DEFAULT_DIELINE_COIN_COST = 20;
+export const DEFAULT_DIELINE_COIN_COST = 10;
 export const DEFAULT_SHARE_COIN_COST = 20;
 export const DEFAULT_PROJECT_EXTEND_COIN_COST = 10;
 export const WELCOME_BONUS_COINS = 20;
@@ -26,8 +26,8 @@ export const WELCOME_BONUS_COINS = 20;
 export const RENDER_COST_MULTIPLIERS = {
   1024: 0.5,
   2048: 1,
-  4096: 2,
-  8129: 4,
+  4096: 1.5,
+  8129: 3,
 } as const;
 
 export type SupportedRenderResolution = keyof typeof RENDER_COST_MULTIPLIERS;
@@ -38,7 +38,7 @@ export function isSupportedRenderResolution(resolution: number): resolution is S
 
 /**
  * Compute render coin cost for a given output resolution from the live 2048 px
- * base cost (default 10 coins -> 5 / 10 / 20 / 40 across 1K / 2K / 4K / 8K).
+ * base cost (default 10 coins -> 5 / 10 / 15 / 30 across 1K / 2K / 4K / 8K).
  */
 export function resolveRenderCoinCost(
   resolution: number,

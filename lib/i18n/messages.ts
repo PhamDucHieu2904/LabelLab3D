@@ -13,6 +13,11 @@ export type UiMessages = {
     openNotifications: string;
     notificationsRegion: string;
     adminUpdates: string;
+    notificationsLoginPrompt: string;
+    notificationsEmpty: string;
+    notificationsLoading: string;
+    notificationKindReply: string;
+    notificationKindAdmin: string;
     login: string;
     logout: string;
     langSwitchAria: string;
@@ -82,6 +87,12 @@ export type UiMessages = {
     feedbackPlaceholder: string;
     feedbackEmailPlaceholder: string;
     feedbackAsUser: (name: string) => string;
+    feedbackLoginPrompt: string;
+    feedbackLoginBtn: string;
+    feedbackQuotaHint: string;
+    feedbackCooldown: (seconds: number) => string;
+    feedbackCooldownBtn: (countdown: string) => string;
+    feedbackDailyLimit: (limit: number) => string;
     feedbackSend: string;
     feedbackSending: string;
     feedbackSentTitle: string;
@@ -399,9 +410,14 @@ const VI_MESSAGES: UiMessages = {
     home: "Trang chủ",
     studio: "Mockup Studio",
     myProjects: "Dự án của tôi",
-    openNotifications: "Mở thông báo",
-    notificationsRegion: "Thông báo",
-    adminUpdates: "Cập nhật hệ thống",
+    openNotifications: "Mở thông báo từ Admin",
+    notificationsRegion: "Thông báo từ Admin",
+    adminUpdates: "Thông báo từ Admin",
+    notificationsLoginPrompt: "Đăng nhập để nhận phản hồi góp ý và thông báo riêng từ quản trị viên.",
+    notificationsEmpty: "Bạn chưa có thông báo nào từ quản trị viên.",
+    notificationsLoading: "Đang tải thông báo…",
+    notificationKindReply: "Phản hồi góp ý",
+    notificationKindAdmin: "Từ Admin",
     login: "Đăng nhập",
     logout: "Đăng xuất",
     langSwitchAria: "Chọn ngôn ngữ hiển thị",
@@ -472,6 +488,12 @@ const VI_MESSAGES: UiMessages = {
     feedbackPlaceholder: "Góp ý tính năng, báo lỗi hoặc đề xuất mẫu mockup 3D mới...",
     feedbackEmailPlaceholder: "Email liên hệ (tùy chọn)",
     feedbackAsUser: (name) => `Gửi từ ${name}`,
+    feedbackLoginPrompt: "Đăng nhập tài khoản để gửi góp ý trực tiếp cho đội ngũ HyperMockup.",
+    feedbackLoginBtn: "Đăng nhập để gửi góp ý",
+    feedbackQuotaHint: "Tối đa 10 thư/ngày · cách nhau 2 phút",
+    feedbackCooldown: (seconds) => `Vui lòng đợi ${seconds} giây trước khi gửi góp ý tiếp theo.`,
+    feedbackCooldownBtn: (countdown) => `Đợi ${countdown}`,
+    feedbackDailyLimit: (limit) => `Bạn đã đạt giới hạn ${limit} góp ý trong hôm nay. Hẹn bạn ngày mai!`,
     feedbackSend: "Gửi góp ý",
     feedbackSending: "Đang gửi...",
     feedbackSentTitle: "Đã gửi góp ý thành công!",
@@ -804,9 +826,14 @@ const EN_MESSAGES: UiMessages = {
     home: "Home",
     studio: "Mockup Studio",
     myProjects: "My projects",
-    openNotifications: "Open notifications",
-    notificationsRegion: "Notifications",
-    adminUpdates: "Admin updates",
+    openNotifications: "Open Admin notifications",
+    notificationsRegion: "Admin notifications",
+    adminUpdates: "Admin notifications",
+    notificationsLoginPrompt: "Sign in to view feedback replies and personal notices from Admin.",
+    notificationsEmpty: "You have no messages from Admin yet.",
+    notificationsLoading: "Loading notifications…",
+    notificationKindReply: "Feedback reply",
+    notificationKindAdmin: "From Admin",
     login: "Login",
     logout: "Log out",
     langSwitchAria: "Select display language",
@@ -877,6 +904,12 @@ const EN_MESSAGES: UiMessages = {
     feedbackPlaceholder: "Share an idea, report a bug, or request a new 3D mockup...",
     feedbackEmailPlaceholder: "Contact email (optional)",
     feedbackAsUser: (name) => `Sending as ${name}`,
+    feedbackLoginPrompt: "Sign in to send feedback directly to the HyperMockup team.",
+    feedbackLoginBtn: "Sign in to send feedback",
+    feedbackQuotaHint: "Up to 10/day · 2 min between messages",
+    feedbackCooldown: (seconds) => `Please wait ${seconds}s before sending another message.`,
+    feedbackCooldownBtn: (countdown) => `Wait ${countdown}`,
+    feedbackDailyLimit: (limit) => `You reached today's limit of ${limit} messages. Please try again tomorrow.`,
     feedbackSend: "Send",
     feedbackSending: "Sending...",
     feedbackSentTitle: "Feedback sent!",

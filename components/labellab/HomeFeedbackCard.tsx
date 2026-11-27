@@ -1,7 +1,8 @@
 "use client";
 
-import { CheckCircle2, MessageSquareHeart, RotateCcw, Send } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { CheckCircle2, Lock, LogIn, MessageSquareHeart, RotateCcw, Send } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useAuthDialog } from "./AuthDialog";
 import { useLocale } from "./LocaleProvider";
 import styles from "./HomeFeedbackCard.module.css";
 
@@ -11,17 +12,32 @@ type HomeFeedbackCardProps = {
   user: { name: string; email: string } | null;
 };
 
+function formatCountdown(totalSec: number): string {
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 export default function HomeFeedbackCard({ user }: HomeFeedbackCardProps) {
   const { locale, t } = useLocale();
+  const openAuth = useAuthDialog();
   const [category, setCategory] = useState<FeedbackCategory>("suggestion");
   const [message, setMessage] = useState("");
-  const [contactEmail, setContactEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
+  const [cooldownLeft, setCooldownLeft] = useState(0);
+
+  useEffect(() => {
+    if (cooldownLeft <= 0) return;
+    const timer = window.setInterval(() => {
+      setCooldownLeft((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldownLeft]);
 
   const trimmed = message.trim();
-  const canSubmit = !busy && trimmed.length >= 3;
+  const canSubmit = Boolean(user) && !busy && cooldownLeft === 0 && trimmed.length >= 3;
 
   const categories: { id: FeedbackCategory; label: string }[] = [
     { id: "suggestion", label: t.home.feedbackCatIdea },
@@ -32,13 +48,16 @@ export default function HomeFeedbackCard({ user }: HomeFeedbackCardProps) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
-    if (trimmed.length < 3) {
-      setError(t.home.feedbackTooShort);
+    if (!user) {
+      openAuth("login");
       return;
     }
-    const emailValue = contactEmail.trim();
-    if (!user && emailValue && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)) {
-      setError(t.home.feedbackInvalidEmail);
+    if (cooldownLeft > 0) {
+      setError(t.home.feedbackCooldown(cooldownLeft));
+      return;
+    }
+    if (trimmed.length < 3) {
+      setError(t.home.feedbackTooShort);
       return;
     }
 
@@ -52,14 +71,31 @@ export default function HomeFeedbackCard({ user }: HomeFeedbackCardProps) {
         body: JSON.stringify({
           category,
           message: trimmed,
-          contactEmail: user ? undefined : emailValue || undefined,
           pagePath: "/",
           locale,
         }),
       });
-      const payload = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+        retryAfterSec?: number;
+        cooldownSeconds?: number;
+        limit?: number;
+      } | null;
+
+      if (response.status === 401 || payload?.error === "LOGIN_REQUIRED") {
+        openAuth("login");
+        return;
+      }
+
       if (!response.ok || !payload?.ok) {
-        if (response.status === 429 || payload?.error === "AUTH_RATE_LIMIT") {
+        if (payload?.error === "FEEDBACK_COOLDOWN") {
+          const waitSec = Math.max(1, Number(payload.retryAfterSec ?? 120));
+          setCooldownLeft(waitSec);
+          setError(t.home.feedbackCooldown(waitSec));
+        } else if (payload?.error === "FEEDBACK_DAILY_LIMIT") {
+          setError(t.home.feedbackDailyLimit(Number(payload.limit ?? 10)));
+        } else if (response.status === 429 || payload?.error === "AUTH_RATE_LIMIT") {
           setError(t.home.feedbackRateLimit);
         } else if (payload?.error === "INVALID_INPUT") {
           setError(t.home.feedbackInvalidInput);
@@ -71,6 +107,7 @@ export default function HomeFeedbackCard({ user }: HomeFeedbackCardProps) {
       setSent(true);
       setMessage("");
       setError("");
+      setCooldownLeft(Number(payload.cooldownSeconds ?? 120));
     } catch {
       setError(t.home.feedbackFailed);
     } finally {
@@ -88,25 +125,45 @@ export default function HomeFeedbackCard({ user }: HomeFeedbackCardProps) {
           <h2>{t.home.feedbackTitle}</h2>
         </div>
 
-        <div className={styles.categories} role="group" aria-label={t.home.feedbackCategoryAria}>
-          {categories.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`${styles.catBtn} ${category === item.id ? styles.catBtnActive : ""}`}
-              aria-pressed={category === item.id}
-              onClick={() => {
-                setCategory(item.id);
-                if (sent) setSent(false);
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+        {user && (
+          <div className={styles.categories} role="group" aria-label={t.home.feedbackCategoryAria}>
+            {categories.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`${styles.catBtn} ${category === item.id ? styles.catBtnActive : ""}`}
+                aria-pressed={category === item.id}
+                onClick={() => {
+                  setCategory(item.id);
+                  if (sent) setSent(false);
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {sent ? (
+      {!user ? (
+        <div className={styles.guestGate}>
+          <div className={styles.guestCopy}>
+            <Lock size={16} className={styles.guestLockIcon} aria-hidden="true" />
+            <div>
+              <p>{t.home.feedbackLoginPrompt}</p>
+              <small>{t.home.feedbackQuotaHint}</small>
+            </div>
+          </div>
+          <button
+            type="button"
+            className={`${styles.submitBtn} home-sheen`}
+            onClick={() => openAuth("login")}
+          >
+            <LogIn size={14} aria-hidden="true" />
+            <span>{t.home.feedbackLoginBtn}</span>
+          </button>
+        </div>
+      ) : sent ? (
         <div className={styles.successBox} role="status" aria-live="polite">
           <div className={styles.successCopy}>
             <CheckCircle2 size={22} className={styles.successIcon} aria-hidden="true" />
@@ -121,7 +178,11 @@ export default function HomeFeedbackCard({ user }: HomeFeedbackCardProps) {
             onClick={() => setSent(false)}
           >
             <RotateCcw size={13} aria-hidden="true" />
-            <span>{t.home.feedbackSendAnother}</span>
+            <span>
+              {cooldownLeft > 0
+                ? `${t.home.feedbackSendAnother} (${formatCountdown(cooldownLeft)})`
+                : t.home.feedbackSendAnother}
+            </span>
           </button>
         </div>
       ) : (
@@ -140,31 +201,13 @@ export default function HomeFeedbackCard({ user }: HomeFeedbackCardProps) {
           />
 
           <div className={styles.footer}>
-            {user ? (
-              <span className={styles.metaHint} title={user.email}>
-                {error ? (
-                  <span className={styles.errorText} role="alert">{error}</span>
-                ) : (
-                  <span>{t.home.feedbackAsUser(user.name || user.email)}</span>
-                )}
-              </span>
-            ) : (
-              <div className={styles.guestInputWrap}>
-                <input
-                  type="email"
-                  className={styles.emailInput}
-                  value={contactEmail}
-                  onChange={(e) => {
-                    setContactEmail(e.target.value);
-                    if (error) setError("");
-                  }}
-                  placeholder={t.home.feedbackEmailPlaceholder}
-                  aria-label={t.home.feedbackEmailPlaceholder}
-                  maxLength={160}
-                />
-                {error && <span className={styles.errorFloat} role="alert">{error}</span>}
-              </div>
-            )}
+            <span className={styles.metaHint} title={user.email}>
+              {error ? (
+                <span className={styles.errorText} role="alert">{error}</span>
+              ) : (
+                <span>{t.home.feedbackQuotaHint}</span>
+              )}
+            </span>
 
             <button
               type="submit"
@@ -172,7 +215,13 @@ export default function HomeFeedbackCard({ user }: HomeFeedbackCardProps) {
               disabled={!canSubmit}
             >
               <Send size={13} aria-hidden="true" />
-              <span>{busy ? t.home.feedbackSending : t.home.feedbackSend}</span>
+              <span>
+                {busy
+                  ? t.home.feedbackSending
+                  : cooldownLeft > 0
+                    ? t.home.feedbackCooldownBtn(formatCountdown(cooldownLeft))
+                    : t.home.feedbackSend}
+              </span>
             </button>
           </div>
         </form>

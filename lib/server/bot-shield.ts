@@ -151,6 +151,7 @@ export function classifyRequestCategory(pathname: string): RequestCategory {
 function isSensitiveBurstPath(pathname: string): boolean {
   return (
     pathname.startsWith("/api/account/") ||
+    pathname.startsWith("/api/feedback") ||
     pathname.startsWith("/api/admin/auth") ||
     pathname.startsWith("/api/admin/bootstrap") ||
     pathname.startsWith("/api/payments/orders") ||

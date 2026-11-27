@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
-import { Award, CalendarDays, Coins, Download, ImageIcon, LogIn, Sparkles, UserPlus, UserRound } from "lucide-react";
+import { Award, CalendarDays, Coins, Download, ImageIcon, LogIn, Mail, Ruler, UserPlus, UserRound } from "lucide-react";
 import { numberLocale } from "@/lib/i18n/locale";
 import type { UiMessages } from "@/lib/i18n/messages";
 import type { CoinRegion } from "@/lib/payments/packages";
@@ -155,29 +155,35 @@ export default function UserProfileCard({
   const displayName = account?.name || (signedIn ? (session?.user?.name || session?.user?.email || pr.yourAccount) : pr.guestAccount);
   const displaySubtitle = account?.email || (signedIn ? (session?.user?.email || pr.signedIn) : pr.guestSubtitle);
   const avatarUrl = account?.avatarUrl || (status === "authenticated" ? (session?.user?.image || null) : null);
-  const recentActivity: WalletEntry[] = account ? account.entries.slice(0, 3) : [];
+  const recentActivity: WalletEntry[] = account ? account.entries.slice(0, 5) : [];
   const badgeTitle = resolveDisplayBadge(account?.badges, pr.defaultBadge);
 
   return (
     <article className={`home-card ${styles.card}`} aria-label={pr.ariaLabel}>
       <div className={styles.heading}>
         <span className={styles.eyebrow}>{pr.eyebrow}</span>
+        {signedIn && (
+          <span className={styles.badgePill} title={`${pr.badges}: ${badgeTitle}`} aria-label={`${pr.badges}: ${badgeTitle}`}>
+            <Award aria-hidden="true" />
+            <span>{badgeTitle}</span>
+          </span>
+        )}
       </div>
 
       <div className={styles.identity}>
         <div className={`${styles.avatar} ${!signedIn ? styles.guestAvatar : styles.initialsAvatar}`}>
           {avatarUrl ? (
-            <Image src={avatarUrl} alt="" fill sizes="72px" unoptimized />
+            <Image src={avatarUrl} alt="" fill sizes="56px" unoptimized />
           ) : signedIn ? (
             <span>{initialsFrom(displayName)}</span>
           ) : (
-            <UserRound size={30} strokeWidth={1.8} aria-hidden="true" />
+            <UserRound size={24} strokeWidth={1.8} aria-hidden="true" />
           )}
         </div>
         <div className={styles.identityText}>
           <h2>{displayName}</h2>
-          <p>
-            <Sparkles aria-hidden="true" />
+          <p title={displaySubtitle}>
+            <Mail aria-hidden="true" />
             <span>{displaySubtitle}</span>
           </p>
         </div>
@@ -193,19 +199,11 @@ export default function UserProfileCard({
             <div className={`${styles.stat} ${styles.balance}`}>
               <dt>{pr.coinBalance}</dt>
               <dd>
-                <Image src="/branding/hypermockup-coin.svg" alt="" width={28} height={28} />
+                <Image src="/branding/hypermockup-coin.svg" alt="" width={22} height={22} />
                 {(account?.balance ?? 0).toLocaleString(numLocale)}
               </dd>
             </div>
           </dl>
-
-          <section className={styles.badges} aria-label={pr.badges}>
-            <span className={styles.badgeLabel}>
-              <Award aria-hidden="true" />
-              {pr.badges}
-            </span>
-            <strong className={styles.badgeValue}>{badgeTitle}</strong>
-          </section>
 
           <section className={styles.activity} aria-labelledby="recent-coin-usage-title">
             <div className={styles.activityHeader}>
@@ -224,19 +222,25 @@ export default function UserProfileCard({
             </div>
             {recentActivity.length > 0 ? (
               <ul className={styles.usageList}>
-                {recentActivity.map((entry) => (
-                  <li className={styles.usageRow} key={entry.id}>
-                    <span className={styles.usageDescription}>
-                      {entry.amount >= 0 ? <Coins aria-hidden="true" /> : <ImageIcon aria-hidden="true" />}
-                      {entryLabel(entry, pr)}
-                    </span>
-                    <span className={styles.usageWhen}>{relativeTime(entry.createdAt, pr)}</span>
-                    <span className={`${styles.usageAmount} ${entry.amount > 0 ? styles.positive : ""}`} aria-label={pr.coinsAria(entry.amount)}>
-                      <span aria-hidden="true">{entry.amount > 0 ? "+" : "−"}{Math.abs(entry.amount).toLocaleString(numLocale)}</span>
-                      <Image src="/branding/hypermockup-coin.svg" alt="" width={18} height={18} />
-                    </span>
-                  </li>
-                ))}
+                {recentActivity.map((entry) => {
+                  const isPositive = entry.amount > 0;
+                  const isDieline = entry.reference?.startsWith("dieline:");
+                  return (
+                    <li className={styles.usageRow} key={entry.id}>
+                      <span className={`${styles.usageIcon} ${isPositive ? styles.usageIconPositive : styles.usageIconSpend}`} aria-hidden="true">
+                        {isPositive ? <Coins /> : isDieline ? <Ruler /> : <ImageIcon />}
+                      </span>
+                      <span className={styles.usageInfo}>
+                        <span className={styles.usageDescription}>{entryLabel(entry, pr)}</span>
+                        <span className={styles.usageWhen}>{relativeTime(entry.createdAt, pr)}</span>
+                      </span>
+                      <span className={`${styles.usageAmount} ${isPositive ? styles.positive : ""}`} aria-label={pr.coinsAria(entry.amount)}>
+                        <span aria-hidden="true">{isPositive ? "+" : "−"}{Math.abs(entry.amount).toLocaleString(numLocale)}</span>
+                        <Image src="/branding/hypermockup-coin.svg" alt="" width={15} height={15} />
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
               <p className={styles.empty}>{pr.emptyActivity}</p>
@@ -253,7 +257,7 @@ export default function UserProfileCard({
             <div className={`${styles.stat} ${styles.balance}`}>
               <dt>{pr.coinBalance}</dt>
               <dd className={styles.guestMetric}>
-                <Image src="/branding/hypermockup-coin.svg" alt="" width={24} height={24} />
+                <Image src="/branding/hypermockup-coin.svg" alt="" width={22} height={22} />
                 —
               </dd>
             </div>

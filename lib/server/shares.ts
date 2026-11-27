@@ -339,14 +339,18 @@ function sanitizeItemInput(raw: unknown, index: number): SharedProjectItemInput 
   };
 }
 
-function sanitizeExpiresAt(raw: unknown): string | null {
-  if (raw === null || raw === undefined || raw === "") return null;
+function sanitizeExpiresAt(raw: unknown): string {
+  const now = Date.now();
+  const maxMs = now + SHARE_LIMITS.maxExpiryDays * 86_400_000 + 60_000; // +1 min clock skew tolerance
+  // Omitted / null defaults to the 30-day maximum (infinite share links are disabled).
+  if (raw === null || raw === undefined || raw === "") {
+    return new Date(now + SHARE_LIMITS.maxExpiryDays * 86_400_000).toISOString();
+  }
   if (typeof raw !== "string") throw new Error("INVALID_INPUT");
   const ms = Date.parse(raw);
   if (!Number.isFinite(ms)) throw new Error("INVALID_INPUT");
-  // Clamp expiry between +1 hour and +365 days
-  const now = Date.now();
-  if (ms < now + 3_600_000 || ms > now + 366 * 86_400_000) {
+  // Clamp expiry strictly between +1 hour and +30 days
+  if (ms < now + 3_600_000 || ms > maxMs) {
     throw new Error("INVALID_INPUT");
   }
   return new Date(ms).toISOString();

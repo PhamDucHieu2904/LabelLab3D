@@ -51,6 +51,7 @@ export async function ensureFeedbackTable(env: AppEnv) {
     )`),
     db.prepare("CREATE INDEX IF NOT EXISTS user_feedback_status_time ON user_feedback(status, created_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS user_feedback_created_at ON user_feedback(created_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS user_feedback_user_time ON user_feedback(user_id, created_at)"),
   ]);
   tableReady.add(db);
   return db;
@@ -80,6 +81,65 @@ export function sanitizeOptionalEmail(raw: unknown): string {
   const cleaned = raw.trim().toLowerCase().slice(0, 160);
   if (!cleaned) return "";
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleaned) ? cleaned : "";
+}
+
+export const FEEDBACK_DAILY_LIMIT_PER_USER = 10;
+export const FEEDBACK_COOLDOWN_SECONDS = 120;
+
+export type FeedbackQuotaCheck =
+  | { allowed: true; sentToday: number; remainingToday: number }
+  | { allowed: false; reason: "FEEDBACK_DAILY_LIMIT"; sentToday: number; limit: number }
+  | { allowed: false; reason: "FEEDBACK_COOLDOWN"; retryAfterSec: number; sentToday: number };
+
+function startOfVnDayUtcIso(nowMs = Date.now()): string {
+  const vnOffsetMs = 7 * 60 * 60 * 1000;
+  const vnDate = new Date(nowMs + vnOffsetMs);
+  const midnightVnAsUtc = Date.UTC(vnDate.getUTCFullYear(), vnDate.getUTCMonth(), vnDate.getUTCDate()) - vnOffsetMs;
+  return new Date(midnightVnAsUtc).toISOString();
+}
+
+export async function checkUserFeedbackQuota(env: AppEnv, userId: string): Promise<FeedbackQuotaCheck> {
+  const db = await ensureFeedbackTable(env);
+  const dayStartIso = startOfVnDayUtcIso();
+  const [countRow, latestRow] = await Promise.all([
+    db
+      .prepare("SELECT COUNT(*) AS cnt FROM user_feedback WHERE user_id = ? AND created_at >= ?")
+      .bind(userId, dayStartIso)
+      .first<{ cnt: number | null }>(),
+    db
+      .prepare("SELECT created_at AS createdAt FROM user_feedback WHERE user_id = ? ORDER BY created_at DESC LIMIT 1")
+      .bind(userId)
+      .first<{ createdAt: string | null }>(),
+  ]);
+
+  const sentToday = Number(countRow?.cnt ?? 0);
+  if (sentToday >= FEEDBACK_DAILY_LIMIT_PER_USER) {
+    return {
+      allowed: false,
+      reason: "FEEDBACK_DAILY_LIMIT",
+      sentToday,
+      limit: FEEDBACK_DAILY_LIMIT_PER_USER,
+    };
+  }
+
+  if (latestRow?.createdAt) {
+    const elapsedMs = Date.now() - Date.parse(latestRow.createdAt);
+    const cooldownMs = FEEDBACK_COOLDOWN_SECONDS * 1000;
+    if (Number.isFinite(elapsedMs) && elapsedMs >= 0 && elapsedMs < cooldownMs) {
+      return {
+        allowed: false,
+        reason: "FEEDBACK_COOLDOWN",
+        retryAfterSec: Math.max(1, Math.ceil((cooldownMs - elapsedMs) / 1000)),
+        sentToday,
+      };
+    }
+  }
+
+  return {
+    allowed: true,
+    sentToday,
+    remainingToday: Math.max(0, FEEDBACK_DAILY_LIMIT_PER_USER - sentToday),
+  };
 }
 
 export async function createUserFeedback(

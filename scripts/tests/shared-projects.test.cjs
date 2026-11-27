@@ -457,3 +457,52 @@ test('SharedProjectViewer renders desktop right-side rounded panel while keeping
   assert.ok(viewerCss.includes('border-radius: 20px'), 'Desktop right panel uses rounded corners');
   assert.ok(viewerCss.includes('@media (max-width: 900px)'), 'Preserves mobile bottom-bar layout below 900px');
 });
+
+test('share link expiry enforces a strict 30-day maximum and never allows infinite links', async () => {
+  const load = createLoader();
+  const contracts = load(path.resolve(ROOT, 'lib/share/contracts.ts'));
+  const shares = load(path.resolve(ROOT, 'lib/server/shares.ts'));
+  const shareAssets = load(path.resolve(ROOT, 'lib/server/share-assets.ts'));
+  const prefs = load(path.resolve(ROOT, 'lib/labellab/preferences.ts'));
+
+  assert.equal(contracts.SHARE_LIMITS.maxExpiryDays, 30);
+  const baseMs = Date.UTC(2026, 5, 1, 0, 0, 0);
+  assert.equal(Date.parse(contracts.computeExpiryIso('1d', baseMs)) - baseMs, 1 * 86_400_000);
+  assert.equal(Date.parse(contracts.computeExpiryIso('7d', baseMs)) - baseMs, 7 * 86_400_000);
+  assert.equal(Date.parse(contracts.computeExpiryIso('14d', baseMs)) - baseMs, 14 * 86_400_000);
+  assert.equal(Date.parse(contracts.computeExpiryIso('30d', baseMs)) - baseMs, 30 * 86_400_000);
+
+  const { DB } = createSqliteD1();
+  const env = { DB, SHARE_UNLOCK_SECRET: 'expiry-secret' };
+  const hash1 = await shareAssets.sha256Hex(FAKE_WEBP_1);
+  const baseInput = {
+    title: 'Expiry Check',
+    items: [
+      {
+        name: 'Can',
+        kind: 'beverage',
+        subtitle: '330 mL',
+        sortOrder: 0,
+        payload: { kind: 'beverage', settings: prefs.DEFAULT_PREFERENCES, labelHash: hash1 },
+      },
+    ],
+    assets: [{ expectedHash: hash1, bytes: FAKE_WEBP_1 }],
+  };
+
+  // Passing null defaults to <= 30 days instead of infinite
+  const created = await shares.createSharedProject(env, 'user_1', { ...baseInput, expiresAt: null });
+  assert.ok(created.expiresAt, 'Share link must always have an expiration timestamp');
+  const deltaDays = (Date.parse(created.expiresAt) - Date.now()) / 86_400_000;
+  assert.ok(deltaDays > 29.9 && deltaDays <= 30.01, `Expected ~30 days, got ${deltaDays}`);
+
+  // Rejects anything beyond 30 days (e.g. 90 days)
+  const ninetyDaysIso = new Date(Date.now() + 90 * 86_400_000).toISOString();
+  await assert.rejects(
+    () => shares.createSharedProject(env, 'user_1', { ...baseInput, expiresAt: ninetyDaysIso }),
+    /INVALID_INPUT/,
+  );
+  await assert.rejects(
+    () => shares.updateSharedProject(env, 'user_1', created.id, { expiresAt: ninetyDaysIso }),
+    /INVALID_INPUT/,
+  );
+});

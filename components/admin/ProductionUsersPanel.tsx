@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Lock, Plus, RefreshCw, Search, Shield, SlidersHorizontal, Unlock, Users, Wallet, X } from "lucide-react";
+import { Bell, Lock, Plus, RefreshCw, Search, Send, Shield, SlidersHorizontal, Unlock, Users, Wallet, X } from "lucide-react";
 import { formatDate, formatMoney, formatNumber } from "@/lib/admin/commerce";
 import { CoinValue } from "./OverviewPanel";
 import s from "./AdminWorkspace.module.css";
@@ -22,7 +22,11 @@ type UserRow = {
   googleLinked: number;
 };
 
-type ModalState = { kind: "coin"; user: UserRow } | { kind: "create" } | null;
+type ModalState =
+  | { kind: "coin"; user: UserRow }
+  | { kind: "create" }
+  | { kind: "notify"; user: UserRow | null }
+  | null;
 
 function DialogModal({ title, children, close }: { title: string; children: ReactNode; close: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -63,6 +67,8 @@ export default function ProductionUsersPanel() {
   const [filter, setFilter] = useState<"all" | "active" | "locked" | "admin">("all");
   const [modal, setModal] = useState<ModalState>(null);
   const [modalError, setModalError] = useState("");
+  const [notifyTarget, setNotifyTarget] = useState<"user" | "all">("user");
+  const [notifyUserId, setNotifyUserId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -153,6 +159,67 @@ export default function ProductionUsersPanel() {
     if (ok) setModal(null);
   }
 
+  function openNotifyModal(user: UserRow | null) {
+    setModalError("");
+    setNotifyTarget("user");
+    setNotifyUserId(user?.id ?? users[0]?.id ?? "");
+    setModal({ kind: "notify", user });
+  }
+
+  async function submitSendNotification(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (modal?.kind !== "notify") return;
+    const fd = new FormData(event.currentTarget);
+    const title = String(fd.get("title") ?? "").trim();
+    const body = String(fd.get("body") ?? "").trim();
+    const target = modal.user ? "user" : notifyTarget;
+    const userId = modal.user ? modal.user.id : notifyUserId;
+
+    if (target === "user" && !userId) {
+      setModalError("Vui lòng chọn người dùng nhận thông báo.");
+      return;
+    }
+    if (title.length < 2 || body.length < 2) {
+      setModalError("Vui lòng nhập tiêu đề và nội dung (tối thiểu 2 ký tự).");
+      return;
+    }
+
+    setBusy(true);
+    setModalError("");
+    try {
+      const response = await fetch("/api/admin/notifications", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          target,
+          userId: target === "user" ? userId : undefined,
+          kind: "admin_message",
+          title,
+          body,
+        }),
+      });
+      const resBody = (await response.json().catch(() => null)) as {
+        error?: string;
+        sentCount?: number;
+      } | null;
+      if (!response.ok) {
+        throw new Error(resBody?.error ?? "Không thể gửi thông báo.");
+      }
+      setModal(null);
+      if (target === "all") {
+        announce(`Đã gửi thông báo tới ${formatNumber(resBody?.sentCount ?? 0)} người dùng đang hoạt động.`);
+      } else {
+        const picked = modal.user ?? users.find((u) => u.id === userId);
+        announce(`Đã gửi thông báo tới chuông của ${picked ? picked.email : "người dùng"}.`);
+      }
+    } catch (e) {
+      setModalError(e instanceof Error ? e.message : "Không thể gửi thông báo.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const normalized = query.trim().toLowerCase();
   const filtered = users.filter((u) => {
     if (filter === "active" && u.status !== "active") return false;
@@ -212,6 +279,9 @@ export default function ProductionUsersPanel() {
           <button type="button" className={s.secondary} onClick={() => void load()} disabled={loading}>
             <RefreshCw size={15} aria-hidden="true" />Làm mới
           </button>
+          <button type="button" className={s.secondary} onClick={() => openNotifyModal(null)} disabled={busy}>
+            <Bell size={15} aria-hidden="true" />Gửi thông báo
+          </button>
           <button type="button" className={s.primary} onClick={() => { setModalError(""); setModal({ kind: "create" }); }}>
             <Plus size={16} aria-hidden="true" />Tạo tài khoản
           </button>
@@ -267,6 +337,15 @@ export default function ProductionUsersPanel() {
                   <td>{formatDate(user.createdAt)}</td>
                   <td>
                     <div className={s.actions} style={{ gap: 6 }}>
+                      <button
+                        type="button"
+                        className={s.secondary}
+                        disabled={busy}
+                        onClick={() => openNotifyModal(user)}
+                        title={`Gửi thông báo tới ${user.name}`}
+                      >
+                        <Bell size={14} aria-hidden="true" />Thông báo
+                      </button>
                       <button
                         type="button"
                         className={s.secondary}
@@ -357,6 +436,89 @@ export default function ProductionUsersPanel() {
             <div className={s.modalFooter}>
               <button type="button" className={s.secondary} onClick={() => setModal(null)}>Hủy</button>
               <button type="submit" disabled={busy} className={s.primary}>Tạo tài khoản</button>
+            </div>
+          </form>
+        </DialogModal>
+      )}
+
+      {modal?.kind === "notify" && (
+        <DialogModal
+          title={modal.user ? `Gửi thông báo · ${modal.user.name}` : "Gửi thông báo tới người dùng"}
+          close={() => setModal(null)}
+        >
+          <form onSubmit={(e) => void submitSendNotification(e)}>
+            <div className={s.modalBody}>
+              {modal.user ? (
+                <p className={s.subtle} style={{ marginTop: 0 }}>
+                  Người nhận: <strong>{modal.user.name}</strong> ({modal.user.email}) — hiển thị trực tiếp tại biểu tượng chuông thông báo.
+                </p>
+              ) : (
+                <div className={s.formGrid} style={{ marginBottom: 14 }}>
+                  <label className={`${s.field} ${s.fullWidth}`}>
+                    Đối tượng nhận
+                    <select
+                      className={s.select}
+                      value={notifyTarget}
+                      onChange={(e) => setNotifyTarget(e.target.value as "user" | "all")}
+                      disabled={busy}
+                    >
+                      <option value="user">Một người dùng cụ thể</option>
+                      <option value="all">Tất cả người dùng đang hoạt động ({activeCount} tài khoản)</option>
+                    </select>
+                  </label>
+                  {notifyTarget === "user" && (
+                    <label className={`${s.field} ${s.fullWidth}`}>
+                      Chọn người dùng
+                      <select
+                        className={s.select}
+                        value={notifyUserId}
+                        onChange={(e) => setNotifyUserId(e.target.value)}
+                        disabled={busy}
+                        required
+                      >
+                        {users.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name} ({u.email}){u.status === "locked" ? " [Đã khóa]" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                </div>
+              )}
+              <div className={s.formGrid}>
+                <label className={`${s.field} ${s.fullWidth}`}>
+                  Tiêu đề thông báo
+                  <input
+                    name="title"
+                    required
+                    minLength={2}
+                    maxLength={160}
+                    placeholder="Ví dụ: Phản hồi hỗ trợ hoặc thông báo từ HyperMockup"
+                    className={s.input}
+                  />
+                </label>
+                <label className={`${s.field} ${s.fullWidth}`}>
+                  Nội dung thông báo
+                  <textarea
+                    name="body"
+                    required
+                    minLength={2}
+                    maxLength={2000}
+                    rows={4}
+                    placeholder="Nhập nội dung gửi tới biểu tượng chuông thông báo của người dùng..."
+                    className={s.textarea}
+                  />
+                </label>
+              </div>
+              {modalError && <p role="alert" className={s.formError}>{modalError}</p>}
+            </div>
+            <div className={s.modalFooter}>
+              <button type="button" className={s.secondary} onClick={() => setModal(null)}>Hủy</button>
+              <button type="submit" disabled={busy} className={s.primary}>
+                <Send size={14} aria-hidden="true" />
+                {busy ? "Đang gửi..." : "Gửi thông báo"}
+              </button>
             </div>
           </form>
         </DialogModal>

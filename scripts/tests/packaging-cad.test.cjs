@@ -76,10 +76,15 @@ const {
 } = loadSource(path.join(root, 'lib/packaging-cad/materials/corrugated-materials'));
 
 const {
+  buildDielineDimensionPlan,
   exportDielineSvg,
   exportDielineDxf,
   exportDielinePdf,
 } = loadSource(path.join(root, 'lib/packaging-cad/exporters/vector-dieline'));
+
+const {
+  createPackagingTextureComposer,
+} = loadSource(path.join(root, 'lib/packaging-cad/artwork-composer'));
 
 test('multi-domain registry exposes beverage, packaging and future apparel slot cleanly', () => {
   assert.equal(STUDIO_DOMAINS.length, 3);
@@ -208,24 +213,33 @@ test('FEFCO 0421 flagship tray matches Pacdora 320x200x60mm with 4 lock slots an
   materials.dispose();
 });
 
-test('1:1 mm SVG, DXF R12 and Vector PDF exporters emit valid CAD files for every template', () => {
+test('1:1 mm SVG, DXF R12 and Vector PDF exporters emit valid CAD files with detailed dimensions for every template', () => {
   for (const tpl of PACKAGING_TEMPLATES) {
     const solved = solvePackagingTemplate(createDefaultPackagingParams(tpl.id));
+    const plan = buildDielineDimensionPlan(solved, 'outside');
+    assert.ok(plan.xChain.length >= 2, `${tpl.id} has horizontal chain dimensions`);
+    assert.ok(plan.yChain.length >= 2, `${tpl.id} has vertical chain dimensions`);
+    assert.ok(plan.panels.length >= 3, `${tpl.id} annotates individual panel W × H dimensions`);
+    assert.ok(plan.specLines.some((l) => l.includes('Inner:') && l.includes('Outer:')), `${tpl.id} includes inner/outer engineering spec`);
 
     const svg = exportDielineSvg(solved, { side: 'outside' });
     assert.ok(svg.startsWith('<?xml version="1.0"'));
     assert.ok(svg.includes('mm"'));
-    assert.ok(svg.includes('id="Cut"') && svg.includes('id="Crease"'));
+    assert.ok(svg.includes('id="Cut"') && svg.includes('id="Crease"') && svg.includes('id="Dimensions"'));
+    assert.ok(svg.includes('Inner:') && svg.includes('Outer:'), 'SVG includes engineering spec block');
 
     const dxf = exportDielineDxf(solved, 'outside');
     assert.ok(dxf.includes('$INSUNITS\r\n70\r\n4'), 'DXF declares millimetre units');
-    assert.ok(dxf.includes('CUT') && dxf.includes('CREASE') && dxf.trimEnd().endsWith('EOF'));
+    assert.ok(dxf.includes('CUT') && dxf.includes('CREASE') && dxf.includes('DIMENSIONS') && dxf.includes('LABELS'));
+    assert.ok(dxf.includes('\r\nTEXT\r\n'), 'DXF emits CAD dimension/panel text entities');
+    assert.ok(dxf.trimEnd().endsWith('EOF'));
 
     const pdfBytes = exportDielinePdf(solved, 'outside');
     assert.ok(pdfBytes instanceof Uint8Array && pdfBytes.length > 400);
     const pdfText = new TextDecoder().decode(pdfBytes);
     assert.ok(pdfText.startsWith('%PDF-1.4'));
     assert.ok(pdfText.includes('/MediaBox'));
+    assert.ok(pdfText.includes('Blank:') && pdfText.includes('Inner:'), 'PDF includes detailed spec and dimension text');
     assert.ok(pdfText.includes('%%EOF'));
   }
 });
@@ -924,4 +938,204 @@ test('FEFCO 0201 Top-Open Shipping Carton (RSC) folds cleanly with exact dimensi
 
   rig.dispose();
   materials.dispose();
+});
+
+test('packaging texture composer reallocates CanvasTexture on box resize and guards async races', async () => {
+  const prevDocument = globalThis.document;
+  const prevImage = globalThis.Image;
+  const pendingDecodes = new Map();
+
+  function makeStubCanvas() {
+    const drawLog = [];
+    const ctx = {
+      fillStyle: '',
+      strokeStyle: '',
+      lineWidth: 1,
+      font: '',
+      textAlign: 'left',
+      textBaseline: 'alphabetic',
+      globalCompositeOperation: 'source-over',
+      save() {},
+      restore() {},
+      setTransform() {},
+      clearRect() {},
+      fillRect(x, y, w, h) { drawLog.push(['fillRect', x, y, w, h, this.fillStyle]); },
+      strokeRect() {},
+      beginPath() {},
+      moveTo() {},
+      lineTo() {},
+      closePath() {},
+      clip() {},
+      translate() {},
+      rotate() {},
+      stroke() {},
+      fill() {},
+      setLineDash() {},
+      roundRect() {},
+      measureText(t) { return { width: String(t).length * 10 }; },
+      fillText() {},
+      drawImage(img, x, y, w, h) { drawLog.push(['drawImage', img.src, x, y, w, h]); },
+      getImageData(_x, _y, w, h) { return { data: new Uint8ClampedArray(w * h * 4) }; },
+      putImageData() {},
+    };
+    return {
+      width: 0,
+      height: 0,
+      drawLog,
+      getContext(kind) { return kind === '2d' ? ctx : null; },
+    };
+  }
+
+  class StubImage {
+    constructor() {
+      this.crossOrigin = '';
+      this.naturalWidth = 1000;
+      this.naturalHeight = 500;
+      this.onload = null;
+      this.onerror = null;
+      this._src = '';
+    }
+    get src() { return this._src; }
+    set src(value) {
+      this._src = value;
+      if (value.includes('deferred')) {
+        pendingDecodes.set(value, () => { this.onload?.(); });
+      } else {
+        queueMicrotask(() => { this.onload?.(); });
+      }
+    }
+  }
+
+  globalThis.document = {
+    createElement(tag) {
+      if (tag === 'canvas') return makeStubCanvas();
+      throw new Error(`Unexpected tag ${tag}`);
+    },
+  };
+  globalThis.Image = StubImage;
+
+  try {
+    const composer = createPackagingTextureComposer();
+    const solvedDefault = solvePackagingTemplate(createDefaultPackagingParams('fefco-0201-rsc'));
+    const solvedResized = solvePackagingTemplate({
+      ...createDefaultPackagingParams('fefco-0201-rsc'),
+      lengthMm: 415,
+      widthMm: 277,
+      heightMm: 191,
+    });
+    const artwork = {
+      mode: 'panel',
+      panelOverlays: {
+        'outside:front-wall': {
+          panelId: 'front-wall',
+          surface: 'outside',
+          imageUrl: 'blob:mock/front-v1',
+          fitMode: 'crop',
+          imageScale: 1,
+          imageOffsetX: 0,
+          imageOffsetY: 0,
+          imageRotationDeg: 0,
+        },
+      },
+    };
+
+    // 1. Compose at default 360×240×220 (3072×1147)
+    const tex1 = await composer.compose(solvedDefault, artwork, 'outside');
+    assert.ok(tex1, 'initial outside CanvasTexture created');
+    assert.equal(tex1.image.width, 3072);
+    const h1 = tex1.image.height;
+
+    let tex1Disposed = 0;
+    const origDispose1 = tex1.dispose.bind(tex1);
+    tex1.dispose = () => { tex1Disposed++; origDispose1(); };
+
+    // 2. Resize to 415×277×191 (3072×1016): MUST allocate fresh CanvasTexture & fresh canvas
+    //    so WebGL2 never uploads mismatched dimensions into immutable texStorage2D!
+    const tex2 = await composer.compose(solvedResized, artwork, 'outside');
+    assert.ok(tex2, 'resized outside CanvasTexture created');
+    assert.notEqual(tex2, tex1, 'box resize allocates a brand-new CanvasTexture handle');
+    assert.notEqual(tex2.image, tex1.image, 'box resize allocates a brand-new HTMLCanvasElement');
+    assert.notEqual(tex2.image.height, h1, 'new canvas height reflects resized blank aspect ratio');
+    assert.equal(tex1Disposed, 0, 'old texture stays alive until materials swap & flushRetired() runs');
+
+    composer.flushRetired();
+    assert.equal(tex1Disposed, 1, 'flushRetired() disposes replaced texture cleanly');
+
+    // 3. Re-composing at the SAME dimensions (e.g. re-adding artwork after resize) reuses tex2
+    const artwork2 = {
+      mode: 'panel',
+      panelOverlays: {
+        'outside:front-wall': {
+          ...artwork.panelOverlays['outside:front-wall'],
+          imageUrl: 'blob:mock/front-v2',
+        },
+      },
+    };
+    const tex3 = await composer.compose(solvedResized, artwork2, 'outside');
+    assert.equal(tex3, tex2, 'same-dimension artwork update reuses active CanvasTexture');
+    assert.equal(tex3.image.height, tex2.image.height);
+
+    // 4. Growing back taller (415×277×191 -> 360×240×220) also reallocates cleanly (avoids GL_INVALID_VALUE)
+    const tex4 = await composer.compose(solvedDefault, artwork2, 'outside');
+    assert.ok(tex4);
+    assert.notEqual(tex4, tex2, 'growing canvas height allocates a fresh CanvasTexture');
+    assert.equal(tex4.image.height, h1);
+    composer.flushRetired();
+
+    // 5. Async race guard: older compose() finishing AFTER newer compose() must bail without drawing
+    const staleArtwork = {
+      mode: 'panel',
+      panelOverlays: {
+        'outside:front-wall': {
+          ...artwork.panelOverlays['outside:front-wall'],
+          imageUrl: 'blob:mock/deferred-old',
+        },
+      },
+    };
+    const freshArtwork = {
+      mode: 'panel',
+      panelOverlays: {
+        'outside:front-wall': {
+          ...artwork.panelOverlays['outside:front-wall'],
+          imageUrl: 'blob:mock/fresh-new',
+        },
+      },
+    };
+    const stalePromise = composer.compose(solvedDefault, staleArtwork, 'outside');
+    const freshPromise = composer.compose(solvedResized, freshArtwork, 'outside');
+    const freshTex = await freshPromise;
+    assert.ok(freshTex, 'newer async compose succeeds');
+    const drawCountAfterFresh = freshTex.image.drawLog.length;
+
+    // Resolve slow stale image decode AFTER newer frame already rendered
+    pendingDecodes.get('blob:mock/deferred-old')?.();
+    const staleTex = await stalePromise;
+    assert.equal(staleTex, null, 'stale out-of-order compose returns null');
+    assert.equal(freshTex.image.drawLog.length, drawCountAfterFresh, 'stale compose never mutates newer canvas');
+
+    // 6. Finish mask also reallocates CanvasTexture cleanly on resize
+    const solvedMaskDefault = solvePackagingTemplate({
+      ...createDefaultPackagingParams('fefco-0201-rsc'),
+      finishMode: 'gold-foil',
+      finishTarget: 'brand-frame',
+    });
+    const solvedMaskResized = solvePackagingTemplate({
+      ...createDefaultPackagingParams('fefco-0201-rsc'),
+      lengthMm: 415,
+      widthMm: 277,
+      heightMm: 191,
+      finishMode: 'gold-foil',
+      finishTarget: 'brand-frame',
+    });
+    const mask1 = await composer.composeFinishMask(solvedMaskDefault, freshArtwork);
+    const mask2 = await composer.composeFinishMask(solvedMaskResized, freshArtwork);
+    assert.ok(mask1 && mask2);
+    assert.notEqual(mask2, mask1, 'finish mask reallocates fresh CanvasTexture when blank resizes');
+    assert.notEqual(mask2.image.height, mask1.image.height);
+    composer.flushRetired();
+    composer.dispose();
+  } finally {
+    globalThis.document = prevDocument;
+    globalThis.Image = prevImage;
+  }
 });

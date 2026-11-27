@@ -164,15 +164,16 @@ test('regional coin catalog separates Vietnam (VND) and International (USD) tier
   assert.equal(roundTrip.filter((p) => p.region === 'vietnam').length, 4);
   assert.equal(roundTrip.filter((p) => p.region === 'international').length, 4);
 
-  // Action pricing scales cleanly from 2K base (10 coins -> 5 / 10 / 20 / 40) and dieline defaults to 20
+  // Action pricing scales cleanly from 2K base (10 coins -> 5 / 10 / 15 / 30) and dieline defaults to 10
   assert.equal(packages.DEFAULT_RENDER_COIN_COST, 10);
-  assert.equal(packages.DEFAULT_DIELINE_COIN_COST, 20);
+  assert.equal(packages.DEFAULT_DIELINE_COIN_COST, 10);
   assert.equal(packages.WELCOME_BONUS_COINS, 20);
   assert.equal(packages.resolveRenderCoinCost(1024), 5);
   assert.equal(packages.resolveRenderCoinCost(2048), 10);
-  assert.equal(packages.resolveRenderCoinCost(4096), 20);
-  assert.equal(packages.resolveRenderCoinCost(8129), 40);
-  assert.equal(packages.resolveRenderCoinCost(4096, 20), 40);
+  assert.equal(packages.resolveRenderCoinCost(4096), 15);
+  assert.equal(packages.resolveRenderCoinCost(8129), 30);
+  assert.equal(packages.resolveRenderCoinCost(4096, 20), 30);
+  assert.equal(packages.resolveRenderCoinCost(8129, 20), 60);
   assert.equal(packages.resolveRenderCoinCost(2048, 0), 0);
 });
 
@@ -228,7 +229,7 @@ test('site settings default to HyperMockup Coming Soon mode and sanitize pricing
   assert.equal(siteConfig.DEFAULT_SITE_SETTINGS.domain, 'hypermockup.com');
   assert.equal(siteConfig.DEFAULT_SITE_SETTINGS.maintenance, true);
   assert.equal(siteConfig.DEFAULT_SITE_SETTINGS.renderCost, 10);
-  assert.equal(siteConfig.DEFAULT_SITE_SETTINGS.dielineCost, 20);
+  assert.equal(siteConfig.DEFAULT_SITE_SETTINGS.dielineCost, 10);
 
   const launched = siteConfig.sanitizeSiteSettings({
     maintenance: false,
@@ -244,10 +245,10 @@ test('site settings default to HyperMockup Coming Soon mode and sanitize pricing
 
   const invalidNeg = siteConfig.sanitizeSiteSettings({ renderCost: -5, dielineCost: -1 });
   assert.equal(invalidNeg.renderCost, 10);
-  assert.equal(invalidNeg.dielineCost, 20);
+  assert.equal(invalidNeg.dielineCost, 10);
 });
 
-test('coin reserve API charges 5/10/20/40 coins for renders and 20 coins for 1:1 mm dieline exports', async () => {
+test('coin reserve API charges 5/10/15/30 coins for renders and 10 coins for 1:1 mm dieline exports', async () => {
   const reservedCalls = [];
   const load = createLoader({
     '@/lib/server/http': {
@@ -258,7 +259,7 @@ test('coin reserve API charges 5/10/20/40 coins for renders and 20 coins for 1:1
       errorResponse: (err) => Response.json({ error: err instanceof Error ? err.message : 'ERROR' }, { status: 400 }),
     },
     '@/lib/server/site-config': {
-      getLiveSiteSettings: async () => ({ renderCost: 10, dielineCost: 20 }),
+      getLiveSiteSettings: async () => ({ renderCost: 10, dielineCost: 10 }),
     },
     '@/lib/server/wallet': {
       reserveCoins: async (_env, input) => {
@@ -269,7 +270,7 @@ test('coin reserve API charges 5/10/20/40 coins for renders and 20 coins for 1:1
   });
   const { POST } = load(path.resolve(ROOT, 'app/api/account/coin/reserve/route.ts'));
 
-  for (const [resolution, expectedCoins] of [[1024, 5], [2048, 10], [4096, 20], [8129, 40]]) {
+  for (const [resolution, expectedCoins] of [[1024, 5], [2048, 10], [4096, 15], [8129, 30]]) {
     const res = await POST(new Request('https://hypermockup.com/api/account/coin/reserve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -285,7 +286,7 @@ test('coin reserve API charges 5/10/20/40 coins for renders and 20 coins for 1:1
     assert.equal(body.quote.action, 'render');
   }
 
-  // Dieline export charges 20 coins and validates format allowlist
+  // Dieline export charges 10 coins and validates format allowlist
   const dielineRes = await POST(new Request('https://hypermockup.com/api/account/coin/reserve', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -298,7 +299,7 @@ test('coin reserve API charges 5/10/20/40 coins for renders and 20 coins for 1:1
   }));
   assert.equal(dielineRes.status, 200);
   const dielineBody = await dielineRes.json();
-  assert.equal(dielineBody.quote.amount, 20);
+  assert.equal(dielineBody.quote.amount, 10);
   assert.equal(dielineBody.quote.action, 'dieline');
   assert.equal(reservedCalls.at(-1).reference, 'dieline:fefco-0421-tray:svg');
 

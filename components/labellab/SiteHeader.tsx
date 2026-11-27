@@ -1,18 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
-import { Bell, CheckCheck, Layers3, LogIn, LogOut } from "lucide-react";
-import { fetchSiteConfigCached } from "@/lib/client/api-cache";
-import {
-  DEFAULT_PUBLIC_ANNOUNCEMENTS,
-  localizeAnnouncement,
-  OPEN_ANNOUNCEMENT_EVENT,
-  useAnnouncementReadState,
-  type PublicAnnouncement,
-} from "@/lib/client/announcements";
+import { Bell, CheckCheck, Layers3, LogIn, LogOut, MessageSquareReply, ShieldCheck } from "lucide-react";
+import type { UserNotificationItem } from "@/lib/server/notifications";
 import { useAccount, useAuthDialog } from "./AuthDialog";
 import { readAnalyticsConsent } from "./CookieConsentBanner";
 import { useLocale } from "./LocaleProvider";
@@ -27,6 +20,21 @@ type SiteHeaderProps = {
   onLogout?: () => void;
 };
 
+function formatNotificationTime(iso: string, locale: "vi" | "en"): string {
+  const ts = Date.parse(iso);
+  if (!Number.isFinite(ts)) return "";
+  try {
+    return new Intl.DateTimeFormat(locale === "vi" ? "vi-VN" : "en-US", {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(ts));
+  } catch {
+    return "";
+  }
+}
+
 export default function SiteHeader({ activePage, disabled = false, onOpenProjects, isLoggedIn, onLogin, onLogout }: SiteHeaderProps) {
   const { locale, setLocale, t } = useLocale();
   const openAuth = useAuthDialog();
@@ -35,9 +43,38 @@ export default function SiteHeader({ activePage, disabled = false, onOpenProject
   const signedIn = isLoggedIn ?? (Boolean(user) || status === "authenticated");
   const accountLabel = signedIn ? t.header.logout : t.header.login;
   const AccountIcon = signedIn ? LogOut : LogIn;
-  const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>(DEFAULT_PUBLIC_ANNOUNCEMENTS);
+
+  const [notifications, setNotifications] = useState<UserNotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loadingNotices, setLoadingNotices] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const detailsRef = useRef<HTMLDetailsElement>(null);
-  const { unreadCount, isUnread, markRead, markAllRead } = useAnnouncementReadState(announcements);
+
+  const loadNotifications = useCallback(async () => {
+    if (!signedIn) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+    setLoadingNotices(true);
+    try {
+      const response = await fetch("/api/account/notifications", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const data = (await response.json()) as {
+        notifications?: UserNotificationItem[];
+        unreadCount?: number;
+      };
+      setNotifications(data.notifications ?? []);
+      setUnreadCount(Number(data.unreadCount ?? 0));
+    } catch {
+      // Keep header responsive if notifications fetch fails transiently.
+    } finally {
+      setLoadingNotices(false);
+    }
+  }, [signedIn]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -61,18 +98,18 @@ export default function SiteHeader({ activePage, disabled = false, onOpenProject
   }, []);
 
   useEffect(() => {
-    let active = true;
-    void fetchSiteConfigCached<{ announcements?: PublicAnnouncement[] }>()
-      .then((cfg) => {
-        if (active && Array.isArray(cfg?.announcements)) {
-          setAnnouncements(cfg.announcements);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
+    const frame = requestAnimationFrame(() => {
+      void loadNotifications();
+    });
+    const onAccountChanged = () => {
+      void loadNotifications();
     };
-  }, []);
+    window.addEventListener("labellab-account-changed", onAccountChanged);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("labellab-account-changed", onAccountChanged);
+    };
+  }, [loadNotifications]);
 
   useEffect(() => {
     const kind = activePage === "studio" ? "studio_session" : "pageview";
@@ -97,6 +134,41 @@ export default function SiteHeader({ activePage, disabled = false, onOpenProject
     window.addEventListener("hypermockup-consent-changed", onConsent);
     return () => window.removeEventListener("hypermockup-consent-changed", onConsent);
   }, [activePage]);
+
+  const markSingleRead = async (item: UserNotificationItem) => {
+    setExpandedId((prev) => (prev === item.id ? null : item.id));
+    if (item.readAt) return;
+    const now = new Date().toISOString();
+    setNotifications((prev) => prev.map((n) => (n.id === item.id ? { ...n, readAt: now } : n)));
+    setUnreadCount((prev) => Math.max(0, prev - 1));
+    try {
+      await fetch("/api/account/notifications", {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id }),
+      });
+    } catch {
+      // Keep optimistic state.
+    }
+  };
+
+  const markAllRead = async () => {
+    if (unreadCount === 0) return;
+    const now = new Date().toISOString();
+    setNotifications((prev) => prev.map((n) => (n.readAt ? n : { ...n, readAt: now })));
+    setUnreadCount(0);
+    try {
+      await fetch("/api/account/notifications", {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "mark_all_read" }),
+      });
+    } catch {
+      // Keep optimistic state.
+    }
+  };
 
   return (
     <header className={styles.header} inert={disabled}>
@@ -124,6 +196,11 @@ export default function SiteHeader({ activePage, disabled = false, onOpenProject
         <details
           ref={detailsRef}
           className={styles.notifications}
+          onToggle={(event) => {
+            if (event.currentTarget.open && signedIn) {
+              void loadNotifications();
+            }
+          }}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
               event.currentTarget.open = false;
@@ -133,69 +210,79 @@ export default function SiteHeader({ activePage, disabled = false, onOpenProject
         >
           <summary className={styles.notificationButton} aria-label={t.header.openNotifications}>
             <Bell className={styles.icon} aria-hidden="true" />
-            {unreadCount > 0 && <i aria-hidden="true" />}
+            {signedIn && unreadCount > 0 && (
+              <span className={styles.unreadCountBadge} aria-hidden="true">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </summary>
           <div className={styles.notificationPanel} role="region" aria-label={t.header.notificationsRegion}>
             <div className={styles.notificationHeader}>
               <strong>{t.header.adminUpdates}</strong>
-              {unreadCount > 0 && (
+              {signedIn && unreadCount > 0 && (
                 <button
                   type="button"
                   className={styles.markReadBtn}
-                  onClick={() => markAllRead(announcements)}
+                  onClick={() => void markAllRead()}
                 >
                   <CheckCheck size={13} aria-hidden="true" />
                   <span>{t.home.markAllRead}</span>
                 </button>
               )}
             </div>
-            {announcements.length > 0 ? (
+
+            {!signedIn ? (
+              <div className={styles.notificationGuestBox}>
+                <p>{t.header.notificationsLoginPrompt}</p>
+                <button
+                  type="button"
+                  className={styles.notificationLoginBtn}
+                  onClick={() => {
+                    if (detailsRef.current) detailsRef.current.open = false;
+                    openAuth("login");
+                  }}
+                >
+                  <LogIn size={14} aria-hidden="true" />
+                  <span>{t.header.login}</span>
+                </button>
+              </div>
+            ) : loadingNotices && notifications.length === 0 ? (
+              <p className={styles.notificationEmpty}>{t.header.notificationsLoading}</p>
+            ) : notifications.length > 0 ? (
               <ul>
-                {announcements.slice(0, 5).map((notice) => {
-                  const localized = localizeAnnouncement(notice, locale);
-                  const unread = isUnread(notice);
+                {notifications.map((notice) => {
+                  const unread = !notice.readAt;
+                  const expanded = expandedId === notice.id;
+                  const isReply = notice.kind === "feedback_reply";
                   return (
                     <li key={notice.id}>
-                      {activePage === "home" ? (
-                        <button
-                          type="button"
-                          className={`${styles.notificationItem} ${unread ? styles.notificationItemUnread : ""}`}
-                          onClick={() => {
-                            markRead(notice);
-                            if (detailsRef.current) detailsRef.current.open = false;
-                            window.dispatchEvent(new CustomEvent(OPEN_ANNOUNCEMENT_EVENT, { detail: { id: notice.id } }));
-                          }}
-                        >
-                          <span className={styles.notificationTitle}>
-                            {unread && <span className={styles.notificationItemDot} aria-hidden="true" />}
-                            <span>{localized.title}</span>
+                      <button
+                        type="button"
+                        className={`${styles.notificationItem} ${unread ? styles.notificationItemUnread : ""}`}
+                        onClick={() => void markSingleRead(notice)}
+                        aria-expanded={expanded}
+                      >
+                        <span className={styles.notificationMetaRow}>
+                          <span className={`${styles.notificationTag} ${isReply ? styles.notificationTagReply : styles.notificationTagAdmin}`}>
+                            {isReply ? <MessageSquareReply size={11} aria-hidden="true" /> : <ShieldCheck size={11} aria-hidden="true" />}
+                            <span>{isReply ? t.header.notificationKindReply : t.header.notificationKindAdmin}</span>
                           </span>
-                          <p className={styles.notificationBody}>{localized.body}</p>
-                          <small>{notice.time}</small>
-                        </button>
-                      ) : (
-                        <Link
-                          href={localized.href}
-                          className={`${styles.notificationItem} ${unread ? styles.notificationItemUnread : ""}`}
-                          onClick={() => {
-                            markRead(notice);
-                            if (detailsRef.current) detailsRef.current.open = false;
-                          }}
-                        >
-                          <span className={styles.notificationTitle}>
-                            {unread && <span className={styles.notificationItemDot} aria-hidden="true" />}
-                            <span>{localized.title}</span>
-                          </span>
-                          <p className={styles.notificationBody}>{localized.body}</p>
-                          <small>{notice.time}</small>
-                        </Link>
-                      )}
+                          <small>{formatNotificationTime(notice.createdAt, locale)}</small>
+                        </span>
+                        <span className={styles.notificationTitle}>
+                          {unread && <span className={styles.notificationItemDot} aria-hidden="true" />}
+                          <span>{notice.title}</span>
+                        </span>
+                        <p className={`${styles.notificationBody} ${expanded ? styles.notificationBodyExpanded : ""}`}>
+                          {notice.body}
+                        </p>
+                      </button>
                     </li>
                   );
                 })}
               </ul>
             ) : (
-              <p className={styles.notificationEmpty}>{t.home.noAnnouncements}</p>
+              <p className={styles.notificationEmpty}>{t.header.notificationsEmpty}</p>
             )}
           </div>
         </details>

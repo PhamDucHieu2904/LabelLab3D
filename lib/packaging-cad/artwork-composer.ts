@@ -85,6 +85,8 @@ export interface PackagingTextureComposer {
     artwork: PackagingArtworkState,
     options?: { maxEdge?: number },
   ): Promise<THREE.CanvasTexture | null>;
+  /** Dispose textures replaced after a canvas resize once materials have swapped to the new maps. */
+  flushRetired(): void;
   dispose(): void;
 }
 
@@ -94,27 +96,74 @@ export interface PackagingTextureComposer {
  *  - Full-dieline uploaded artwork (Pro mode)
  *  - Per-panel overlays (Quick Panel Designer: fill color, logo image, upright typography)
  *  - Optional Face Orientation Guides (`FRONT ↑`, `LEFT ↑`, `TOP ↑`) so users never print upside-down
+ *
+ * WebGL2 safety invariants:
+ *  1. Whenever blank aspect ratio changes (`width` or `height` differs), allocate a fresh
+ *     `HTMLCanvasElement` + fresh `THREE.CanvasTexture` instead of resizing an existing
+ *     CanvasTexture in-place (WebGL2 `texStorage2D` is immutable per texture handle!).
+ *  2. Preload all images BEFORE mutating any canvas and guard with a monotonic sequence counter
+ *     so rapid slider drags can never interleave or let stale async draws overwrite newer frames.
  */
 export function createPackagingTextureComposer(): PackagingTextureComposer {
   const imageCache = new Map<string, Promise<HTMLImageElement>>();
   const canvasBySide: Partial<Record<'outside' | 'inside', HTMLCanvasElement>> = {};
   const textureBySide: Partial<Record<'outside' | 'inside', THREE.CanvasTexture>> = {};
+  const sizeBySide: Partial<Record<'outside' | 'inside', { width: number; height: number }>> = {};
+  const seqBySide: Record<'outside' | 'inside', number> = { outside: 0, inside: 0 };
+
   let finishMaskCanvas: HTMLCanvasElement | null = null;
   let finishMaskTexture: THREE.CanvasTexture | null = null;
+  let finishMaskSize: { width: number; height: number } | null = null;
+  let finishMaskSeq = 0;
   let scratchCanvas: HTMLCanvasElement | null = null;
+  const retiredTextures: THREE.CanvasTexture[] = [];
 
-  const ensureCanvas = (side: 'outside' | 'inside', width: number, height: number) => {
+  const pruneImageCache = (artwork: PackagingArtworkState) => {
+    const activeUrls = new Set<string>();
+    if (artwork.outsideDielineUrl) activeUrls.add(artwork.outsideDielineUrl);
+    if (artwork.insideDielineUrl) activeUrls.add(artwork.insideDielineUrl);
+    if (artwork.finishMaskUrl) activeUrls.add(artwork.finishMaskUrl);
+    for (const ov of Object.values(artwork.panelOverlays)) {
+      if (ov.imageUrl) activeUrls.add(ov.imageUrl);
+    }
+    for (const cachedUrl of imageCache.keys()) {
+      if (cachedUrl.startsWith('blob:') && !activeUrls.has(cachedUrl)) {
+        imageCache.delete(cachedUrl);
+      }
+    }
+  };
+
+  const ensureSizedCanvas = (side: 'outside' | 'inside', width: number, height: number) => {
     if (typeof document === 'undefined') return null;
-    let canvas = canvasBySide[side];
-    if (!canvas) {
-      canvas = document.createElement('canvas');
-      canvasBySide[side] = canvas;
+    const prevSize = sizeBySide[side];
+    const resized = !canvasBySide[side] || !prevSize || prevSize.width !== width || prevSize.height !== height;
+    if (resized) {
+      // Create a fresh canvas whenever dimensions change so Three.js WebGL2 never reuses
+      // an immutable texStorage2D allocation with mismatched width/height.
+      const fresh = document.createElement('canvas');
+      fresh.width = width;
+      fresh.height = height;
+      canvasBySide[side] = fresh;
+      sizeBySide[side] = { width, height };
+      return { canvas: fresh, resized: true };
     }
-    if (canvas.width !== width || canvas.height !== height) {
-      canvas.width = width;
-      canvas.height = height;
-    }
-    return canvas;
+    return { canvas: canvasBySide[side]!, resized: false };
+  };
+
+  const preloadUrls = async (urls: readonly string[]): Promise<Map<string, HTMLImageElement>> => {
+    const unique = Array.from(new Set(urls.filter(Boolean)));
+    const decoded = new Map<string, HTMLImageElement>();
+    await Promise.all(
+      unique.map(async (url) => {
+        try {
+          const img = await loadImageCached(url, imageCache);
+          decoded.set(url, img);
+        } catch {
+          // Gracefully skip expired/broken blob URLs.
+        }
+      }),
+    );
+    return decoded;
   };
 
   /**
@@ -335,9 +384,18 @@ export function createPackagingTextureComposer(): PackagingTextureComposer {
     return scratchCanvas;
   };
 
+  const flushRetired = () => {
+    while (retiredTextures.length > 0) {
+      retiredTextures.pop()?.dispose();
+    }
+  };
+
   return {
     async compose(solved, artwork, side, options) {
       if (typeof document === 'undefined') return null;
+
+      const mySeq = ++seqBySide[side];
+      pruneImageCache(artwork);
 
       const fullUrl = side === 'outside' ? artwork.outsideDielineUrl : artwork.insideDielineUrl;
       const panelOverlays: PanelDesignOverlay[] = Object.values(artwork.panelOverlays).filter(
@@ -346,37 +404,46 @@ export function createPackagingTextureComposer(): PackagingTextureComposer {
       const showLabels = solved.params.showFaceLabels;
       const showCreases = solved.params.showCreaseLines && solved.params.foldProgress < 0.45;
 
-      // If there is no artwork, no panel overlays, and no face labels, still draw subtle crisp
-      // kraft grain + orientation watermark only when needed; otherwise return null for pure fast PBR!
       if (!fullUrl && panelOverlays.length === 0 && !showLabels && !showCreases) {
         return null;
       }
 
+      // Phase 1 (async): Decode all referenced images BEFORE mutating any shared canvas/ctx!
+      const urlsToLoad: string[] = [];
+      if (fullUrl) urlsToLoad.push(fullUrl);
+      for (const ov of panelOverlays) {
+        if (ov.imageUrl) urlsToLoad.push(ov.imageUrl);
+      }
+      const decodedImages = urlsToLoad.length > 0 ? await preloadUrls(urlsToLoad) : new Map<string, HTMLImageElement>();
+
+      // If a newer compose() started while decoding, bail out without touching canvas/texture.
+      if (mySeq !== seqBySide[side]) return null;
+
+      // Phase 2 (100% synchronous): Size canvas, paint clean frame, and bind CanvasTexture.
       const hasImageOverlay = panelOverlays.some((ov) => Boolean(ov.imageUrl));
       const maxEdge = options?.maxEdge ?? (hasImageOverlay || fullUrl ? 3072 : 2048);
       const aspect = Math.max(0.2, Math.min(5, solved.blankBounds.width / Math.max(1, solved.blankBounds.height)));
       const width = aspect >= 1 ? maxEdge : Math.max(256, Math.round(maxEdge * aspect));
       const height = aspect >= 1 ? Math.max(256, Math.round(maxEdge / aspect)) : maxEdge;
 
-      const canvas = ensureCanvas(side, width, height);
-      if (!canvas) return null;
+      const ensured = ensureSizedCanvas(side, width, height);
+      if (!ensured) return null;
+      const { canvas, resized } = ensured;
       const ctx = canvas.getContext('2d');
       if (!ctx) return null;
 
       // 1. Base board color fill
       ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, width, height);
       ctx.fillStyle = side === 'outside' ? solved.params.outsideColor : solved.params.insideColor;
       ctx.fillRect(0, 0, width, height);
       ctx.restore();
 
       // 2. Full Dieline Artwork (Pro Mode)
       if (fullUrl) {
-        try {
-          const img = await loadImageCached(fullUrl, imageCache);
-          ctx.drawImage(img, 0, 0, width, height);
-        } catch {
-          // Preserve base color if blob URL expired.
-        }
+        const img = decodedImages.get(fullUrl);
+        if (img) ctx.drawImage(img, 0, 0, width, height);
       }
 
       // 3. Per-Panel Overlays (Quick Panel Designer — clipped to each panel polygon, upright oriented!)
@@ -413,8 +480,8 @@ export function createPackagingTextureComposer(): PackagingTextureComposer {
         const uprightH = Math.abs(rotDeg % 180) === 90 ? panelWpx : panelHpx;
 
         if (overlay.imageUrl) {
-          try {
-            const img = await loadImageCached(overlay.imageUrl, imageCache);
+          const img = decodedImages.get(overlay.imageUrl);
+          if (img) {
             if (overlay.fitMode === 'crop') {
               ctx.save();
               ctx.translate(cx, cy);
@@ -439,8 +506,6 @@ export function createPackagingTextureComposer(): PackagingTextureComposer {
               ctx.drawImage(img, -drawW * 0.5, -drawH * 0.5, drawW, drawH);
               ctx.restore();
             }
-          } catch {
-            // Skip broken overlay image gracefully.
           }
         }
 
@@ -516,14 +581,15 @@ export function createPackagingTextureComposer(): PackagingTextureComposer {
       }
 
       let tex = textureBySide[side];
-      if (!tex || tex.image !== canvas) {
-        tex?.dispose();
+      if (!tex || resized || tex.image !== canvas) {
+        if (tex) retiredTextures.push(tex);
         tex = new THREE.CanvasTexture(canvas);
         tex.colorSpace = THREE.SRGBColorSpace;
         tex.flipY = false;
         tex.anisotropy = 8;
         tex.wrapS = THREE.ClampToEdgeWrapping;
         tex.wrapT = THREE.ClampToEdgeWrapping;
+        tex.needsUpdate = true;
         textureBySide[side] = tex;
       } else {
         tex.needsUpdate = true;
@@ -532,10 +598,30 @@ export function createPackagingTextureComposer(): PackagingTextureComposer {
     },
     async composeFinishMask(solved, artwork, options) {
       if (typeof document === 'undefined') return null;
+      const mySeq = ++finishMaskSeq;
       const { finishMode, finishTarget, finishThreshold, finishInvertMask } = solved.params;
       if (finishMode === 'none') return null;
       if (!artwork.finishMaskUrl && finishTarget === 'full-surface') return null;
 
+      // Phase 1 (async): Preload all images before mutating finishMaskCanvas
+      const panelOverlays: PanelDesignOverlay[] = Object.values(artwork.panelOverlays).filter(
+        (ov) => ov.surface === 'outside' && Boolean(ov.imageUrl || ov.text?.trim()),
+      );
+      const urlsToLoad: string[] = [];
+      if (artwork.finishMaskUrl) {
+        urlsToLoad.push(artwork.finishMaskUrl);
+      } else {
+        if (artwork.outsideDielineUrl && finishTarget === 'auto-artwork') {
+          urlsToLoad.push(artwork.outsideDielineUrl);
+        }
+        for (const ov of panelOverlays) {
+          if (ov.imageUrl) urlsToLoad.push(ov.imageUrl);
+        }
+      }
+      const decodedImages = urlsToLoad.length > 0 ? await preloadUrls(urlsToLoad) : new Map<string, HTMLImageElement>();
+      if (mySeq !== finishMaskSeq) return null;
+
+      // Phase 2 (100% synchronous)
       const maxEdge = options?.maxEdge ?? 2048;
       const aspect = Math.max(
         0.2,
@@ -544,30 +630,30 @@ export function createPackagingTextureComposer(): PackagingTextureComposer {
       const width = aspect >= 1 ? maxEdge : Math.max(256, Math.round(maxEdge * aspect));
       const height = aspect >= 1 ? Math.max(256, Math.round(maxEdge / aspect)) : maxEdge;
 
-      if (!finishMaskCanvas) finishMaskCanvas = document.createElement('canvas');
-      if (finishMaskCanvas.width !== width || finishMaskCanvas.height !== height) {
+      const resized =
+        !finishMaskCanvas ||
+        !finishMaskSize ||
+        finishMaskSize.width !== width ||
+        finishMaskSize.height !== height;
+      if (resized) {
+        finishMaskCanvas = document.createElement('canvas');
         finishMaskCanvas.width = width;
         finishMaskCanvas.height = height;
+        finishMaskSize = { width, height };
       }
-      const ctx = finishMaskCanvas.getContext('2d', { willReadFrequently: true });
+      const ctx = finishMaskCanvas!.getContext('2d', { willReadFrequently: true });
       if (!ctx) return null;
 
       // Start solid black (0.0 = natural matte board, 1.0 = active Spot UV / Hot Foil)
       ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, width, height);
 
       if (artwork.finishMaskUrl) {
-        try {
-          const maskImg = await loadImageCached(artwork.finishMaskUrl, imageCache);
-          ctx.drawImage(maskImg, 0, 0, width, height);
-        } catch {
-          // Keep clean fallback if custom mask blob expired
-        }
+        const maskImg = decodedImages.get(artwork.finishMaskUrl);
+        if (maskImg) ctx.drawImage(maskImg, 0, 0, width, height);
       } else {
-        const panelOverlays: PanelDesignOverlay[] = Object.values(artwork.panelOverlays).filter(
-          (ov) => ov.surface === 'outside' && Boolean(ov.imageUrl || ov.text?.trim()),
-        );
         const hasArtworkContent = Boolean(artwork.outsideDielineUrl || panelOverlays.length > 0);
 
         // Draw luxury frame when explicitly selected OR as graceful instant preview on blank boxes
@@ -576,12 +662,10 @@ export function createPackagingTextureComposer(): PackagingTextureComposer {
         }
 
         if (artwork.outsideDielineUrl && finishTarget === 'auto-artwork') {
-          try {
-            const img = await loadImageCached(artwork.outsideDielineUrl, imageCache);
+          const img = decodedImages.get(artwork.outsideDielineUrl);
+          if (img) {
             const extracted = extractImageMaskToScratch(img, width * 0.5, height * 0.5, finishThreshold);
             if (extracted) ctx.drawImage(extracted, 0, 0, width, height);
-          } catch {
-            // Skip invalid URL
           }
         }
 
@@ -613,8 +697,8 @@ export function createPackagingTextureComposer(): PackagingTextureComposer {
           const uprightH = Math.abs(rotDeg % 180) === 90 ? panelWpx : panelHpx;
 
           if (overlay.imageUrl) {
-            try {
-              const img = await loadImageCached(overlay.imageUrl, imageCache);
+            const img = decodedImages.get(overlay.imageUrl);
+            if (img) {
               const extracted = extractImageMaskToScratch(img, uprightW, uprightH, finishThreshold);
               if (extracted) {
                 if (overlay.fitMode === 'crop') {
@@ -642,8 +726,6 @@ export function createPackagingTextureComposer(): PackagingTextureComposer {
                   ctx.restore();
                 }
               }
-            } catch {
-              // Skip broken overlay image
             }
           }
 
@@ -672,30 +754,36 @@ export function createPackagingTextureComposer(): PackagingTextureComposer {
       }
       ctx.restore();
 
-      if (!finishMaskTexture || finishMaskTexture.image !== finishMaskCanvas) {
-        finishMaskTexture?.dispose();
-        finishMaskTexture = new THREE.CanvasTexture(finishMaskCanvas);
+      if (!finishMaskTexture || resized || finishMaskTexture.image !== finishMaskCanvas) {
+        if (finishMaskTexture) retiredTextures.push(finishMaskTexture);
+        finishMaskTexture = new THREE.CanvasTexture(finishMaskCanvas!);
         finishMaskTexture.colorSpace = THREE.NoColorSpace;
         finishMaskTexture.flipY = false;
         finishMaskTexture.anisotropy = 8;
         finishMaskTexture.wrapS = THREE.ClampToEdgeWrapping;
         finishMaskTexture.wrapT = THREE.ClampToEdgeWrapping;
+        finishMaskTexture.needsUpdate = true;
       } else {
         finishMaskTexture.needsUpdate = true;
       }
       return finishMaskTexture;
     },
+    flushRetired,
     dispose() {
+      flushRetired();
       textureBySide.outside?.dispose();
       textureBySide.inside?.dispose();
       finishMaskTexture?.dispose();
       finishMaskTexture = null;
       finishMaskCanvas = null;
+      finishMaskSize = null;
       scratchCanvas = null;
       delete textureBySide.outside;
       delete textureBySide.inside;
       delete canvasBySide.outside;
       delete canvasBySide.inside;
+      delete sizeBySide.outside;
+      delete sizeBySide.inside;
       imageCache.clear();
     },
   };

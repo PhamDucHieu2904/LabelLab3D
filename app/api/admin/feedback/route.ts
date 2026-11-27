@@ -6,6 +6,7 @@ import {
   sanitizeFeedbackStatus,
 } from "@/lib/server/feedback";
 import { assertSameOrigin, errorResponse, json } from "@/lib/server/http";
+import { listRepliesForFeedback } from "@/lib/server/notifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +20,12 @@ export async function GET(request: Request) {
     if (summaryOnly) {
       return json({ summary: data.summary });
     }
-    return json(data);
+    const replyMap = await listRepliesForFeedback(env);
+    const items = data.items.map((item) => ({
+      ...item,
+      replies: replyMap.get(item.id) ?? [],
+    }));
+    return json({ items, summary: data.summary });
   } catch (error) {
     return errorResponse(error);
   }

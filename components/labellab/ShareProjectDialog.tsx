@@ -570,10 +570,10 @@ export default function ShareProjectDialog({
                 disabled={busy}
                 onChange={(e) => setExpiryPreset(e.target.value as ShareExpiryPreset)}
               >
+                <option value="1d">{copy.exp1d}</option>
                 <option value="7d">{copy.exp7d}</option>
+                <option value="14d">{copy.exp14d}</option>
                 <option value="30d">{copy.exp30d}</option>
-                <option value="90d">{copy.exp90d}</option>
-                <option value="never">{copy.expNever}</option>
               </select>
             </label>
 

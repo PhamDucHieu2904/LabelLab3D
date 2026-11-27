@@ -261,13 +261,15 @@ export function createPackagingSubject(
 
   const rebakeTextures = async (artworkState: PackagingArtworkState) => {
     const rev = ++artworkRevision;
+    const targetSolved = solved;
     const [outsideMap, insideMap, finishMaskMap] = await Promise.all([
-      composer.compose(solved, artworkState, 'outside'),
-      composer.compose(solved, artworkState, 'inside'),
-      composer.composeFinishMask(solved, artworkState),
+      composer.compose(targetSolved, artworkState, 'outside'),
+      composer.compose(targetSolved, artworkState, 'inside'),
+      composer.composeFinishMask(targetSolved, artworkState),
     ]);
     if (disposed || rev !== artworkRevision) return;
-    materials.sync(solved.params, solved.material, { outsideMap, insideMap, finishMaskMap });
+    materials.sync(targetSolved.params, targetSolved.material, { outsideMap, insideMap, finishMaskMap });
+    composer.flushRetired();
     callbacks?.onNeedsRender?.();
   };
 

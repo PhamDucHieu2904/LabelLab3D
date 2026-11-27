@@ -47,7 +47,7 @@ const defaults = {
   tileThreshold: 4096,
   freeDownloads: 1,
   renderCost: 10,
-  dielineCost: 20,
+  dielineCost: 10,
   shareCost: 20,
   projectExtendCost: 10,
   emailVerified: true,
@@ -598,7 +598,7 @@ export default function OperationsPanel({ section }: { section: "activity" | "se
                       <option value={8129}>8129 px</option>
                     </select>
                   </label>
-                  {textField("renderCost", "Coin render chuẩn 2048 px (1K=0.5× · 4K=2× · 8K=4×)", "number", 0, 10000)}
+                  {textField("renderCost", "Coin render chuẩn 2048 px (1K=0.5× · 4K=1.5× · 8K=3×)", "number", 0, 10000)}
                   {textField("dielineCost", "Coin xuất Dieline 1:1 mm (SVG/PDF/DXF)", "number", 0, 10000)}
                   {textField("shareCost", "Coin tạo Link Share 3D cho khách duyệt (0 = miễn phí)", "number", 0, 10000)}
                   {textField("projectExtendCost", "Coin gia hạn dự án Cloud thêm 30 ngày (0 = miễn phí)", "number", 0, 10000)}

@@ -1603,7 +1603,12 @@
   position: absolute;
   inset: 0;
   opacity: 0;
-  pointer-events: none;
+  visibility: hidden;
+  pointer-events: none !important;
+}
+
+.splitPane3DHidden * {
+  pointer-events: none !important;
 }
 
 .splitPane2D {
@@ -1617,6 +1622,7 @@
   border-right: 1px solid #dcdfe2;
   border-left: 1px solid #dcdfe2;
   z-index: 4;
+  pointer-events: auto;
 }
 
 .splitPane2DFull {
@@ -1631,10 +1637,50 @@
   gap: 8px;
   padding: 78px 14px 10px;
   border-bottom: 1px solid #e2e8f0;
-  background: rgba(255, 255, 255, 0.94);
+  background: rgba(255, 255, 255, 0.96);
   font-size: 11px;
   color: #475569;
   flex-wrap: wrap;
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.dielineZoomGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  border: 1px solid #dcdfe2;
+  background: #f1f5f9;
+}
+
+.dielineZoomBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.dielineZoomBtn:hover:not(:disabled) {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.dielineZoomBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .toastTop {
@@ -1685,23 +1731,37 @@
 }
 
 .dielineCanvasWrap {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
-  display: grid;
-  place-items: center;
-  padding: 18px 20px 76px;
-  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 18px 80px;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+  pointer-events: auto;
   background-image:
     linear-gradient(to right, rgba(148, 163, 184, 0.14) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(148, 163, 184, 0.14) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
+.dielineCanvasWrapDragging {
+  cursor: grabbing;
+}
+
 .dielineSvgHost {
   width: 100%;
   height: 100%;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center center;
+  will-change: transform;
 }
 
 .dielineSvgHost svg {
@@ -1709,6 +1769,7 @@
   max-height: 100%;
   width: auto;
   height: auto;
+  display: block;
   filter: drop-shadow(0 8px 24px rgba(15, 23, 42, 0.08));
 }
 
@@ -1719,6 +1780,25 @@
 
 .dielineSvgHost svg path[data-panel-id]:hover {
   fill-opacity: 0.6;
+}
+
+.dielineHintPill {
+  position: absolute;
+  left: 14px;
+  top: 12px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.9);
+  color: #475569;
+  font-size: 10.5px;
+  font-weight: 550;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
 }
 
 /* Dual-Mode Artwork Panel */

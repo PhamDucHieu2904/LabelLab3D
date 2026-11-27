@@ -13,10 +13,11 @@ export const SHARE_LIMITS = Object.freeze({
   maxItemNameLength: 80,
   minPasscodeLength: 4,
   maxPasscodeLength: 32,
+  maxExpiryDays: 30,
 });
 
 export type ShareStatus = 'active' | 'paused' | 'revoked';
-export type ShareExpiryPreset = '7d' | '30d' | '90d' | 'never';
+export type ShareExpiryPreset = '1d' | '7d' | '14d' | '30d';
 
 export interface SharedProjectOptions {
   allowFold: boolean;
@@ -174,8 +175,14 @@ export function collectPayloadAssetHashes(
   return [...hashes];
 }
 
-export function computeExpiryIso(preset: ShareExpiryPreset, nowMs = Date.now()): string | null {
-  if (preset === 'never') return null;
-  const days = preset === '7d' ? 7 : preset === '90d' ? 90 : 30;
+export function computeExpiryIso(preset: ShareExpiryPreset, nowMs = Date.now()): string {
+  const days =
+    preset === '1d'
+      ? 1
+      : preset === '7d'
+        ? 7
+        : preset === '14d'
+          ? 14
+          : SHARE_LIMITS.maxExpiryDays;
   return new Date(nowMs + days * 86_400_000).toISOString();
 }
