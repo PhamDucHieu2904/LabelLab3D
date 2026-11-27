@@ -19,7 +19,6 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Pause,
-  Play,
   Plus,
   RotateCcw,
   RotateCw,
@@ -107,7 +106,6 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
   const [foldProgress, setFoldProgress] = useState<number>(() =>
     initialItem?.payload.kind === "packaging" ? initialItem.payload.packagingParams.foldProgress : 1,
   );
-  const [foldPlaying, setFoldPlaying] = useState(false);
   const [showDimensions, setShowDimensions] = useState<boolean>(() =>
     Boolean(initialItem?.payload.kind === "packaging" && initialItem.payload.packagingParams.showDimensions),
   );
@@ -187,7 +185,6 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
     if (item.payload.kind === "packaging") {
       setFoldProgress(item.payload.packagingParams.foldProgress);
       setShowDimensions(Boolean(item.payload.packagingParams.showDimensions));
-      setFoldPlaying(false);
       setAutoSpin(false);
     } else {
       const savedMode = item.payload.settings.sceneMode;
@@ -200,7 +197,6 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
             : "pink",
       );
       setAutoSpin(item.payload.settings.motion !== "off");
-      setFoldPlaying(false);
     }
   }, []);
 
@@ -511,18 +507,9 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
       : undefined;
 
   const handleFoldSlider = (next: number) => {
-    setFoldPlaying(false);
-    packagingSubjectRef.current?.setFoldPlaying(false);
     setFoldProgress(next);
     packagingSubjectRef.current?.setFoldProgress(next);
     sceneRef.current?.refreshProceduralBounds(false);
-  };
-
-  const handleToggleFoldPlay = () => {
-    const next = !foldPlaying;
-    setFoldPlaying(next);
-    packagingSubjectRef.current?.setFoldPlaying(next, (p) => setFoldProgress(p));
-    sceneRef.current?.requestFrame();
   };
 
   const handleToggleDimensions = () => {
@@ -678,14 +665,6 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
           <div className={`${styles.floatingControls} ${!panelCollapsed ? styles.floatingControlsWithPanel : ""}`}>
             {isPackaging && readyShare.options.allowFold && (
               <div className={styles.foldCard}>
-                <button
-                  type="button"
-                  className={styles.foldPlayBtn}
-                  onClick={handleToggleFoldPlay}
-                  aria-label={foldPlaying ? "Pause fold animation" : "Play fold animation"}
-                >
-                  {foldPlaying ? <Pause size={14} /> : <Play size={14} />}
-                </button>
                 <label className={styles.foldSliderLabel}>
                   <span>Fold {Math.round(foldProgress * 100)}%</span>
                   <input
