@@ -82,6 +82,7 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
   const hostRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<MockupRuntime | null>(null);
   const panKeysRef = useRef<Set<"w" | "a" | "s" | "d">>(new Set());
+  const orbitKeysRef = useRef<Set<"left" | "right">>(new Set());
   const propsRef = useRef({ model, settings, artwork, artworkEditing, onStatus, onQualityChange, qualityPreference, paintBackground, onHoverTarget, onPickTarget });
   const [readyVersion, setReadyVersion] = useState(0);
   const [status, setStatus] = useState("loading-model");
@@ -302,6 +303,12 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
     return null;
   };
 
+  const resolveOrbitKey = (event: { code?: string; key: string }): "left" | "right" | null => {
+    if (event.code === "ArrowLeft" || event.key === "ArrowLeft") return "left";
+    if (event.code === "ArrowRight" || event.key === "ArrowRight") return "right";
+    return null;
+  };
+
   const syncPanVelocity = () => {
     const keys = panKeysRef.current;
     const horizontal = (keys.has("a") ? 1 : 0) - (keys.has("d") ? 1 : 0);
@@ -309,12 +316,23 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
     runtimeRef.current?.setPanVelocity(horizontal, vertical);
   };
 
+  const syncOrbitVelocity = () => {
+    const keys = orbitKeysRef.current;
+    const yaw = (keys.has("right") ? 1 : 0) - (keys.has("left") ? 1 : 0);
+    runtimeRef.current?.setOrbitVelocity(yaw, 0);
+  };
+
   useEffect(() => {
     if (interaction === "drag-only") return;
-    const clearHeldPan = () => {
-      if (panKeysRef.current.size === 0) return;
-      panKeysRef.current.clear();
-      runtimeRef.current?.setPanVelocity(0, 0);
+    const clearHeldNavigation = () => {
+      if (panKeysRef.current.size > 0) {
+        panKeysRef.current.clear();
+        runtimeRef.current?.setPanVelocity(0, 0);
+      }
+      if (orbitKeysRef.current.size > 0) {
+        orbitKeysRef.current.clear();
+        runtimeRef.current?.setOrbitVelocity(0, 0);
+      }
     };
     const onWindowKeyUp = (event: KeyboardEvent) => {
       const panKey = resolvePanKey(event);
@@ -324,16 +342,22 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
         const vertical = (keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0);
         runtimeRef.current?.setPanVelocity(horizontal, vertical);
       }
+      const orbitKey = resolveOrbitKey(event);
+      if (orbitKey && orbitKeysRef.current.delete(orbitKey)) {
+        const keys = orbitKeysRef.current;
+        const yaw = (keys.has("right") ? 1 : 0) - (keys.has("left") ? 1 : 0);
+        runtimeRef.current?.setOrbitVelocity(yaw, 0);
+      }
     };
     const onVisibility = () => {
-      if (document.hidden) clearHeldPan();
+      if (document.hidden) clearHeldNavigation();
     };
-    window.addEventListener("blur", clearHeldPan);
+    window.addEventListener("blur", clearHeldNavigation);
     window.addEventListener("keyup", onWindowKeyUp);
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      clearHeldPan();
-      window.removeEventListener("blur", clearHeldPan);
+      clearHeldNavigation();
+      window.removeEventListener("blur", clearHeldNavigation);
       window.removeEventListener("keyup", onWindowKeyUp);
       document.removeEventListener("visibilitychange", onVisibility);
     };
@@ -361,10 +385,17 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
             }
             return;
           }
+          const orbitKey = resolveOrbitKey(event);
+          if (orbitKey) {
+            event.preventDefault();
+            if (!orbitKeysRef.current.has(orbitKey)) {
+              orbitKeysRef.current.add(orbitKey);
+              syncOrbitVelocity();
+            }
+            return;
+          }
           const key = event.key.toLowerCase();
           const map: Record<string, () => void> = {
-            ArrowLeft: () => runtimeRef.current?.orbitView(-0.15, 0),
-            ArrowRight: () => runtimeRef.current?.orbitView(0.15, 0),
             ArrowUp: () => runtimeRef.current?.adjustFov(-2),
             ArrowDown: () => runtimeRef.current?.adjustFov(2),
             "+": () => runtimeRef.current?.zoom(1.15),
@@ -385,11 +416,19 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
           if (panKey && panKeysRef.current.delete(panKey)) {
             syncPanVelocity();
           }
+          const orbitKey = resolveOrbitKey(event);
+          if (orbitKey && orbitKeysRef.current.delete(orbitKey)) {
+            syncOrbitVelocity();
+          }
         }}
         onBlur={interaction === "drag-only" ? undefined : () => {
           if (panKeysRef.current.size > 0) {
             panKeysRef.current.clear();
             syncPanVelocity();
+          }
+          if (orbitKeysRef.current.size > 0) {
+            orbitKeysRef.current.clear();
+            syncOrbitVelocity();
           }
         }}
       />

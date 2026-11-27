@@ -487,6 +487,10 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   const panVelocity = new THREE.Vector2(0, 0);
   const PAN_SPEED_SCREEN_HEIGHTS_PER_SEC = 0.55;
   const PAN_ACCEL_RATE = 24;
+  const orbitInput = new THREE.Vector2(0, 0);
+  const orbitVelocity = new THREE.Vector2(0, 0);
+  const ORBIT_SPEED_RAD_PER_SEC = 1.65;
+  const ORBIT_ACCEL_RATE = 22;
   let raf = 0;
   let dirty = true;
   let lastTime = performance.now();
@@ -602,8 +606,11 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   const isVisible = () => !disposed && !contextLost && visible && !document.hidden && pausedAt === null;
   const isPanning = () => panInput.lengthSq() > 0.0001 || panVelocity.lengthSq() > 0.00001;
   const clearPan = () => { panInput.set(0, 0); panVelocity.set(0, 0); };
+  const isOrbitingByKey = () => orbitInput.lengthSq() > 0.0001 || orbitVelocity.lengthSq() > 0.00001;
+  const clearOrbit = () => { orbitInput.set(0, 0); orbitVelocity.set(0, 0); };
   const moving = () => hasSubject() && !captureGate.busy && (Boolean(cameraTransition)
     || isPanning()
+    || isOrbitingByKey()
     || animation.playing && animation.mode !== 'off'
     || animation.mode === 'showcase' && (dragging || Boolean(returnFrom) || pose.angleTo(targetPose) > 0.00001 && Number.isFinite(lastInputAt)));
   const restoreSoftboxKeyLight = () => {
@@ -1119,6 +1126,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       dirty = true;
       if (complete) cameraTransition = null;
     }
+    let movedCameraByKeyboard = false;
     if (isPanning() && !captureGate.busy) {
       const subjectBounds = currentSubjectBounds();
       if (subjectBounds) {
@@ -1141,8 +1149,45 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
             camera.position.add(applied);
             controls.target.add(applied);
             controls.update();
+            movedCameraByKeyboard = true;
             dirty = true;
           }
+        }
+      }
+    }
+    if (isOrbitingByKey() && !captureGate.busy && hasSubject()) {
+      const blend = 1 - Math.exp(-dt * ORBIT_ACCEL_RATE);
+      orbitVelocity.lerp(orbitInput, blend);
+      if (orbitInput.lengthSq() === 0 && orbitVelocity.lengthSq() < 0.00002) {
+        orbitVelocity.set(0, 0);
+      }
+      if (orbitVelocity.lengthSq() > 0) {
+        const yawStep = orbitVelocity.x * ORBIT_SPEED_RAD_PER_SEC * dt;
+        const pitchStep = orbitVelocity.y * ORBIT_SPEED_RAD_PER_SEC * dt;
+        if (animation.mode === 'showcase') {
+          if (Math.abs(yawStep) > 1e-6) {
+            pose.premultiply(dragStep.setFromAxisAngle(yawAxis, yawStep)).normalize();
+          }
+          if (Math.abs(pitchStep) > 1e-6) {
+            candidatePose.copy(pose).premultiply(dragStep.setFromAxisAngle(new THREE.Vector3(1, 0, 0), pitchStep)).normalize();
+            up.set(0, 1, 0).applyQuaternion(candidatePose);
+            if (up.y >= -0.25) pose.copy(candidatePose);
+          }
+          targetPose.copy(pose);
+          product.quaternion.copy(pose);
+          lastInputAt = motionTime;
+          returnFrom = null;
+          dirty = true;
+        } else {
+          const relative = camera.position.clone().sub(controls.target);
+          const spherical = new THREE.Spherical().setFromVector3(relative);
+          spherical.theta += yawStep;
+          spherical.phi = THREE.MathUtils.clamp(spherical.phi + pitchStep, controls.minPolarAngle, controls.maxPolarAngle);
+          camera.position.copy(controls.target).add(new THREE.Vector3().setFromSpherical(spherical));
+          camera.lookAt(controls.target);
+          controls.update();
+          movedCameraByKeyboard = true;
+          dirty = true;
         }
       }
     }
@@ -1204,7 +1249,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     // Reuse that request instead of starting a second animation chain.
     // The transition branch already synchronizes OrbitControls after moving
     // the camera. Avoid damping it twice in the same frame.
-    const controlsMoving = transitionAtFrame ? false : controls.update();
+    const controlsMoving = transitionAtFrame || movedCameraByKeyboard ? false : controls.update();
     const stillActive = moving() || bubbling || proceduralAnimating || controlsMoving || dirty;
     if (stillActive && !raf) raf = requestAnimationFrame(frame);
     else if (!stillActive) scheduleIdleRefine();
@@ -1778,7 +1823,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   };
   const manualCamera = (preset: MockupCameraPreset) => {
     if (disposed || captureGate.busy) return;
-    clearPan();
+    clearPan(); clearOrbit();
     const wasAnimated = animation.mode !== 'off';
     cancelPointers();
     // Clear OrbitControls momentum without advancing the visible camera.
@@ -2036,6 +2081,23 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       requestRender();
     }
   };
+  const setOrbitVelocity = (yaw: number, pitch = 0) => {
+    if (disposed || captureGate.busy || !Number.isFinite(yaw) || !Number.isFinite(pitch)) return;
+    const nyaw = THREE.MathUtils.clamp(yaw, -1, 1);
+    const npitch = THREE.MathUtils.clamp(pitch, -1, 1);
+    const hadInput = orbitInput.lengthSq() > 0;
+    orbitInput.set(nyaw, npitch);
+    if (nyaw !== 0 || npitch !== 0) {
+      cameraTransition = null;
+      if (!hadInput) {
+        pauseFromInteraction();
+      } else {
+        requestRender();
+      }
+    } else if (orbitVelocity.lengthSq() > 0) {
+      requestRender();
+    }
+  };
   const wheel = (event: WheelEvent) => {
     if (options.enableWheelZoom === false || animation.mode !== 'showcase' || !hasSubject() || !isVisible() || captureGate.busy || event.ctrlKey) return;
     event.preventDefault();
@@ -2058,7 +2120,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     host.addEventListener('gesturestart', blockSafariGesture, { passive: false });
     host.addEventListener('gesturechange', blockSafariGesture, { passive: false });
   }
-  const onControlsStart = () => { if (!captureGate.busy) { cameraTransition = null; pauseFromInteraction(); } };
+  const onControlsStart = () => { if (!captureGate.busy) { clearOrbit(); cameraTransition = null; pauseFromInteraction(); } };
   const onControlsEnd = () => {
     orbitDragging = false;
     if (clickCandidate?.moved) clickCandidate = null;
@@ -2306,25 +2368,25 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     },
     orbitView(yawRadians, pitchRadians) {
       if (disposed || captureGate.busy || !Number.isFinite(yawRadians) || !Number.isFinite(pitchRadians)) return;
+      clearOrbit();
       cameraTransition = null;
       if (animation.mode === 'showcase') {
-        targetPose.copy(pose); rotateProduct(yawAxis, yawRadians);
-        rotateProduct(new THREE.Vector3(1, 0, 0), pitchRadians); return;
+        if (returnFrom || !Number.isFinite(lastInputAt)) targetPose.copy(pose);
+        if (Math.abs(yawRadians) > 1e-6) rotateProduct(yawAxis, yawRadians);
+        if (Math.abs(pitchRadians) > 1e-6) rotateProduct(new THREE.Vector3(1, 0, 0), pitchRadians);
+        return;
       }
       pauseFromInteraction();
       const relative = camera.position.clone().sub(controls.target);
       const spherical = new THREE.Spherical().setFromVector3(relative);
       spherical.theta += yawRadians;
       spherical.phi = THREE.MathUtils.clamp(spherical.phi + pitchRadians, controls.minPolarAngle, controls.maxPolarAngle);
-      const nextPosition = controls.target.clone().add(new THREE.Vector3().setFromSpherical(spherical));
-      cameraTransition = {
-        fromPosition: camera.position.clone(), fromTarget: controls.target.clone(),
-        toPosition: nextPosition, toTarget: controls.target.clone(),
-        fromFov: camera.fov, toFov: camera.fov,
-        startedAt: performance.now(), duration: 180,
-      };
+      camera.position.copy(controls.target).add(new THREE.Vector3().setFromSpherical(spherical));
+      camera.lookAt(controls.target);
+      controls.update();
       requestRender();
     },
+    setOrbitVelocity,
     adjustFov,
     panView,
     setPanVelocity,
@@ -2337,7 +2399,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     },
     resetView() {
       if (disposed || captureGate.busy) return;
-      clearPan();
+      clearPan(); clearOrbit();
       cameraTransition = null; cancelPointers(); pauseFromInteraction();
       product.quaternion.copy(animation.mode === 'showcase' ? rest : new THREE.Quaternion());
       pose.copy(product.quaternion); targetPose.copy(pose); lastInputAt = -Infinity; returnFrom = null;

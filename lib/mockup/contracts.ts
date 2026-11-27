@@ -128,6 +128,8 @@ export interface MockupRuntime {
   setAspect(aspect: number): void;
   /** Keyboard-accessible free orbit; pitch increases the polar angle. */
   orbitView(yawRadians: number, pitchRadians: number): void;
+  /** Set continuous normalized orbit velocity (e.g. held ArrowLeft/ArrowRight keys). */
+  setOrbitVelocity(yaw: number, pitch?: number): void;
   /** Adjust the live perspective field of view in degrees. */
   adjustFov(deltaDegrees: number): void;
   /** Translate the camera and focus point in the current view plane. */
