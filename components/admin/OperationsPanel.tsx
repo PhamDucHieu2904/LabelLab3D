@@ -42,7 +42,7 @@ const defaults = {
   ownerPhone: "",
   moitStatusUrl: "",
   usdToVndRate: 25500,
-  maintenance: true,
+  maintenance: false,
   resolutions: [1024, 2048, 4096, 8129],
   tileThreshold: 4096,
   freeDownloads: 1,
@@ -572,7 +572,7 @@ export default function OperationsPanel({ section }: { section: "activity" | "se
                       <option value="en">English</option>
                     </select>
                   </label>
-                  {check("maintenance", "Chế độ Coming Soon / Bảo trì (ẩn sản phẩm với khách truy cập)")}
+                  {check("maintenance", "Chế độ Bảo trì (tạm ẩn trang với khách truy cập)")}
                 </>
               )}
               {settingsTab === "render" && (

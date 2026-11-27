@@ -1,6 +1,7 @@
 import { hashPassword } from "@/lib/server/password";
 import { nowIso, randomId, requireDb } from "@/lib/server/db";
 import { appendLedgerEntry } from "@/lib/server/wallet";
+import { markNewUserOnboardingPending } from "@/lib/server/onboarding";
 import { requireAdmin } from "@/lib/server/admin";
 import { assertSameOrigin, errorResponse, json } from "@/lib/server/http";
 
@@ -82,6 +83,9 @@ export async function POST(request: Request) {
         db.prepare("INSERT INTO wallets (user_id,balance,updated_at) VALUES (?,0,?) ON CONFLICT(user_id) DO NOTHING").bind(id, now),
         db.prepare("INSERT INTO audit_events (id,actor_user_id,action,target_type,target_id,metadata_json,created_at) VALUES (?,?,?,?,?,?,?)").bind(randomId("audit"), actor.id, "admin_user_create", "user", id, JSON.stringify({ email, role }), now),
       ]);
+      if (role === "user") {
+        await markNewUserOnboardingPending(env, id);
+      }
       return json({ ok: true, id }, { status: 201 });
     }
     throw new Error("INVALID_INPUT");

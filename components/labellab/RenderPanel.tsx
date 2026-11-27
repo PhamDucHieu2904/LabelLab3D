@@ -50,7 +50,7 @@ export default function RenderPanel({
   const renderCost = resolveRenderCoinCost(settings.resolution, baseRenderCost);
   return (
     <div className="render-sidebar">
-    <aside className="render-panel" aria-label={r.heading} aria-busy={busy}>
+    <aside className="render-panel" data-tour="render-panel" aria-label={r.heading} aria-busy={busy}>
       <div className="render-panel-heading">
         <span><SlidersHorizontal size={16} aria-hidden="true" /> {r.heading}</span>
       </div>

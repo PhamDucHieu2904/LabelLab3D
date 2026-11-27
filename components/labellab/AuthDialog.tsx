@@ -38,6 +38,7 @@ export type AccountUser = {
   name: string;
   role: "user" | "admin";
   avatarUrl?: string | null;
+  studioTourPending?: boolean;
 };
 type AccountContextValue = { user: AccountUser | null; refresh: () => Promise<void> };
 

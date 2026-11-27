@@ -9,6 +9,7 @@ import type { UserNotificationItem } from "@/lib/server/notifications";
 import { useAccount, useAuthDialog } from "./AuthDialog";
 import { readAnalyticsConsent } from "./CookieConsentBanner";
 import { useLocale } from "./LocaleProvider";
+import { useGuideDialog } from "./UserGuideModal";
 import styles from "./SiteHeader.module.css";
 
 type SiteHeaderProps = {
@@ -38,6 +39,7 @@ function formatNotificationTime(iso: string, locale: "vi" | "en"): string {
 export default function SiteHeader({ activePage, disabled = false, onOpenProjects, isLoggedIn, onLogin, onLogout }: SiteHeaderProps) {
   const { locale, setLocale, t } = useLocale();
   const openAuth = useAuthDialog();
+  const openGuide = useGuideDialog();
   const { user } = useAccount();
   const { data: session, status } = useSession();
   const signedIn = isLoggedIn ?? (Boolean(user) || status === "authenticated");
@@ -182,6 +184,7 @@ export default function SiteHeader({ activePage, disabled = false, onOpenProject
       <div className={styles.actions}>
         <Link
           className={styles.projects}
+          data-tour="my-projects-btn"
           href="/studio?panel=projects#workspace"
           aria-label={t.header.myProjects}
           onClick={(event) => {
@@ -193,6 +196,16 @@ export default function SiteHeader({ activePage, disabled = false, onOpenProject
         >
           <Layers3 className={styles.icon} aria-hidden="true" /><span>{t.header.myProjects}</span>
         </Link>
+        <button
+          type="button"
+          className={styles.guideButton}
+          data-tour="header-guide-btn"
+          aria-label={t.header.openGuide}
+          title={t.header.openGuide}
+          onClick={() => openGuide(activePage === "studio" ? "models" : "overview")}
+        >
+          <span className={styles.guideMark} aria-hidden="true">?</span>
+        </button>
         <details
           ref={detailsRef}
           className={styles.notifications}

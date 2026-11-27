@@ -17,11 +17,11 @@ function isLocalHost(hostHeader: string | null): boolean {
 }
 
 /**
- * Determine whether public storefront pages should render the Coming Soon gate.
+ * Determine whether public storefront pages should render the maintenance gate.
  * - Always bypassed in local development (`NODE_ENV !== "production"`) and on
  *   localhost/127.0.0.1 hosts so local testing works immediately without admin login.
- * - In production, reads D1 `site_config` `settings.maintenance` (defaults to `true`
- *   until launch) and automatically bypasses for authenticated `admin` sessions.
+ * - In production, reads D1 `site_config` `settings.maintenance` (defaults to `false`
+ *   now that HyperMockup is officially live) and automatically bypasses for authenticated `admin` sessions.
  */
 export async function shouldShowComingSoon(): Promise<boolean> {
   if (process.env.NODE_ENV !== "production") return false;

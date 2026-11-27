@@ -432,6 +432,248 @@
   box-shadow: 0 10px 22px rgba(182, 12, 72, 0.3);
 }
 
+/* Grand Launch Welcome Promo Banner inside Reader Dialog */
+.dialogLaunch {
+  width: min(560px, calc(100vw - 24px));
+}
+
+.launchBannerHero {
+  position: relative;
+  padding: 24px 24px 22px;
+  background: linear-gradient(135deg, #5e0c30 0%, #b5124f 52%, #e02067 100%);
+  color: #ffffff;
+  overflow: hidden;
+}
+
+.launchBannerHero::before {
+  content: "";
+  position: absolute;
+  top: -40%;
+  right: -12%;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 224, 130, 0.34), transparent 70%);
+  pointer-events: none;
+}
+
+.launchBannerTop {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.launchKicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #fff6d6;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.launchCloseBtn {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.launchCloseBtn:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.launchHeroMain {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.launchHeroCopy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.launchHeroCopy h3 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  color: #ffffff;
+}
+
+.launchHeroCopy p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: rgba(255, 240, 246, 0.92);
+}
+
+.launchCoinBadge {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 232, 163, 0.42);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 24px rgba(48, 6, 24, 0.24);
+}
+
+.launchCoinBadge img {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 10px rgba(255, 200, 50, 0.45));
+}
+
+.launchCoinBadge strong {
+  font-size: 18px;
+  font-weight: 850;
+  line-height: 1;
+  color: #ffe89e;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.launchBannerBody {
+  padding: 20px 24px 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.launchRules {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px;
+  list-style: none;
+  border-radius: 14px;
+  background: #fdf4f7;
+  border: 1px solid rgba(176, 36, 86, 0.12);
+}
+
+.launchRules li {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #4f3542;
+}
+
+.launchRules li svg {
+  margin-top: 2px;
+  color: #c2185b;
+  flex-shrink: 0;
+}
+
+.launchRules strong {
+  color: #2b1622;
+}
+
+.launchActionArea {
+  display: grid;
+  gap: 10px;
+}
+
+.launchClaimBtn {
+  width: 100%;
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #e11d62 0%, #b50d4b 100%);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 750;
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(190, 18, 82, 0.28);
+  transition: transform 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
+}
+
+.launchClaimBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 13px 26px rgba(190, 18, 82, 0.36);
+}
+
+.launchClaimBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.launchSecondaryBtn {
+  width: 100%;
+  min-height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(165, 44, 86, 0.22);
+  background: #ffffff;
+  color: #8f1d47;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.launchSecondaryBtn:hover {
+  background: #fff2f7;
+}
+
+.launchStatusBox {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 13px;
+  font-size: 13.2px;
+  line-height: 1.5;
+}
+
+.launchStatusSuccess {
+  background: #ecf9f2;
+  border: 1px solid rgba(25, 135, 84, 0.25);
+  color: #145c3c;
+}
+
+.launchStatusInfo {
+  background: #f6f4f7;
+  border: 1px solid rgba(105, 80, 96, 0.18);
+  color: #513e49;
+}
+
+.launchStatusError {
+  background: #fef2f4;
+  border: 1px solid rgba(190, 24, 65, 0.24);
+  color: #9f1239;
+}
+
 @container labellab-page (max-width: 860px) {
   .rowTitle {
     white-space: normal;

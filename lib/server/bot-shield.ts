@@ -27,6 +27,7 @@ const STATIC_PREFIXES = [
   "/decoders/",
   "/assets/",
   "/catalog/",
+  "/guide/",
 ];
 
 const STATIC_EXT_RE = /\.(?:glb|gltf|webp|png|jpe?g|gif|svg|ico|wasm|js|mjs|css|woff2?|ttf|eot|exr|hdr|mp4|webm|map)$/i;

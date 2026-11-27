@@ -3,6 +3,7 @@ import { WELCOME_BONUS_COINS } from "@/lib/payments/packages";
 import { nowIso, randomId, requireDb, type AppEnv } from "./db";
 import type { AuthUser } from "./auth";
 import { recordLegalConsent } from "./legal";
+import { markNewUserOnboardingPending } from "./onboarding";
 import { appendLedgerEntry } from "./wallet";
 
 export type GoogleIdentity = {
@@ -96,5 +97,6 @@ export async function upsertGoogleUser(env: AppEnv, identity: GoogleIdentity): P
     policyVersion: CURRENT_POLICY_VERSION,
     metadata: { email, provider: "google" },
   });
+  await markNewUserOnboardingPending(env, userId);
   return { id: userId, email, name: displayName, role: "user", status: "active" };
 }

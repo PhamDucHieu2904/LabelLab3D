@@ -306,3 +306,22 @@ CREATE TABLE IF NOT EXISTS user_notifications (
 CREATE INDEX IF NOT EXISTS user_notifications_user_time ON user_notifications(user_id, created_at);
 CREATE INDEX IF NOT EXISTS user_notifications_user_unread ON user_notifications(user_id, read_at);
 CREATE INDEX IF NOT EXISTS user_notifications_feedback ON user_notifications(feedback_id, created_at);
+
+CREATE TABLE IF NOT EXISTS user_onboarding (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  studio_tour_status TEXT NOT NULL DEFAULT 'pending' CHECK (studio_tour_status IN ('pending','completed','skipped')),
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS promo_claims (
+  promo_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  email_canonical_hash TEXT NOT NULL,
+  coins INTEGER NOT NULL CHECK (coins > 0),
+  ip_hash TEXT,
+  ledger_id TEXT,
+  claimed_at TEXT NOT NULL,
+  PRIMARY KEY (promo_id, user_id),
+  UNIQUE (promo_id, email_canonical_hash)
+);
+CREATE INDEX IF NOT EXISTS promo_claims_promo_ip ON promo_claims(promo_id, ip_hash, claimed_at);

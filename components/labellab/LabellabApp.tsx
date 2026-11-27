@@ -185,7 +185,12 @@ import type { SharedProjectSummary } from "@/lib/share/contracts";
 import SiteHeader from "./SiteHeader";
 import ModelVariantsPanel from "./ModelVariantsPanel";
 import PropertiesPanel, { type PropertiesPart } from "./PropertiesPanel";
-import { useAuthDialog } from "./AuthDialog";
+import { useAccount, useAuthDialog } from "./AuthDialog";
+import { useGuideDialog } from "./UserGuideModal";
+import StudioOnboardingTour, {
+  START_STUDIO_TOUR_EVENT,
+  type StudioTourStepId,
+} from "./StudioOnboardingTour";
 import {
   DEFAULT_DIELINE_COIN_COST,
   DEFAULT_PROJECT_EXTEND_COIN_COST,
@@ -193,7 +198,7 @@ import {
   DEFAULT_SHARE_COIN_COST,
   resolveRenderCoinCost,
 } from "@/lib/payments/packages";
-import { fetchSiteConfigCached } from "@/lib/client/api-cache";
+import { fetchSiteConfigCached, invalidateClientApiCache } from "@/lib/client/api-cache";
 import {
   attachUsageTrackerLifecycle,
   recordDielineCompleted,
@@ -320,7 +325,11 @@ export default function LabellabApp() {
   const [artwork, setArtwork] = useState<string>();
   const [artworkEditing, setArtworkEditing] = useState(false);
   const [artworkReset, setArtworkReset] = useState(0);
+  const [tourOpen, setTourOpen] = useState(false);
+  const tourAutoCheckedRef = useRef<string | null>(null);
   const openAuth = useAuthDialog();
+  const openGuide = useGuideDialog();
+  const { user: accountUser, refresh: refreshAccount } = useAccount();
   const [sitePricing, setSitePricing] = useState({
     renderCost: DEFAULT_RENDER_COIN_COST,
     dielineCost: DEFAULT_DIELINE_COIN_COST,
@@ -724,9 +733,88 @@ export default function LabellabApp() {
       })
       .catch(() => {});
     if (params.get("panel") === "projects") setModal("projects");
+    if (params.get("tour") === "1") {
+      setTourOpen(true);
+      const cleaned = new URL(window.location.href);
+      cleaned.searchParams.delete("tour");
+      window.history.replaceState(window.history.state, "", cleaned);
+    }
     setHydrated(true);
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
+  useEffect(() => {
+    const onStartTour = () => {
+      setModal(null);
+      setSaveDialogOpen(false);
+      setActiveArtworkTarget(null);
+      setTourOpen(true);
+    };
+    window.addEventListener(START_STUDIO_TOUR_EVENT, onStartTour);
+    return () => window.removeEventListener(START_STUDIO_TOUR_EVENT, onStartTour);
+  }, []);
+
+  // Automatically start the game-style interactive tour once for newly created accounts entering Studio.
+  useEffect(() => {
+    if (!hydrated || !accountUser?.id || !accountUser.studioTourPending) return;
+    if (tourOpen || modal || saveDialogOpen || activeArtworkTarget) return;
+    if (tourAutoCheckedRef.current === accountUser.id) return;
+    const localKey = `hm_studio_tour_done:${accountUser.id}`;
+    try {
+      if (window.localStorage.getItem(localKey) === "1") {
+        tourAutoCheckedRef.current = accountUser.id;
+        return;
+      }
+    } catch {
+      // Ignore storage failures in restricted browsing modes.
+    }
+    tourAutoCheckedRef.current = accountUser.id;
+    const timer = window.setTimeout(() => {
+      setTourOpen(true);
+    }, 650);
+    return () => window.clearTimeout(timer);
+  }, [hydrated, accountUser, tourOpen, modal, saveDialogOpen, activeArtworkTarget]);
+
+  const handleTourStepChange = useCallback((stepId: StudioTourStepId) => {
+    if (stepId === "welcome" || stepId === "library" || stepId === "domains") {
+      setActiveFamilyId(null);
+      setActiveTool("models");
+    } else if (stepId === "artwork") {
+      setActiveFamilyId(null);
+      setActiveTool((current) => {
+        if (isPackaging) return "scene";
+        return current === "label" ? current : "label";
+      });
+    }
+  }, [isPackaging]);
+
+  const handleTourFinish = useCallback(
+    (tourStatus: "completed" | "skipped") => {
+      setTourOpen(false);
+      const uid = accountUser?.id;
+      if (uid) {
+        try {
+          window.localStorage.setItem(`hm_studio_tour_done:${uid}`, "1");
+        } catch {
+          // Ignore storage failures.
+        }
+        if (accountUser?.studioTourPending) {
+          void fetch("/api/account/onboarding", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: tourStatus }),
+          })
+            .then(() => {
+              invalidateClientApiCache("account");
+              void refreshAccount();
+            })
+            .catch(() => undefined);
+        }
+      }
+    },
+    [accountUser, refreshAccount],
+  );
+
   useEffect(() => {
     if (hydrated && !isPackaging) savePreferences(settings);
   }, [settings, hydrated, isPackaging]);
@@ -2209,7 +2297,7 @@ export default function LabellabApp() {
               )}
             </h1>
           </div>
-          <button className="text-guide" onClick={() => setModal("guide")}>
+          <button className="text-guide" onClick={() => openGuide(isPackaging ? "packaging" : "models")}>
             {st.exploreStudio} <ArrowRight size={16} />
           </button>
         </div>
@@ -2219,7 +2307,7 @@ export default function LabellabApp() {
             ref={workspaceLayoutRef}
             className={`workspace-layout ${effectiveTool ? "has-tool-panel" : "canvas-only"} has-render-panel`}
           >
-            <nav ref={railRef} className="editor-rail" aria-label="Studio tools" inert={exportBusy}>
+            <nav ref={railRef} className="editor-rail" data-tour="editor-rail" aria-label="Studio tools" inert={exportBusy}>
               <div className="editor-rail-card editor-rail-primary">
                 <button
                   type="button"
@@ -2301,6 +2389,7 @@ export default function LabellabApp() {
             <aside
               ref={libraryPanelRef}
               className={`library-panel tool-panel ${modelLibrary.panel} ${effectiveTool === "models" ? "is-open" : ""}`}
+              data-tour="library-panel"
               data-panel={effectiveTool}
               data-tone={studio ? "neutral" : settings.style}
               inert={exportBusy}
@@ -2540,6 +2629,7 @@ export default function LabellabApp() {
                 <div className="stage-top">
                   <div
                     className={pkgStyles.domainBar}
+                    data-tour="domain-bar"
                     data-tone={studio ? "neutral" : settings.style}
                     role="group"
                     aria-label="Mockup studio category"
@@ -2570,7 +2660,7 @@ export default function LabellabApp() {
                       );
                     })}
                   </div>
-                  <div className="studio-project-actions" role="group" aria-label="Project actions">
+                  <div className="studio-project-actions" data-tour="project-actions" role="group" aria-label="Project actions">
                     <button type="button" onClick={reset} aria-label={st.actions.restoreDefaultsTitle} title={st.actions.restoreDefaultsTitle}>
                       <RotateCcw size={16} /><span>{st.actions.restoreDefaults}</span>
                     </button>
@@ -2654,7 +2744,7 @@ export default function LabellabApp() {
                     onChangeQuality={setQualityPreference}
                   />
                 </div>
-                <div className="stage-bottom">
+                <div className="stage-bottom" data-tour="camera-controls">
                   {isPackaging ? (
                     <PackagingBottomDock
                       foldProgress={packagingParams.foldProgress}
@@ -2748,6 +2838,7 @@ export default function LabellabApp() {
             <aside
               id="material-settings-panel"
               className={`controls-panel tool-panel ${isControlsOpen ? "is-open" : ""}`}
+              data-tour="controls-panel"
               data-active-tool={controlsToolGroup}
               aria-label={controlsHeading.title}
               inert={exportBusy}
@@ -3385,6 +3476,12 @@ export default function LabellabApp() {
           onClose={() => setShareDialogGroupId(null)}
         />
       )}
+      <StudioOnboardingTour
+        open={tourOpen}
+        onStepChange={handleTourStepChange}
+        onFinish={handleTourFinish}
+      />
+
       {toastState && (
         <div
           className={`toast ${toastState.tone === "error" ? "toast-error" : ""} ${isPackaging ? pkgStyles.toastTop : ""}`}

@@ -221,27 +221,27 @@ test('live coin packages and announcements sanitize admin edits safely', () => {
   assert.equal(active[1].bodyEn, 'Hello EN');
 });
 
-test('site settings default to HyperMockup Coming Soon mode and sanitize pricing toggles', () => {
+test('site settings default to live launched mode and sanitize pricing & maintenance toggles', () => {
   const load = createLoader();
   const siteConfig = load(path.resolve(ROOT, 'lib/server/site-config.ts'));
 
   assert.equal(siteConfig.DEFAULT_SITE_SETTINGS.name, 'HyperMockup');
   assert.equal(siteConfig.DEFAULT_SITE_SETTINGS.domain, 'hypermockup.com');
-  assert.equal(siteConfig.DEFAULT_SITE_SETTINGS.maintenance, true);
+  assert.equal(siteConfig.DEFAULT_SITE_SETTINGS.maintenance, false);
   assert.equal(siteConfig.DEFAULT_SITE_SETTINGS.renderCost, 10);
   assert.equal(siteConfig.DEFAULT_SITE_SETTINGS.dielineCost, 10);
 
-  const launched = siteConfig.sanitizeSiteSettings({
-    maintenance: false,
+  const customMaintenance = siteConfig.sanitizeSiteSettings({
+    maintenance: true,
     domain: 'hypermockup.com',
     renderCost: 12,
     dielineCost: 25,
   });
-  assert.equal(launched.maintenance, false);
-  assert.equal(launched.domain, 'hypermockup.com');
-  assert.equal(launched.name, 'HyperMockup');
-  assert.equal(launched.renderCost, 12);
-  assert.equal(launched.dielineCost, 25);
+  assert.equal(customMaintenance.maintenance, true);
+  assert.equal(customMaintenance.domain, 'hypermockup.com');
+  assert.equal(customMaintenance.name, 'HyperMockup');
+  assert.equal(customMaintenance.renderCost, 12);
+  assert.equal(customMaintenance.dielineCost, 25);
 
   const invalidNeg = siteConfig.sanitizeSiteSettings({ renderCost: -5, dielineCost: -1 });
   assert.equal(invalidNeg.renderCost, 10);

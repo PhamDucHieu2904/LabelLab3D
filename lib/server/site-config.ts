@@ -10,6 +10,7 @@ import {
   type CoinRegion,
 } from "@/lib/payments/packages";
 import { LABELLAB_UPDATES, LEGACY_DEMO_ANNOUNCEMENT_TITLES } from "@/lib/labellab/updates";
+import { LAUNCH_PROMO_ANNOUNCEMENT_ID } from "@/lib/promotions/launch-event";
 import { nowIso, requireDb, type AppEnv } from "./db";
 
 export type LiveCheckInConfig = {
@@ -91,7 +92,7 @@ export const DEFAULT_SITE_SETTINGS: LiveSiteSettings = {
   ownerPhone: "",
   moitStatusUrl: "",
   usdToVndRate: 25500,
-  maintenance: true,
+  maintenance: false,
   resolutions: [1024, 2048, 4096, 8129],
   tileThreshold: 4096,
   freeDownloads: 1,
@@ -178,8 +179,8 @@ export function createInitialProductionManagement(): Record<string, ManagementRe
       textEn: item.bodyEn,
       ctaLabel: item.ctaLabel,
       ctaLabelEn: item.ctaLabelEn,
-      start: "",
-      end: "",
+      start: item.start ?? "",
+      end: item.end ?? "",
       url: item.url,
     },
   }));
@@ -205,6 +206,15 @@ export async function loadManagementData(env: AppEnv): Promise<Record<string, Ma
   // Any announcement created or customized by the admin is preserved verbatim.
   if (isLegacyDemoAnnouncementSet(migrated.announcements)) {
     migrated.announcements = initial.announcements;
+  } else {
+    // Ensure the official launch event announcement is seeded into existing databases too.
+    const existingList = Array.isArray(migrated.announcements) ? migrated.announcements : [];
+    if (!existingList.some((row) => row.id === LAUNCH_PROMO_ANNOUNCEMENT_ID)) {
+      const launchSeed = initial.announcements.find((row) => row.id === LAUNCH_PROMO_ANNOUNCEMENT_ID);
+      if (launchSeed) {
+        migrated.announcements = [launchSeed, ...existingList];
+      }
+    }
   }
   return persistentManagementData(migrated);
 }
@@ -434,7 +444,31 @@ export function sanitizeSiteSettings(input: unknown): LiveSiteSettings {
   return result;
 }
 
+/** Timestamp of official public launch (2026-11-27 12:00 GMT+7). Legacy pre-launch `maintenance: true` rows auto-unlock once. */
+export const OFFICIAL_LAUNCH_UNLOCK_ISO = "2026-11-27T05:00:00.000Z";
+
 export async function getLiveSiteSettings(env: AppEnv): Promise<LiveSiteSettings> {
-  const stored = await readConfigJson<unknown>(env, "settings");
-  return sanitizeSiteSettings(stored);
+  const db = await ensureSiteTables(env);
+  const row = await db
+    .prepare("SELECT value_json AS valueJson, updated_at AS updatedAt FROM site_config WHERE key=?")
+    .bind("settings")
+    .first<{ valueJson: string; updatedAt?: string }>();
+  if (!row?.valueJson) return { ...DEFAULT_SITE_SETTINGS };
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(row.valueJson);
+  } catch {
+    return { ...DEFAULT_SITE_SETTINGS };
+  }
+  const settings = sanitizeSiteSettings(parsed);
+  if (settings.maintenance && row.updatedAt && row.updatedAt < OFFICIAL_LAUNCH_UNLOCK_ISO) {
+    const unlocked: LiveSiteSettings = { ...settings, maintenance: false };
+    try {
+      await writeConfigJson(env, "settings", unlocked, null);
+    } catch {
+      // Non-fatal if read-only; still return unlocked live settings immediately.
+    }
+    return unlocked;
+  }
+  return settings;
 }

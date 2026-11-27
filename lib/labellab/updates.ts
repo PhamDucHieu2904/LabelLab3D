@@ -1,3 +1,10 @@
+import {
+  LAUNCH_PROMO_ANNOUNCEMENT_ID,
+  LAUNCH_PROMO_COINS,
+  LAUNCH_PROMO_END_DATE,
+  LAUNCH_PROMO_START_DATE,
+} from "@/lib/promotions/launch-event";
+
 export type AnnouncementTone = "pink" | "blue" | "mint";
 export type AnnouncementCategory = "Tính năng mới" | "Nâng cấp" | "Ưu đãi" | "Hệ thống";
 
@@ -14,6 +21,8 @@ export interface DefaultAnnouncementSeed {
   readonly ctaLabelEn: string;
   readonly url: string;
   readonly time: string;
+  readonly start?: string;
+  readonly end?: string;
   readonly unread: boolean;
 }
 
@@ -25,6 +34,23 @@ export const LEGACY_DEMO_ANNOUNCEMENT_TITLES: ReadonlySet<string> = new Set([
 ]);
 
 export const LABELLAB_UPDATES: readonly DefaultAnnouncementSeed[] = Object.freeze([
+  {
+    id: LAUNCH_PROMO_ANNOUNCEMENT_ID,
+    tone: "pink",
+    category: "Ưu đãi",
+    pinned: true,
+    title: `Chào mừng ra mắt HyperMockup: Tặng ngay +${LAUNCH_PROMO_COINS} Coin`,
+    body: `Sự kiện chào mừng chính thức ra mắt website! Tặng ngay ${LAUNCH_PROMO_COINS} Coin miễn phí cho bất kỳ ai đăng ký tài khoản từ 27/11/2026 đến hết 04/12/2026 (mỗi tài khoản nhận 1 lần duy nhất). Bấm để mở banner và nhận xu ngay!`,
+    titleEn: `HyperMockup Launch Event: Claim +${LAUNCH_PROMO_COINS} Free Coins`,
+    bodyEn: `Celebrate the official HyperMockup launch! Every new account registered from Nov 27 to Dec 4, 2026 gets +${LAUNCH_PROMO_COINS} free Studio coins (strictly one claim per account). Open to claim now!`,
+    ctaLabel: `Nhận ngay ${LAUNCH_PROMO_COINS} Coin`,
+    ctaLabelEn: `Claim ${LAUNCH_PROMO_COINS} Coins`,
+    url: "/#launch-promo",
+    time: "27/11/2026",
+    start: LAUNCH_PROMO_START_DATE,
+    end: LAUNCH_PROMO_END_DATE,
+    unread: true,
+  },
   {
     id: "release-cad-boxes",
     tone: "mint",

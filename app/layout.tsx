@@ -3,6 +3,7 @@ import { Changa_One, Luckiest_Guy, Mona_Sans } from "next/font/google";
 import { AuthDialogProvider } from "@/components/labellab/AuthDialog";
 import CookieConsentBanner from "@/components/labellab/CookieConsentBanner";
 import { LocaleProvider } from "@/components/labellab/LocaleProvider";
+import { GuideDialogProvider } from "@/components/labellab/UserGuideModal";
 import { readServerLocale } from "@/lib/server/locale";
 import "./globals.css";
 
@@ -63,8 +64,10 @@ export default async function RootLayout({
       <body className={`${uiFont.variable} ${titleFont.variable} ${accentFont.variable}`}>
         <LocaleProvider initialLocale={initialLocale}>
           <AuthDialogProvider>
-            {children}
-            <CookieConsentBanner />
+            <GuideDialogProvider>
+              {children}
+              <CookieConsentBanner />
+            </GuideDialogProvider>
           </AuthDialogProvider>
         </LocaleProvider>
       </body>

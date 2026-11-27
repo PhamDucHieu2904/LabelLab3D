@@ -10,6 +10,7 @@ export type UiMessages = {
     home: string;
     studio: string;
     myProjects: string;
+    openGuide: string;
     openNotifications: string;
     notificationsRegion: string;
     adminUpdates: string;
@@ -329,6 +330,7 @@ export type UiMessages = {
     createAccount: string;
     coinsAria: (amount: number) => string;
     entryWelcome: string;
+    entryLaunchPromo: string;
     entryCheckin: string;
     entryPurchase: string;
     entryAdmin: string;
@@ -410,6 +412,7 @@ const VI_MESSAGES: UiMessages = {
     home: "Trang chủ",
     studio: "Mockup Studio",
     myProjects: "Dự án của tôi",
+    openGuide: "Hướng dẫn sử dụng",
     openNotifications: "Mở thông báo từ Admin",
     notificationsRegion: "Thông báo từ Admin",
     adminUpdates: "Thông báo từ Admin",
@@ -741,6 +744,7 @@ const VI_MESSAGES: UiMessages = {
     createAccount: "Tạo tài khoản",
     coinsAria: (amount) => `${amount} coins`,
     entryWelcome: "Quà chào mừng",
+    entryLaunchPromo: "Quà ra mắt website",
     entryCheckin: "Điểm danh hằng ngày",
     entryPurchase: "Nạp coin",
     entryAdmin: "Điều chỉnh từ Admin",
@@ -826,6 +830,7 @@ const EN_MESSAGES: UiMessages = {
     home: "Home",
     studio: "Mockup Studio",
     myProjects: "My projects",
+    openGuide: "User guide",
     openNotifications: "Open Admin notifications",
     notificationsRegion: "Admin notifications",
     adminUpdates: "Admin notifications",
@@ -1157,6 +1162,7 @@ const EN_MESSAGES: UiMessages = {
     createAccount: "Create account",
     coinsAria: (amount) => `${amount} coins`,
     entryWelcome: "Welcome bonus",
+    entryLaunchPromo: "Launch event bonus",
     entryCheckin: "Daily check-in",
     entryPurchase: "Coin purchase",
     entryAdmin: "Admin adjustment",

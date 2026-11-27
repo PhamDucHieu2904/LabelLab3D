@@ -27,6 +27,9 @@
 .preview > span { width: 6px; height: 6px; border-radius: 50%; background: #3ca96d; box-shadow: 0 0 0 2px #3ca96d20; }
 .projects { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; color: #5f4d56; white-space: nowrap; }
 .header .icon { width: 19px; height: 19px; flex-shrink: 0; }
+.guideButton { position: relative; display: grid; place-items: center; width: 40px; height: 40px; border: 1.5px solid #6c4c5b38; border-radius: 50%; background: #ffffffc7; color: #523b47; cursor: pointer; flex-shrink: 0; box-shadow: 0 2px 6px rgba(75, 21, 43, 0.06); }
+.guideMark { font-size: 17px; font-weight: 800; line-height: 1; }
+.guideButton:hover { background: #fbe8ef; border-color: #d7195c55; color: #b5134e; transform: translateY(-1px); }
 .notifications { position: relative; }
 .notificationButton { position: relative; display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #6c4c5b29; border-radius: 10px; background: #ffffff99; color: #5d4853; cursor: pointer; list-style: none; }
 .notificationButton::-webkit-details-marker { display: none; }

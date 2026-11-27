@@ -23,6 +23,7 @@ type UserProfileCardProps = {
 
 function entryLabel(entry: WalletEntry, pr: UiMessages["profile"]) {
   if (entry.kind === "welcome_bonus") return pr.entryWelcome;
+  if (entry.kind === "promo_bonus") return pr.entryLaunchPromo;
   if (entry.kind === "daily_checkin") return pr.entryCheckin;
   if (entry.kind === "purchase") return pr.entryPurchase;
   if (entry.kind === "admin_adjustment") return pr.entryAdmin;

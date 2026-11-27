@@ -6,6 +6,7 @@ import { assertRegistrationAllowed, recordRegistrationAttempt } from "@/lib/serv
 import { verifyAndConsumeCode } from "@/lib/server/email-verification";
 import { getLiveSiteSettings } from "@/lib/server/site-config";
 import { recordLegalConsent } from "@/lib/server/legal";
+import { markNewUserOnboardingPending } from "@/lib/server/onboarding";
 import { appendLedgerEntry } from "@/lib/server/wallet";
 import { CURRENT_POLICY_VERSION } from "@/lib/legal/policies";
 import { WELCOME_BONUS_COINS } from "@/lib/payments/packages";
@@ -84,6 +85,7 @@ export async function POST(request: Request) {
       policyVersion: CURRENT_POLICY_VERSION,
       metadata: { email, acceptedTerms: true, acceptedPrivacy: true },
     });
+    await markNewUserOnboardingPending(runtimeEnv, id);
     await sessionCookie({ id, email, name, role: "user", status: "active" });
     return json({ user: { id, email, name, role: "user" }, welcomeBonus: WELCOME_BONUS_COINS }, { status: 201 });
   } catch (error) {

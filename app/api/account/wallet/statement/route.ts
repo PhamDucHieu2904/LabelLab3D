@@ -42,6 +42,7 @@ function formatStatementTime(iso: string, locale: "vi" | "en"): string {
 function describeEntry(row: LedgerRow, locale: "vi" | "en"): string {
   const pr = getUiMessages(locale).profile;
   if (row.kind === "welcome_bonus") return pr.entryWelcome;
+  if (row.kind === "promo_bonus") return pr.entryLaunchPromo;
   if (row.kind === "daily_checkin") return pr.entryCheckin;
   if (row.kind === "purchase") return pr.entryPurchase;
   if (row.kind === "admin_adjustment") return pr.entryAdmin;
