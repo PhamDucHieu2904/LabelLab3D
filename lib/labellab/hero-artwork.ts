@@ -117,7 +117,7 @@ export const HERO_SHOWCASE_SCENES: readonly HeroShowcaseScene[] = Object.freeze(
       softness: 0.66,
     },
     displayScale: 1.12,
-    labelOffset: 12,
+    labelOffset: 6,
   },
   {
     id: "rigid-lid-base",
