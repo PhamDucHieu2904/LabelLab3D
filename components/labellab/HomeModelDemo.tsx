@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getLabModel, getModelMaterialDefaults } from "@/lib/labellab/catalog";
 import { DEFAULT_PREFERENCES, type ScenePreferences } from "@/lib/labellab/preferences";
 import {
-  getHeroLabelArtworkUrl,
+  getCachedHeroLabelArtworkUrl,
+  loadHeroLabelArtworkUrl,
   resolveHeroEnvironment,
   type HeroLightMoodId,
   type HeroShowcaseScene,
@@ -43,12 +44,28 @@ export default function HomeModelDemo({
   const [packagingSubject, setPackagingSubject] = useState<PackagingSubjectController | null>(null);
 
   const model = useMemo(() => getLabModel(scene.modelId), [scene.modelId]);
+  const [loadedDemoArt, setLoadedDemoArt] = useState<{ sceneId: string; url: string } | null>(null);
 
-  // Lazily synthesize (and cache) the crisp studio showcase label on the client for beverage scenes.
-  const generatedArtwork = useMemo(
-    () => (scene.kind === "beverage" ? getHeroLabelArtworkUrl(scene.id) : undefined),
-    [scene.id, scene.kind],
-  );
+  const cachedDemoArt =
+    scene.kind === "beverage" ? getCachedHeroLabelArtworkUrl(scene.id) : undefined;
+  const demoArtwork =
+    scene.kind === "beverage"
+      ? (cachedDemoArt ?? (loadedDemoArt?.sceneId === scene.id ? loadedDemoArt.url : undefined))
+      : undefined;
+
+  // Fetch and register the static WebP demo label for the active beverage showcase scene.
+  useEffect(() => {
+    if (scene.kind !== "beverage" || cachedDemoArt) return;
+    let cancelled = false;
+    void loadHeroLabelArtworkUrl(scene.id).then((url) => {
+      if (!cancelled && url) {
+        setLoadedDemoArt({ sceneId: scene.id, url });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [scene.id, scene.kind, cachedDemoArt]);
 
   // Mount a luxury obsidian + gold-foil 3D rigid CAD box when the packaging showcase scene is active.
   useEffect(() => {
@@ -149,7 +166,7 @@ export default function HomeModelDemo({
   );
 
   const activeArtwork =
-    scene.kind === "beverage" ? (customArtworkUrl || generatedArtwork) : undefined;
+    scene.kind === "beverage" ? (customArtworkUrl || demoArtwork) : undefined;
 
   const handleStatus = useCallback(
     (status: MockupStatus) => {
