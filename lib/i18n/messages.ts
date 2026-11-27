@@ -29,7 +29,6 @@ export type UiMessages = {
     showModelDemo: (name: string) => string;
     startMockup: string;
     parametricCta: string;
-    live3d: string;
     tryLabel: string;
     resetLabel: string;
     foldPlay: string;
@@ -72,6 +71,27 @@ export type UiMessages = {
     checkinPausedCta: string;
     checkinClaimedCta: (reward: number) => string;
     checkinClaimCta: (reward: number) => string;
+    checkinPausedBadge: string;
+    checkinClaimedBadge: (reward: number) => string;
+    checkinTapTodayBadge: (reward: number) => string;
+    feedbackTitle: string;
+    feedbackCategoryAria: string;
+    feedbackCatIdea: string;
+    feedbackCatBug: string;
+    feedbackCatModel: string;
+    feedbackPlaceholder: string;
+    feedbackEmailPlaceholder: string;
+    feedbackAsUser: (name: string) => string;
+    feedbackSend: string;
+    feedbackSending: string;
+    feedbackSentTitle: string;
+    feedbackSentDesc: string;
+    feedbackSendAnother: string;
+    feedbackTooShort: string;
+    feedbackInvalidEmail: string;
+    feedbackInvalidInput: string;
+    feedbackRateLimit: string;
+    feedbackFailed: string;
     defaultUpdates: readonly { tone: "pink" | "blue" | "mint"; title: string; time: string; unread: boolean }[];
   };
   pricing: {
@@ -285,7 +305,11 @@ export type UiMessages = {
     coinBalance: string;
     signInShort: string;
     badges: string;
+    defaultBadge: string;
     recentActivity: string;
+    downloadStatement: string;
+    downloadingStatement: string;
+    downloadStatementAria: string;
     emptyActivity: string;
     guestPromptVietnam: string;
     guestPromptInternational: string;
@@ -389,12 +413,11 @@ const VI_MESSAGES: UiMessages = {
     showcaseAria: "Mockup 3D nổi bật",
     webOptimized: "Tối ưu web",
     eyebrow: "Hiện thực hóa ý tưởng",
-    heroTitle: "Biến nhãn hàng thành 3D sống động.",
+    heroTitle: "Mockup 3D chuẩn studio.",
     featuredModelsAria: "Mẫu mockup nổi bật",
     showModelDemo: (name) => `Xem mẫu 3D ${name}`,
     startMockup: "Tạo mockup mới",
-    parametricCta: "Hộp & khay tham số (mm CAD)",
-    live3d: "LIVE 3D",
+    parametricCta: "Hộp & khay tham số (mm)",
     tryLabel: "Thử nhãn",
     resetLabel: "Nhãn mẫu",
     foldPlay: "Gấp 3D",
@@ -438,6 +461,27 @@ const VI_MESSAGES: UiMessages = {
     checkinPausedCta: "Tạm dừng điểm danh",
     checkinClaimedCta: (reward) => `Đã nhận thưởng (+${reward})`,
     checkinClaimCta: (reward) => `Nhận ngay +${reward} coin`,
+    checkinPausedBadge: "Tạm dừng",
+    checkinClaimedBadge: (reward) => `Đã nhận +${reward}`,
+    checkinTapTodayBadge: (reward) => `Bấm Hôm nay +${reward}`,
+    feedbackTitle: "Gửi thư góp ý",
+    feedbackCategoryAria: "Chọn loại góp ý",
+    feedbackCatIdea: "Góp ý",
+    feedbackCatBug: "Báo lỗi",
+    feedbackCatModel: "Mẫu 3D",
+    feedbackPlaceholder: "Góp ý tính năng, báo lỗi hoặc đề xuất mẫu mockup 3D mới...",
+    feedbackEmailPlaceholder: "Email liên hệ (tùy chọn)",
+    feedbackAsUser: (name) => `Gửi từ ${name}`,
+    feedbackSend: "Gửi góp ý",
+    feedbackSending: "Đang gửi...",
+    feedbackSentTitle: "Đã gửi góp ý thành công!",
+    feedbackSentDesc: "Cảm ơn bạn — đội ngũ quản trị đã nhận được thư góp ý của bạn.",
+    feedbackSendAnother: "Gửi thêm góp ý",
+    feedbackTooShort: "Vui lòng nhập ít nhất 3 ký tự.",
+    feedbackInvalidEmail: "Email không đúng định dạng.",
+    feedbackInvalidInput: "Nội dung góp ý chưa hợp lệ.",
+    feedbackRateLimit: "Bạn gửi quá nhanh, vui lòng thử lại sau ít phút.",
+    feedbackFailed: "Không thể gửi lúc này, vui lòng thử lại.",
     defaultUpdates: [
       { tone: "mint", title: "Ra mắt Hộp CAD 3D: FEFCO 0201, 0201E & Vách tổ ong", time: "26/11/2026", unread: true },
       { tone: "blue", title: "Ánh sáng HDRI + Spotlight 3D, Lưu Cloud & Link chia sẻ", time: "26/11/2026", unread: true },
@@ -662,7 +706,11 @@ const VI_MESSAGES: UiMessages = {
     coinBalance: "Số dư coin",
     signInShort: "Đăng nhập",
     badges: "Huy hiệu",
+    defaultBadge: "Starter",
     recentActivity: "Hoạt động coin gần đây",
+    downloadStatement: "Tải sao kê",
+    downloadingStatement: "Đang tải…",
+    downloadStatementAria: "Tải sao kê hoạt động coin (CSV)",
     emptyActivity: "Lịch sử giao dịch coin của bạn sẽ hiển thị tại đây.",
     guestPromptVietnam: "Đăng nhập để nhận coin hằng ngày, nạp qua VietQR và đồng bộ số dư Studio 3D.",
     guestPromptInternational: "Đăng nhập để nhận coin hằng ngày, nạp qua thẻ quốc tế và đồng bộ số dư Studio 3D.",
@@ -770,12 +818,11 @@ const EN_MESSAGES: UiMessages = {
     showcaseAria: "Featured 3D mockup",
     webOptimized: "Web optimized",
     eyebrow: "Make it real",
-    heroTitle: "Bring your next label to life.",
+    heroTitle: "Studio-grade 3D mockups.",
     featuredModelsAria: "Featured mockup models",
     showModelDemo: (name) => `Show ${name} 3D demo`,
     startMockup: "Start a new mockup",
-    parametricCta: "Parametric Boxes & Trays (mm CAD)",
-    live3d: "LIVE 3D",
+    parametricCta: "Parametric Boxes & Trays (mm)",
     tryLabel: "Try label",
     resetLabel: "Reset art",
     foldPlay: "Fold 3D",
@@ -819,6 +866,27 @@ const EN_MESSAGES: UiMessages = {
     checkinPausedCta: "Check-in paused",
     checkinClaimedCta: (reward) => `Reward claimed (+${reward})`,
     checkinClaimCta: (reward) => `Claim today's +${reward}`,
+    checkinPausedBadge: "Paused",
+    checkinClaimedBadge: (reward) => `Claimed +${reward}`,
+    checkinTapTodayBadge: (reward) => `Tap Today +${reward}`,
+    feedbackTitle: "Send feedback",
+    feedbackCategoryAria: "Select feedback category",
+    feedbackCatIdea: "Idea",
+    feedbackCatBug: "Bug",
+    feedbackCatModel: "3D Model",
+    feedbackPlaceholder: "Share an idea, report a bug, or request a new 3D mockup...",
+    feedbackEmailPlaceholder: "Contact email (optional)",
+    feedbackAsUser: (name) => `Sending as ${name}`,
+    feedbackSend: "Send",
+    feedbackSending: "Sending...",
+    feedbackSentTitle: "Feedback sent!",
+    feedbackSentDesc: "Thank you — our team has received your message.",
+    feedbackSendAnother: "Send another",
+    feedbackTooShort: "Please enter at least 3 characters.",
+    feedbackInvalidEmail: "Please enter a valid email address.",
+    feedbackInvalidInput: "Invalid feedback input.",
+    feedbackRateLimit: "Too many submissions. Please try again in a few minutes.",
+    feedbackFailed: "Could not send feedback right now. Please try again.",
     defaultUpdates: [
       { tone: "mint", title: "Parametric 3D CAD Boxes: FEFCO 0201, 0201E & Honeycomb Dividers", time: "26/11/2026", unread: true },
       { tone: "blue", title: "HDRI + Spotlight Rig, Cloud Projects & 3D Share Links", time: "26/11/2026", unread: true },
@@ -1043,7 +1111,11 @@ const EN_MESSAGES: UiMessages = {
     coinBalance: "Coin balance",
     signInShort: "Sign in",
     badges: "Badges",
+    defaultBadge: "Starter",
     recentActivity: "Recent coin activity",
+    downloadStatement: "Statement",
+    downloadingStatement: "Exporting…",
+    downloadStatementAria: "Download coin activity statement (CSV)",
     emptyActivity: "Your recent coin activity will appear here.",
     guestPromptVietnam: "Sign in to claim daily coins, top up via VietQR, and sync your 3D studio balance.",
     guestPromptInternational: "Sign in to claim daily coins, top up by card, and sync your 3D studio balance.",

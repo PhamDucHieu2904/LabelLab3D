@@ -477,6 +477,10 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       targetVelocity: THREE.Vector3;
     };
   } | null = null;
+  const panInput = new THREE.Vector2(0, 0);
+  const panVelocity = new THREE.Vector2(0, 0);
+  const PAN_SPEED_SCREEN_HEIGHTS_PER_SEC = 0.55;
+  const PAN_ACCEL_RATE = 24;
   let raf = 0;
   let dirty = true;
   let lastTime = performance.now();
@@ -590,7 +594,10 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     if (!disposed) options.onStatus({ phase, assetId: procedural?.subject.id ?? desired?.asset.id ?? '', appearanceId: desired?.appearance?.id ?? '', selectionKey: desiredKey, revision, hasProduct: hasSubject(), materials: phase === 'ready' ? active?.pool.materialValues?.() : undefined, error, message });
   };
   const isVisible = () => !disposed && !contextLost && visible && !document.hidden && pausedAt === null;
+  const isPanning = () => panInput.lengthSq() > 0.0001 || panVelocity.lengthSq() > 0.00001;
+  const clearPan = () => { panInput.set(0, 0); panVelocity.set(0, 0); };
   const moving = () => hasSubject() && !captureGate.busy && (Boolean(cameraTransition)
+    || isPanning()
     || animation.playing && animation.mode !== 'off'
     || animation.mode === 'showcase' && (dragging || Boolean(returnFrom) || pose.angleTo(targetPose) > 0.00001 && Number.isFinite(lastInputAt)));
   const restoreSoftboxKeyLight = () => {
@@ -1105,6 +1112,33 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       controls.update();
       dirty = true;
       if (complete) cameraTransition = null;
+    }
+    if (isPanning() && !captureGate.busy) {
+      const subjectBounds = currentSubjectBounds();
+      if (subjectBounds) {
+        const blend = 1 - Math.exp(-dt * PAN_ACCEL_RATE);
+        panVelocity.lerp(panInput, blend);
+        if (panInput.lengthSq() === 0 && panVelocity.lengthSq() < 0.00002) {
+          panVelocity.set(0, 0);
+        }
+        if (panVelocity.lengthSq() > 0) {
+          const liveDistance = Math.max(0.01, camera.position.distanceTo(controls.target));
+          const visibleHeight = 2 * liveDistance * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5));
+          const stepScale = visibleHeight * PAN_SPEED_SCREEN_HEIGHTS_PER_SEC * dt;
+          const applied = computeClampedPanDelta(
+            subjectBounds,
+            panVelocity.x * stepScale,
+            panVelocity.y * stepScale,
+            liveDistance,
+          );
+          if (applied.lengthSq() > 0) {
+            camera.position.add(applied);
+            controls.target.add(applied);
+            controls.update();
+            dirty = true;
+          }
+        }
+      }
     }
     if (moving()) {
       if (animation.mode === 'showcase') {
@@ -1738,6 +1772,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   };
   const manualCamera = (preset: MockupCameraPreset) => {
     if (disposed || captureGate.busy) return;
+    clearPan();
     const wasAnimated = animation.mode !== 'off';
     cancelPointers();
     // Clear OrbitControls momentum without advancing the visible camera.
@@ -1926,29 +1961,54 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     preserveTransitionOffset(targetOffset, previousFov);
     requestRender();
   };
+  const computeClampedPanDelta = (
+    subjectBounds: THREE.Box3,
+    horizontal: number,
+    vertical: number,
+    liveDistance = Math.max(0.01, camera.position.distanceTo(controls.target)),
+  ) => {
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
+    const camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion).normalize();
+    const delta = right.multiplyScalar(horizontal).add(camUp.multiplyScalar(vertical));
+    const center = subjectBounds.getCenter(new THREE.Vector3());
+    const nextTarget = controls.target.clone().add(delta);
+    const maxOffset = Math.max(currentSubjectRadius() * 14, fitDistance * 5, liveDistance * 4, 2);
+    const offset = nextTarget.clone().sub(center);
+    if (offset.length() > maxOffset) nextTarget.copy(center).add(offset.setLength(maxOffset));
+    return nextTarget.sub(controls.target);
+  };
   const panView = (horizontal: number, vertical: number) => {
     if (disposed || captureGate.busy || !Number.isFinite(horizontal) || !Number.isFinite(vertical)) return;
     cameraTransition = null; pauseFromInteraction();
     const subjectBounds = currentSubjectBounds();
     if (!subjectBounds) return;
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-    right.y = 0;
-    if (right.lengthSq() < 0.0001) right.set(1, 0, 0);
-    else right.normalize();
-    const delta = right.multiplyScalar(horizontal).add(up.set(0, vertical, 0));
-    const center = subjectBounds.getCenter(new THREE.Vector3());
-    const nextTarget = controls.target.clone().add(delta);
-    const maxOffset = Math.max(currentSubjectRadius() * 2.5, fitDistance * 0.7, 0.05);
-    const offset = nextTarget.clone().sub(center);
-    if (offset.length() > maxOffset) nextTarget.copy(center).add(offset.setLength(maxOffset));
-    const applied = nextTarget.sub(controls.target);
+    const applied = computeClampedPanDelta(subjectBounds, horizontal, vertical);
+    const nextTarget = controls.target.clone().add(applied);
     cameraTransition = {
       fromPosition: camera.position.clone(), fromTarget: controls.target.clone(),
-      toPosition: camera.position.clone().add(applied), toTarget: nextTarget.clone(),
+      toPosition: camera.position.clone().add(applied), toTarget: nextTarget,
       fromFov: camera.fov, toFov: camera.fov,
       startedAt: performance.now(), duration: 180,
     };
     requestRender();
+  };
+  const setPanVelocity = (horizontal: number, vertical: number) => {
+    if (disposed || captureGate.busy || !Number.isFinite(horizontal) || !Number.isFinite(vertical)) return;
+    const len = Math.hypot(horizontal, vertical);
+    const nx = len > 1 ? horizontal / len : horizontal;
+    const ny = len > 1 ? vertical / len : vertical;
+    const hadInput = panInput.lengthSq() > 0;
+    panInput.set(nx, ny);
+    if (nx !== 0 || ny !== 0) {
+      cameraTransition = null;
+      if (!hadInput) {
+        pauseFromInteraction();
+      } else {
+        requestRender();
+      }
+    } else if (panVelocity.lengthSq() > 0) {
+      requestRender();
+    }
   };
   const wheel = (event: WheelEvent) => {
     if (options.enableWheelZoom === false || animation.mode !== 'showcase' || !hasSubject() || !isVisible() || captureGate.busy || event.ctrlKey) return;
@@ -2168,6 +2228,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       if (disposed || paused === (pausedAt !== null)) return;
       const now = performance.now();
       if (paused) {
+        clearPan();
         cancelHoverRaf();
         setActiveHover(null);
         cancelIdleRefine();
@@ -2229,6 +2290,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     },
     adjustFov,
     panView,
+    setPanVelocity,
     zoom: zoomCamera,
     requestFrame: requestRender,
     setRenderPreview(target, value) {
@@ -2238,6 +2300,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     },
     resetView() {
       if (disposed || captureGate.busy) return;
+      clearPan();
       cameraTransition = null; cancelPointers(); pauseFromInteraction();
       product.quaternion.copy(animation.mode === 'showcase' ? rest : new THREE.Quaternion());
       pose.copy(product.quaternion); targetPose.copy(pose); lastInputAt = -Infinity; returnFrom = null;

@@ -20,6 +20,12 @@
   box-shadow: 0 3px 12px rgba(29, 35, 43, 0.06);
 }
 
+.domainBar[data-tone="dark"] {
+  border-color: #30333b;
+  background: rgba(20, 21, 25, 0.92);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.48);
+}
+
 .domainBtn {
   display: inline-flex;
   align-items: center;
@@ -42,6 +48,10 @@
   color: #555b63;
 }
 
+.domainBar[data-tone="dark"] .domainBtn {
+  color: #a6abb4;
+}
+
 .domainBtn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.18);
   color: #ffffff;
@@ -51,6 +61,11 @@
 .domainBar[data-tone="white"] .domainBtn:hover:not(:disabled) {
   background: #e7eaee;
   color: #1f2328;
+}
+
+.domainBar[data-tone="dark"] .domainBtn:hover:not(:disabled) {
+  background: #2b2e35;
+  color: #ffffff;
 }
 
 .domainBtn[aria-pressed="true"] {
@@ -63,6 +78,11 @@
 .domainBar[data-tone="white"] .domainBtn[aria-pressed="true"] {
   background: #2f3339;
   color: #ffffff;
+}
+
+.domainBar[data-tone="dark"] .domainBtn[aria-pressed="true"] {
+  background: #ffffff;
+  color: #111215;
 }
 
 .domainBtn:disabled {
@@ -172,6 +192,19 @@
   --pkg-lib-active-bg: #fff9ef;
   --pkg-lib-active-ink: #772440;
   --pkg-lib-scroll-thumb: rgba(255, 255, 255, 0.34);
+}
+
+.templateLibrary[data-tone="dark"],
+.filterBarRoot[data-tone="dark"] {
+  --pkg-lib-ink: #f4f5f7;
+  --pkg-lib-muted: #9fa4ad;
+  --pkg-lib-line: #32353d;
+  --pkg-lib-soft: #262930;
+  --pkg-lib-card: #202227;
+  --pkg-lib-popover: #1a1c21;
+  --pkg-lib-active-bg: #ffffff;
+  --pkg-lib-active-ink: #111215;
+  --pkg-lib-scroll-thumb: rgba(255, 255, 255, 0.24);
 }
 
 .templateToolbar {
@@ -335,6 +368,17 @@
   --theme-active-border: #4b4650;
 }
 
+.sceneThemeGroup[data-tone="dark"] {
+  --theme-ink: #e4e6eb;
+  --theme-muted: #9fa4ad;
+  --theme-line: #32353d;
+  --theme-bg: #202227;
+  --theme-hover: #2a2d34;
+  --theme-active-bg: #ffffff;
+  --theme-active-ink: #111215;
+  --theme-active-border: #ffffff;
+}
+
 .sceneThemeLabel {
   font-size: 11px;
   font-weight: 500;
@@ -343,21 +387,21 @@
 
 .sceneThemeGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .sceneThemeBtn {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 5px;
   min-height: 36px;
-  padding: 6px 10px;
+  padding: 6px 8px;
   border-radius: 9px;
   border: 1px solid var(--theme-line);
   background: var(--theme-bg);
   color: var(--theme-ink);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
   transition: background 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
@@ -375,8 +419,8 @@
 }
 
 .sceneThemeDot {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   border-radius: 999px;
   flex-shrink: 0;
   border: 1.5px solid rgba(255, 255, 255, 0.65);
@@ -385,6 +429,10 @@
 
 .sceneThemeDotWhite {
   border-color: #c7c9d1;
+}
+
+.sceneThemeDotDark {
+  border-color: #6f7480;
 }
 
 .sceneThemeName {
@@ -428,6 +476,17 @@
   --env-active-bg: #ffffff;
   --env-active-ink: #1f2329;
   --env-active-border: #3f434c;
+}
+
+.sceneEnvGroup[data-tone="dark"] {
+  --env-ink: #f0f1f4;
+  --env-muted: #9fa4ad;
+  --env-line: #30333b;
+  --env-bg: #202227;
+  --env-hover: #2b2e36;
+  --env-active-bg: #ffffff;
+  --env-active-ink: #111215;
+  --env-active-border: #ffffff;
 }
 
 .sceneEnvHeader {
@@ -543,6 +602,18 @@
   --spot-active-bg: #2f333b;
   --spot-active-ink: #ffffff;
   --spot-accent: #d53660;
+}
+
+.sceneSpotGroup[data-tone="dark"] {
+  --spot-ink: #f0f1f4;
+  --spot-muted: #9fa4ad;
+  --spot-line: #30333b;
+  --spot-card-bg: #1e2025;
+  --spot-btn-bg: #25282f;
+  --spot-btn-hover: #30343d;
+  --spot-active-bg: #ffffff;
+  --spot-active-ink: #111215;
+  --spot-accent: #ffffff;
 }
 
 .sceneSpotCheckRow {
@@ -926,6 +997,17 @@
   --pkg-accent: #2563eb;
   --pkg-accent-ink: #ffffff;
   --pkg-card: #ffffff;
+}
+
+.inspector[data-tone="dark"] {
+  --pkg-ink: #f4f5f7;
+  --pkg-muted: #9fa4ad;
+  --pkg-line: #32353d;
+  --pkg-field: #1e2025;
+  --pkg-soft: #2a2d34;
+  --pkg-accent: #ffffff;
+  --pkg-accent-ink: #111215;
+  --pkg-card: #202227;
 }
 
 .inspectorSection {

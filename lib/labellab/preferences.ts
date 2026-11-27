@@ -11,7 +11,7 @@ import {
 export interface ScenePreferences {
   modelId: string;
   sceneMode: "website" | "studio";
-  style: "pink" | "white";
+  style: "pink" | "white" | "dark";
   environment: EnvironmentPresetId;
   spotLight: StudioSpotLightConfig;
   motion: "showcase" | "off";
@@ -240,7 +240,7 @@ export function parsePreferences(value: unknown): ScenePreferences {
         sceneMode === "website" || sceneMode === "studio"
           ? sceneMode
           : defaults.sceneMode,
-      style: style === "pink" || style === "white" ? style : defaults.style,
+      style: style === "pink" || style === "white" || style === "dark" ? style : defaults.style,
       environment: normalizeEnvironmentPresetId(own("environment")),
       spotLight: sanitizeSpotLightConfig(own("spotLight")),
       motion:

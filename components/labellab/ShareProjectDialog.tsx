@@ -116,7 +116,6 @@ export default function ShareProjectDialog({
     () => new Set(sourceItems.slice(0, SHARE_LIMITS.maxItems).map((item) => item.id)),
   );
   const [title, setTitle] = useState(existingShare?.title || collection.name);
-  const [brandName, setBrandName] = useState(existingShare?.brandName || collection.brandName || "");
   const [description, setDescription] = useState(existingShare?.description || collection.description || "");
   const [expiryPreset, setExpiryPreset] = useState<ShareExpiryPreset>("30d");
   const [usePasscode, setUsePasscode] = useState<boolean>(Boolean(existingShare?.hasPasscode));
@@ -261,7 +260,7 @@ export default function ShareProjectDialog({
         localProjectId: collection.id,
         title: cleanTitle,
         description: description.trim(),
-        brandName: brandName.trim(),
+        brandName: "",
         expiresAt: computeExpiryIso(expiryPreset),
         options: {
           allowFold,
@@ -539,30 +538,17 @@ export default function ShareProjectDialog({
             </div>
           </section>
 
-          <div className={styles.gridTwo}>
-            <label className={styles.field}>
-              <span>{copy.reviewTitle}</span>
-              <input
-                type="text"
-                maxLength={SHARE_LIMITS.maxTitleLength}
-                value={title}
-                disabled={busy}
-                placeholder={copy.reviewTitlePlaceholder}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </label>
-            <label className={styles.field}>
-              <span>{copy.brandStudio}</span>
-              <input
-                type="text"
-                maxLength={SHARE_LIMITS.maxBrandNameLength}
-                value={brandName}
-                disabled={busy}
-                placeholder={copy.brandPlaceholder}
-                onChange={(e) => setBrandName(e.target.value)}
-              />
-            </label>
-          </div>
+          <label className={styles.field}>
+            <span>{copy.reviewTitle}</span>
+            <input
+              type="text"
+              maxLength={SHARE_LIMITS.maxTitleLength}
+              value={title}
+              disabled={busy}
+              placeholder={copy.reviewTitlePlaceholder}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </label>
 
           <label className={styles.field}>
             <span>{copy.clientNote}</span>

@@ -81,6 +81,7 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
   const outerRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<MockupRuntime | null>(null);
+  const panKeysRef = useRef<Set<"w" | "a" | "s" | "d">>(new Set());
   const propsRef = useRef({ model, settings, artwork, artworkEditing, onStatus, onQualityChange, qualityPreference, paintBackground, onHoverTarget, onPickTarget });
   const [readyVersion, setReadyVersion] = useState(0);
   const [status, setStatus] = useState("loading-model");
@@ -153,11 +154,15 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
             onQualityChange: (report) => {
               if (alive) propsRef.current.onQualityChange?.(report);
             },
-            ...(interaction !== "drag-only"
+            ...(interaction !== "drag-only" && propsRef.current.onHoverTarget
               ? {
                   onHoverTarget: (target) => {
                     if (alive) propsRef.current.onHoverTarget?.(target);
                   },
+                }
+              : {}),
+            ...(interaction !== "drag-only" && propsRef.current.onPickTarget
+              ? {
                   onPickTarget: (target) => {
                     if (alive) propsRef.current.onPickTarget?.(target);
                   },
@@ -287,6 +292,53 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
     return () => observer.disconnect();
   }, [readyVersion]);
 
+  const resolvePanKey = (event: { code?: string; key: string }): "w" | "a" | "s" | "d" | null => {
+    if (event.code === "KeyW") return "w";
+    if (event.code === "KeyA") return "a";
+    if (event.code === "KeyS") return "s";
+    if (event.code === "KeyD") return "d";
+    const lower = event.key.toLowerCase();
+    if (lower === "w" || lower === "a" || lower === "s" || lower === "d") return lower;
+    return null;
+  };
+
+  const syncPanVelocity = () => {
+    const keys = panKeysRef.current;
+    const horizontal = (keys.has("a") ? 1 : 0) - (keys.has("d") ? 1 : 0);
+    const vertical = (keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0);
+    runtimeRef.current?.setPanVelocity(horizontal, vertical);
+  };
+
+  useEffect(() => {
+    if (interaction === "drag-only") return;
+    const clearHeldPan = () => {
+      if (panKeysRef.current.size === 0) return;
+      panKeysRef.current.clear();
+      runtimeRef.current?.setPanVelocity(0, 0);
+    };
+    const onWindowKeyUp = (event: KeyboardEvent) => {
+      const panKey = resolvePanKey(event);
+      if (panKey && panKeysRef.current.delete(panKey)) {
+        const keys = panKeysRef.current;
+        const horizontal = (keys.has("a") ? 1 : 0) - (keys.has("d") ? 1 : 0);
+        const vertical = (keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0);
+        runtimeRef.current?.setPanVelocity(horizontal, vertical);
+      }
+    };
+    const onVisibility = () => {
+      if (document.hidden) clearHeldPan();
+    };
+    window.addEventListener("blur", clearHeldPan);
+    window.addEventListener("keyup", onWindowKeyUp);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      clearHeldPan();
+      window.removeEventListener("blur", clearHeldPan);
+      window.removeEventListener("keyup", onWindowKeyUp);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [interaction]);
+
   const loading = status !== "ready" && status !== "exporting" && !error;
   return (
     <div className="viewer-measure" ref={outerRef}>
@@ -299,16 +351,22 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
           : `3D view of ${subjectName ?? model.name}. Use left and right arrows to rotate, up and down arrows to change field of view, and WASD to pan.`}
         tabIndex={interaction === "drag-only" ? undefined : 0}
         onKeyDown={interaction === "drag-only" ? undefined : (event) => {
+          if (event.ctrlKey || event.metaKey || event.altKey) return;
+          const panKey = resolvePanKey(event);
+          if (panKey) {
+            event.preventDefault();
+            if (!panKeysRef.current.has(panKey)) {
+              panKeysRef.current.add(panKey);
+              syncPanVelocity();
+            }
+            return;
+          }
           const key = event.key.toLowerCase();
           const map: Record<string, () => void> = {
             ArrowLeft: () => runtimeRef.current?.orbitView(-0.15, 0),
             ArrowRight: () => runtimeRef.current?.orbitView(0.15, 0),
             ArrowUp: () => runtimeRef.current?.adjustFov(-2),
             ArrowDown: () => runtimeRef.current?.adjustFov(2),
-            w: () => runtimeRef.current?.panView(0, -0.025),
-            a: () => runtimeRef.current?.panView(0.025, 0),
-            s: () => runtimeRef.current?.panView(0, 0.025),
-            d: () => runtimeRef.current?.panView(-0.025, 0),
             "+": () => runtimeRef.current?.zoom(1.15),
             "=": () => runtimeRef.current?.zoom(1.15),
             "-": () => runtimeRef.current?.zoom(1 / 1.15),
@@ -320,6 +378,18 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
           if (action) {
             event.preventDefault();
             action();
+          }
+        }}
+        onKeyUp={interaction === "drag-only" ? undefined : (event) => {
+          const panKey = resolvePanKey(event);
+          if (panKey && panKeysRef.current.delete(panKey)) {
+            syncPanVelocity();
+          }
+        }}
+        onBlur={interaction === "drag-only" ? undefined : () => {
+          if (panKeysRef.current.size > 0) {
+            panKeysRef.current.clear();
+            syncPanVelocity();
           }
         }}
       />

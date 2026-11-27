@@ -138,7 +138,6 @@
   min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: calc(7 * var(--home-unit));
   padding: calc(7 * var(--home-unit)) calc(12 * var(--home-unit));
   border-radius: 999px;
   background: rgba(16, 7, 15, 0.56);
@@ -151,36 +150,12 @@
   pointer-events: auto;
 }
 
-.liveDot {
-  width: calc(7 * var(--home-unit));
-  height: calc(7 * var(--home-unit));
-  border-radius: 50%;
-  background: #5ef2a5;
-  box-shadow: 0 0 0 calc(3 * var(--home-unit)) rgba(94, 242, 165, 0.28);
-  flex-shrink: 0;
-  animation: heroLivePulse 2.4s ease-in-out infinite;
-}
-
-.liveTag {
-  font-weight: 750;
-  letter-spacing: 0.05em;
-  color: #9effcc;
-  white-space: nowrap;
-}
-
-.liveSep {
-  width: 1px;
-  height: calc(11 * var(--home-unit));
-  background: rgba(255, 255, 255, 0.25);
-  flex-shrink: 0;
-}
-
 .liveModel {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.92);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.94);
 }
 
 .hudActions {
@@ -359,12 +334,12 @@
 
 /* Bottom editorial & high-contrast action panel */
 .bottom {
-  padding: calc(18 * var(--home-unit)) calc(22 * var(--home-unit)) calc(20 * var(--home-unit));
+  padding: calc(15 * var(--home-unit)) calc(22 * var(--home-unit)) calc(18 * var(--home-unit));
   background: linear-gradient(180deg, rgba(255, 252, 254, 0.94), rgba(255, 245, 249, 0.96));
   border-top: 1px solid rgba(255, 255, 255, 0.72);
   display: flex;
   flex-direction: column;
-  gap: calc(11 * var(--home-unit));
+  gap: calc(9 * var(--home-unit));
 }
 
 .metaRow {
@@ -402,17 +377,12 @@
 .title {
   margin: 0;
   color: var(--home-ink);
-  font-family: var(--font-title);
-  font-size: clamp(22px, calc(12px + 20 * var(--home-unit)), 33px);
-  font-weight: 400;
-  line-height: 1.12;
-  text-wrap: balance;
-}
-
-:global(html[lang="vi"]) .title {
   font-family: var(--font-ui);
+  font-size: clamp(19px, calc(10px + 15 * var(--home-unit)), 27px);
   font-weight: 800;
   letter-spacing: -0.028em;
+  line-height: 1.15;
+  white-space: nowrap;
 }
 
 .actions {
@@ -492,16 +462,6 @@
   transform: translateX(3px);
 }
 
-@keyframes heroLivePulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 calc(3 * var(--home-unit)) rgba(94, 242, 165, 0.3);
-  }
-  50% {
-    box-shadow: 0 0 0 calc(6 * var(--home-unit)) rgba(94, 242, 165, 0.08);
-  }
-}
-
 @container labellab-page (max-width: 860px) {
   .card {
     height: auto;
@@ -542,10 +502,7 @@
   .bottom {
     padding: calc(16 * var(--home-unit));
   }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .liveDot {
-    animation: none;
+  .title {
+    white-space: normal;
   }
 }

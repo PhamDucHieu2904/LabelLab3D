@@ -55,8 +55,8 @@ export function paintRenderBackdrop(context: CanvasRenderingContext2D, width: nu
   }
   if (state.style !== 'white' && state.highlight && state.glow) {
     const glow = state.glow;
-    context.globalCompositeOperation = 'overlay';
-    context.globalAlpha = 0.72;
+    context.globalCompositeOperation = state.style === 'dark' ? 'screen' : 'overlay';
+    context.globalAlpha = state.style === 'dark' ? 0.16 : 0.72;
     context.translate(glow.x + glow.width / 2, glow.y + glow.height / 2);
     context.scale(glow.width / 2, glow.height / 2);
     const gradient = context.createRadialGradient(0, 0, 0, 0, 0, 1);

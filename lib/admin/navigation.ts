@@ -2,6 +2,7 @@ export const ADMIN_SECTIONS = [
   { key: "overview", title: "Tổng quan", group: "Hoạt động", icon: "overview" },
   { key: "traffic", title: "Lượt truy cập", group: "Hoạt động", icon: "traffic" },
   { key: "users", title: "Người dùng", group: "Hoạt động", icon: "users" },
+  { key: "feedback", title: "Thư góp ý", group: "Hoạt động", icon: "feedback" },
   { key: "transactions", title: "Giao dịch & coin", group: "Hoạt động", icon: "transactions" },
   { key: "models", title: "Thư viện 3D", group: "Quản lý", icon: "models" },
   { key: "assets", title: "Tài nguyên", group: "Quản lý", icon: "assets" },

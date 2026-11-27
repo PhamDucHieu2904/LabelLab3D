@@ -12,7 +12,7 @@ import styles from "./ViewportDisplayRail.module.css";
 
 interface Props {
   sceneMode: "website" | "studio";
-  styleTone: "pink" | "white";
+  styleTone: "pink" | "white" | "dark";
   qualityPreference: QualityPreference;
   qualityReport: QualityRuntimeReport | null;
   disabled?: boolean;
@@ -51,7 +51,8 @@ export default function ViewportDisplayRail({
 
   const studio = sceneMode === "studio";
   const whiteStyle = styleTone === "white";
-  const visualTone: "neutral" | "pink" | "white" = studio ? "neutral" : styleTone;
+  const darkStyle = styleTone === "dark";
+  const visualTone: "neutral" | "pink" | "white" | "dark" = studio ? "neutral" : styleTone;
 
   useEffect(() => {
     if (!qualityOpen) return;
@@ -119,25 +120,31 @@ export default function ViewportDisplayRail({
         </button>
       </div>
 
-      {/* Preview Theme Swatch (Scene 1 only: Pink <-> White) */}
+      {/* Preview Theme Swatch (Scene 1 only: White -> Pink -> Dark) */}
       {!studio && (
         <>
           <span className={styles.divider} aria-hidden="true" />
           <button
             type="button"
             className={styles.railBtn}
-            role="switch"
-            aria-checked={whiteStyle}
-            aria-label={vp.styleWhite}
-            title={whiteStyle ? vp.styleToggleToPink : vp.styleToggleToWhite}
+            aria-label={darkStyle ? vp.styleDark : whiteStyle ? vp.styleWhite : vp.stylePink}
+            title={
+              whiteStyle
+                ? vp.styleToggleToPink
+                : darkStyle
+                  ? vp.styleToggleToWhite
+                  : vp.styleToggleToDark
+            }
             disabled={disabled}
             onClick={onToggleStyle}
           >
             <span
-              className={`${styles.styleDot} ${whiteStyle ? styles.styleDotWhite : styles.styleDotPink}`}
+              className={`${styles.styleDot} ${darkStyle ? styles.styleDotDark : whiteStyle ? styles.styleDotWhite : styles.styleDotPink}`}
               aria-hidden="true"
             />
-            <span className={styles.microLabel}>{whiteStyle ? vp.styleWhite : vp.stylePink}</span>
+            <span className={styles.microLabel}>
+              {darkStyle ? vp.styleDark : whiteStyle ? vp.styleWhite : vp.stylePink}
+            </span>
           </button>
         </>
       )}

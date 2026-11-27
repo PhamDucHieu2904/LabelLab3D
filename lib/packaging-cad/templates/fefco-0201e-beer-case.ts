@@ -136,12 +136,12 @@ function buildBottomGlueTabPoly(input: {
 export const FEFCO_0201E_BEER_CASE_TEMPLATE: PackagingTemplateDefinition = {
   id: 'fefco-0201e-beer-case',
   code: 'FEFCO 0201E',
-  name: 'Side-Open Beer Case (End-Load)',
-  shortName: 'Beer Case',
+  name: 'Side-Open Carton (End-Load)',
+  shortName: 'Side-Open Carton',
   category: 'carton',
-  tagline: 'End-load beer & beverage carton with side-opening flaps',
+  tagline: 'End-load corrugated carton with side-opening flaps',
   description:
-    'Classic side-loading beer and beverage carton (24-can / 12-can case) that opens from the left and right ends. Features offset outer flap creases, tapered rounded major & dust flaps, manufacturer glue tab, and optional carry hand holes.',
+    'Classic side-loading carton (end-load RSC) that opens from the left and right ends. Ideal for beverages, cans, jars, packaged foods, and multi-unit shipments. Features offset outer flap creases, tapered rounded major & dust flaps, manufacturer glue tab, and optional carry hand holes.',
   defaultMaterialId: 'kraft-b',
   defaultDimensions: { length: 406, width: 272, height: 122 },
   minDimensions: { length: 120, width: 90, height: 60 },
@@ -162,7 +162,7 @@ export const FEFCO_0201E_BEER_CASE_TEMPLATE: PackagingTemplateDefinition = {
   sizePresets: [
     {
       id: 'beer-24-can-330',
-      label: '24-Can 330ml Beer Case (6×4)',
+      label: '24-Can 330ml Case (6×4)',
       detail: '406 × 272 × 122 mm (Inner)',
       lengthMm: 406,
       widthMm: 272,
@@ -184,7 +184,7 @@ export const FEFCO_0201E_BEER_CASE_TEMPLATE: PackagingTemplateDefinition = {
     },
     {
       id: 'beer-24-can-500',
-      label: '24-Can 500ml Tallboy (6×4)',
+      label: '24-Can 500ml Case (6×4)',
       detail: '408 × 274 × 174 mm (Inner)',
       lengthMm: 408,
       widthMm: 274,

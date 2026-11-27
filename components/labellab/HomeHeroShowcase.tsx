@@ -129,9 +129,6 @@ export default function HomeHeroShowcase() {
         {/* Top Floating Studio HUD */}
         <div className={styles.topline}>
           <div className={styles.livePill}>
-            <span className={styles.liveDot} aria-hidden="true" />
-            <span className={styles.liveTag}>{t.home.live3d}</span>
-            <span className={styles.liveSep} aria-hidden="true" />
             <span className={styles.liveModel}>{activeBadge}</span>
           </div>
 

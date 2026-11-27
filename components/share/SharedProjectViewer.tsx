@@ -4,11 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
   Info,
   Layers,
+  ListFilter,
   Lock,
   Maximize2,
   Milk,
@@ -22,6 +24,7 @@ import {
   RotateCcw,
   RotateCw,
   Ruler,
+  Search,
   ShieldAlert,
   Sparkles,
   Sun,
@@ -85,13 +88,15 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
 
   const [selectedItemId, setSelectedItemId] = useState<string>(initialSelectedId);
   const [filterTab, setFilterTab] = useState<FilterTab>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
 
   const initialItem = items.find((i) => i.id === initialSelectedId) ?? items[0] ?? null;
   const [backdropChoice, setBackdropChoice] = useState<BackdropChoice>(() => {
     if (!initialItem || initialItem.payload.kind === "packaging") return "studio";
-    return initialItem.payload.settings.sceneMode === "studio" || initialItem.payload.settings.style === "white"
-      ? "studio"
-      : "pink";
+    if (initialItem.payload.settings.sceneMode === "studio" || initialItem.payload.settings.style === "white") return "studio";
+    if (initialItem.payload.settings.style === "dark") return "dark";
+    return "pink";
   });
   const [quality, setQuality] = useState<QualityPreference>("auto");
   const [autoSpin, setAutoSpin] = useState<boolean>(() =>
@@ -113,6 +118,7 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
   const sceneRef = useRef<SceneCanvasHandle>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const activeItemBtnRef = useRef<HTMLButtonElement | null>(null);
+  const filterWrapRef = useRef<HTMLDivElement | null>(null);
   const packagingSubjectRef = useRef<PackagingSubjectController | null>(null);
   const [packagingEntry, setPackagingEntry] = useState<{
     itemId: string;
@@ -186,7 +192,13 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
     } else {
       const savedMode = item.payload.settings.sceneMode;
       const savedStyle = item.payload.settings.style;
-      setBackdropChoice(savedMode === "studio" || savedStyle === "white" ? "studio" : "pink");
+      setBackdropChoice(
+        savedMode === "studio" || savedStyle === "white"
+          ? "studio"
+          : savedStyle === "dark"
+            ? "dark"
+            : "pink",
+      );
       setAutoSpin(item.payload.settings.motion !== "off");
       setFoldPlaying(false);
     }
@@ -194,16 +206,43 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
 
   const beverageCount = useMemo(() => items.filter((i) => i.kind === "beverage").length, [items]);
   const packagingCount = useMemo(() => items.filter((i) => i.kind === "packaging").length, [items]);
+  const hasMultipleKinds = beverageCount > 0 && packagingCount > 0;
 
   const filteredItems = useMemo(() => {
-    if (filterTab === "all") return items;
-    return items.filter((item) => item.kind === filterTab);
-  }, [items, filterTab]);
+    const q = searchQuery.trim().toLowerCase();
+    return items.filter((item) => {
+      if (filterTab !== "all" && item.kind !== filterTab) return false;
+      if (!q) return true;
+      return (
+        item.name.toLowerCase().includes(q) ||
+        item.subtitle.toLowerCase().includes(q) ||
+        (item.kind === "packaging" ? "box tray hộp khay cad" : "bottle can chai lon").includes(q)
+      );
+    });
+  }, [items, filterTab, searchQuery]);
 
   const activeFilteredIndex = useMemo(() => {
     if (!activeItem) return -1;
     return filteredItems.findIndex((i) => i.id === activeItem.id);
   }, [filteredItems, activeItem]);
+
+  useEffect(() => {
+    if (!filterMenuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (filterWrapRef.current && !filterWrapRef.current.contains(event.target as Node)) {
+        setFilterMenuOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFilterMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [filterMenuOpen]);
 
   useEffect(() => {
     activeItemBtnRef.current?.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
@@ -461,8 +500,8 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
     ...DEFAULT_PREFERENCES,
     ...activeItem.payload.settings,
     sceneMode: isPackaging ? "studio" : backdropChoice === "studio" ? "studio" : "website",
-    style: backdropChoice === "pink" ? "pink" : "white",
-    background: backdropChoice === "dark" ? "#171d29" : backdropChoice === "pink" ? "#d53660" : "#ffffff",
+    style: backdropChoice === "pink" ? "pink" : backdropChoice === "dark" ? "dark" : "white",
+    background: backdropChoice === "dark" ? "#111215" : backdropChoice === "pink" ? "#d53660" : "#ffffff",
     grid: backdropChoice === "pink",
     motion: !isPackaging && autoSpin ? "showcase" : "off",
   };
@@ -504,11 +543,11 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
     <main className={`${styles.page} ${stageClass}`} ref={stageRef}>
       {!isPackaging && backdropChoice === "pink" && (
         <div className={styles.gridBackdrop} aria-hidden="true">
-          <MovingGrid enabled={false} style="pink" />
+          <MovingGrid enabled style="pink" />
         </div>
       )}
 
-      {/* Top Glass Header */}
+      {/* Floating Transparent Header */}
       <header className={styles.topBar}>
         <div className={styles.titleBlock}>
           {readyShare.brandName && <span className={styles.brandTag}>{readyShare.brandName}</span>}
@@ -516,7 +555,6 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
             <h1>{readyShare.title}</h1>
             <span className={styles.activeBadge}>{activeItem.name}</span>
           </div>
-          {activeItem.subtitle && <p className={styles.subtitle}>{activeItem.subtitle}</p>}
         </div>
 
         <div className={styles.topControls}>
@@ -558,18 +596,21 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
             </div>
           )}
 
-          <select
-            className={styles.qualitySelect}
-            aria-label="3D rendering quality"
-            value={quality}
-            onChange={(e) => setQuality(e.target.value as QualityPreference)}
-          >
-            {QUALITY_PREFERENCE_OPTIONS.map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                {opt.shortLabel}
-              </option>
-            ))}
-          </select>
+          <div className={styles.qualitySelectWrap}>
+            <select
+              className={styles.qualitySelect}
+              aria-label="3D rendering quality"
+              value={quality}
+              onChange={(e) => setQuality(e.target.value as QualityPreference)}
+            >
+              {QUALITY_PREFERENCE_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.shortLabel}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={13} className={styles.qualitySelectChevron} aria-hidden="true" />
+          </div>
 
           <button
             type="button"
@@ -634,7 +675,7 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
           )}
 
           {/* Contextual Controls (Fold/Dimensions for CAD, Angles/Spin for Bottles, Zoom/Reset for all) */}
-          <div className={styles.floatingControls}>
+          <div className={`${styles.floatingControls} ${!panelCollapsed ? styles.floatingControlsWithPanel : ""}`}>
             {isPackaging && readyShare.options.allowFold && (
               <div className={styles.foldCard}>
                 <button
@@ -785,42 +826,89 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
             </div>
           </div>
 
-          <div
-            className={`${styles.dockTop} ${
-              !(beverageCount > 0 && packagingCount > 0) ? styles.dockTopMobileOnly : ""
-            }`}
-          >
-            {beverageCount > 0 && packagingCount > 0 ? (
-              <div className={styles.filterTabs} role="tablist" aria-label="Filter objects by category">
+          <div className={styles.searchFilterBar} ref={filterWrapRef}>
+            <div className={styles.searchInputWrap}>
+              <Search size={13} className={styles.searchIcon} aria-hidden="true" />
+              <input
+                type="search"
+                className={styles.searchInput}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search 3D objects…"
+                aria-label="Search 3D objects"
+              />
+              {searchQuery && (
                 <button
                   type="button"
-                  role="tab"
-                  aria-selected={filterTab === "all"}
-                  onClick={() => setFilterTab("all")}
+                  className={styles.searchClearBtn}
+                  aria-label="Clear search"
+                  onClick={() => setSearchQuery("")}
                 >
-                  All ({items.length})
+                  <X size={12} />
+                </button>
+              )}
+              {hasMultipleKinds && (
+                <button
+                  type="button"
+                  className={`${styles.filterTriggerBtn} ${filterTab !== "all" ? styles.filterTriggerActive : ""}`}
+                  aria-label="Filter objects by category"
+                  aria-expanded={filterMenuOpen}
+                  aria-haspopup="menu"
+                  title="Filter by category"
+                  onClick={() => setFilterMenuOpen((open) => !open)}
+                >
+                  <ListFilter size={14} aria-hidden="true" />
+                  {filterTab !== "all" && <span className={styles.filterActiveDot} aria-hidden="true" />}
+                </button>
+              )}
+            </div>
+
+            {hasMultipleKinds && filterMenuOpen && (
+              <div className={styles.filterPopover} role="menu" aria-label="Filter objects by category">
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={filterTab === "all"}
+                  className={`${styles.filterOption} ${filterTab === "all" ? styles.filterOptionActive : ""}`}
+                  onClick={() => {
+                    setFilterTab("all");
+                    setFilterMenuOpen(false);
+                  }}
+                >
+                  <span>All objects</span>
+                  <span className={styles.filterOptionCount}>{items.length}</span>
                 </button>
                 <button
                   type="button"
-                  role="tab"
-                  aria-selected={filterTab === "beverage"}
-                  onClick={() => setFilterTab("beverage")}
+                  role="menuitemradio"
+                  aria-checked={filterTab === "beverage"}
+                  className={`${styles.filterOption} ${filterTab === "beverage" ? styles.filterOptionActive : ""}`}
+                  onClick={() => {
+                    setFilterTab("beverage");
+                    setFilterMenuOpen(false);
+                  }}
                 >
-                  <Milk size={12} /> Bottles &amp; Cans ({beverageCount})
+                  <span className={styles.filterOptionLabel}>
+                    <Milk size={13} aria-hidden="true" /> Bottles &amp; Cans
+                  </span>
+                  <span className={styles.filterOptionCount}>{beverageCount}</span>
                 </button>
                 <button
                   type="button"
-                  role="tab"
-                  aria-selected={filterTab === "packaging"}
-                  onClick={() => setFilterTab("packaging")}
+                  role="menuitemradio"
+                  aria-checked={filterTab === "packaging"}
+                  className={`${styles.filterOption} ${filterTab === "packaging" ? styles.filterOptionActive : ""}`}
+                  onClick={() => {
+                    setFilterTab("packaging");
+                    setFilterMenuOpen(false);
+                  }}
                 >
-                  <Package size={12} /> Boxes &amp; Trays ({packagingCount})
+                  <span className={styles.filterOptionLabel}>
+                    <Package size={13} aria-hidden="true" /> Boxes &amp; Trays
+                  </span>
+                  <span className={styles.filterOptionCount}>{packagingCount}</span>
                 </button>
               </div>
-            ) : (
-              <span className={styles.dockCount}>
-                {items.length} {items.length === 1 ? "3D object" : "3D objects"} in project
-              </span>
             )}
 
             <span className={styles.dragHint}>
@@ -840,44 +928,62 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
               </button>
             )}
             <div className={styles.objectStrip}>
-              {filteredItems.map((item) => {
-                const selected = item.id === activeItem.id;
-                const thumb =
-                  (item.thumbnailHash && assetUrls[item.thumbnailHash]) ||
-                  (item.payload.kind === "beverage"
-                    ? getLabModel(item.payload.settings.modelId).poster
-                    : undefined);
-                return (
-                  <button
-                    key={item.id}
-                    ref={selected ? activeItemBtnRef : undefined}
-                    type="button"
-                    className={`${styles.objectBtn} ${selected ? styles.objectBtnActive : ""}`}
-                    aria-pressed={selected}
-                    onClick={() => applyItemSelection(item)}
-                  >
-                    <span className={styles.objectThumb}>
-                      {thumb ? (
-                        <img src={thumb} alt="" />
-                      ) : item.kind === "packaging" ? (
-                        <Package size={18} />
-                      ) : (
-                        <Milk size={18} />
-                      )}
-                    </span>
-                    <span className={styles.objectMeta}>
-                      <strong>{item.name}</strong>
-                      <small>{item.kind === "packaging" ? "Box / Tray" : "Bottle / Can"}</small>
-                      {item.subtitle && <span className={styles.objectSubtitle}>{item.subtitle}</span>}
-                    </span>
-                    {selected && (
-                      <span className={styles.objectActiveCheck} aria-hidden="true">
-                        <Check size={13} />
+              {filteredItems.length === 0 ? (
+                <div className={styles.emptyObjects}>
+                  <span>No matching objects</span>
+                  {(searchQuery || filterTab !== "all") && (
+                    <button
+                      type="button"
+                      className={styles.resetFilterBtn}
+                      onClick={() => {
+                        setSearchQuery("");
+                        setFilterTab("all");
+                      }}
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              ) : (
+                filteredItems.map((item) => {
+                  const selected = item.id === activeItem.id;
+                  const thumb =
+                    (item.thumbnailHash && assetUrls[item.thumbnailHash]) ||
+                    (item.payload.kind === "beverage"
+                      ? getLabModel(item.payload.settings.modelId).poster
+                      : undefined);
+                  return (
+                    <button
+                      key={item.id}
+                      ref={selected ? activeItemBtnRef : undefined}
+                      type="button"
+                      className={`${styles.objectBtn} ${selected ? styles.objectBtnActive : ""}`}
+                      aria-pressed={selected}
+                      onClick={() => applyItemSelection(item)}
+                    >
+                      <span className={styles.objectThumb}>
+                        {thumb ? (
+                          <img src={thumb} alt="" />
+                        ) : item.kind === "packaging" ? (
+                          <Package size={18} />
+                        ) : (
+                          <Milk size={18} />
+                        )}
                       </span>
-                    )}
-                  </button>
-                );
-              })}
+                      <span className={styles.objectMeta}>
+                        <strong>{item.name}</strong>
+                        <small>{item.kind === "packaging" ? "Box / Tray" : "Bottle / Can"}</small>
+                        {item.subtitle && <span className={styles.objectSubtitle}>{item.subtitle}</span>}
+                      </span>
+                      {selected && (
+                        <span className={styles.objectActiveCheck} aria-hidden="true">
+                          <Check size={13} />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })
+              )}
             </div>
             {filteredItems.length > 1 && (
               <button

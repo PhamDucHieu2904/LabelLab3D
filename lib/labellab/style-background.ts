@@ -9,6 +9,7 @@ import type { ScenePreferences } from './preferences';
 export const SCENE_THEME_BACKGROUNDS: Readonly<Record<ScenePreferences['style'], string>> = Object.freeze({
   white: '#ffffff',
   pink: '#d53660',
+  dark: '#111215',
 });
 
 export const SCENE_THEME_OPTIONS: ReadonlyArray<{
@@ -17,6 +18,7 @@ export const SCENE_THEME_OPTIONS: ReadonlyArray<{
 }> = Object.freeze([
   { id: 'white', color: SCENE_THEME_BACKGROUNDS.white },
   { id: 'pink', color: SCENE_THEME_BACKGROUNDS.pink },
+  { id: 'dark', color: SCENE_THEME_BACKGROUNDS.dark },
 ]);
 
 const tiles = new Map<string, Promise<string>>();
@@ -27,12 +29,14 @@ export function loadStyleGridTile(style: ScenePreferences['style'], rasterScale 
   const key = `${style}:${scale}`;
   const cached = tiles.get(key);
   if (cached) return cached;
+  const lineOpacity = style === 'white' ? 1 : style === 'dark' ? 0.34 : 0.2;
+  const iconOpacity = style === 'white' ? 1 : style === 'dark' ? 0.38 : 0.42;
   const pending = loadBackgroundTile(
     { id: 'labellab', color: '#ffffff', icon: 'berry', iconUrl: labellabWhiteIconUrl },
-    { ...backgroundConfig, lineOpacity: style === 'white' ? 1 : 0.2, iconOpacity: style === 'white' ? 1 : 0.42 },
+    { ...backgroundConfig, lineOpacity, iconOpacity },
     scale,
   ).then(async (url) => {
-    if (style !== 'white') return url;
+    if (style !== 'white' && style !== 'dark') return url;
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
       const source = new Image();
       source.onload = () => resolve(source);
@@ -46,7 +50,7 @@ export function loadStyleGridTile(style: ScenePreferences['style'], rasterScale 
     if (!context) throw new Error('Unable to tint the style grid.');
     context.drawImage(image, 0, 0);
     context.globalCompositeOperation = 'source-in';
-    context.fillStyle = '#b6bac0';
+    context.fillStyle = style === 'dark' ? '#7a7e87' : '#b6bac0';
     context.fillRect(0, 0, canvas.width, canvas.height);
     return canvas.toDataURL('image/png');
   }).catch((error: unknown) => { tiles.delete(key); throw error; });

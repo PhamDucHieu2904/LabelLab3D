@@ -33,7 +33,7 @@ test('malformed JSON and unsupported schemas do not prevent editor startup', () 
 test('style and scene persist independently for every combination', () => {
   const storage = memory();
   for (const sceneMode of ['website', 'studio']) {
-    for (const style of ['pink', 'white']) {
+    for (const style of ['pink', 'white', 'dark']) {
       const chosen = { ...defaults, sceneMode, style, motion: 'off', background: '#123ABC' };
       assert.equal(savePreferences(chosen, storage), true);
       const restored = loadPreferences(storage);

@@ -19,7 +19,7 @@ interface Props {
   artwork: PackagingArtworkState;
   surface: "outside" | "inside";
   selectedPanelId: string;
-  tone: "studio" | "pink" | "white";
+  tone: "studio" | "pink" | "white" | "dark";
   disabled?: boolean;
   onChangeSurface: (surface: "outside" | "inside") => void;
   onSelectPanel: (panelId: string) => void;

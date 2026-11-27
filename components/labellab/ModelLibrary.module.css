@@ -14,6 +14,13 @@
   --library-hover: #e5e8eb;
 }
 
+.panel[data-tone="dark"] {
+  --library-ink: #f4f5f7;
+  --library-line: #363941;
+  --library-control: #222429;
+  --library-hover: #2f323a;
+}
+
 .grid:global(.models-grid) {
   --card-surface: #ea3b6d;
   --card-ink: #fff;
@@ -36,6 +43,13 @@
   --card-ink: #292c30;
   --card-line: #bfc5cb;
   --card-accent: #35393f;
+}
+
+.grid[data-tone="dark"] {
+  --card-surface: #202227;
+  --card-ink: #f4f5f7;
+  --card-line: #34373f;
+  --card-accent: #ffffff;
 }
 
 .grid:global(.models-grid) .card:global(.model-card) {

@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
-  CalendarCheck,
   Check,
   Gift,
   Sparkles,
@@ -16,6 +15,7 @@ import CoinPricing from "./CoinPricing";
 import UserProfileCard from "./UserProfileCard";
 import { useAuthDialog } from "./AuthDialog";
 import HomeHeroShowcase from "./HomeHeroShowcase";
+import HomeFeedbackCard from "./HomeFeedbackCard";
 import SystemUpdatesCard from "./SystemUpdatesCard";
 import LegalFooter, { type PublicLegalInfo } from "./LegalFooter";
 import { useLocale } from "./LocaleProvider";
@@ -50,6 +50,7 @@ export default function HomePage({ initialLegal }: { initialLegal?: Partial<Publ
   });
   const [liveAnnouncements, setLiveAnnouncements] = useState<PublicAnnouncement[] | null>(null);
   const [visitorRegion, setVisitorRegion] = useState<CoinRegion>("vietnam");
+  const [currentUser, setCurrentUser] = useState<{ name: string; email: string } | null>(null);
   const [checkinBusy, setCheckinBusy] = useState(false);
   const openAuth = useAuthDialog();
 
@@ -64,9 +65,14 @@ export default function HomePage({ initialLegal }: { initialLegal?: Partial<Publ
           checkIn?: { enabled: boolean; schedule: number[]; reward: number };
           visitor?: { region?: CoinRegion };
         }>(),
-        fetchAccountMeCached<{ user?: { id?: string } | null }>(),
+        fetchAccountMeCached<{ user?: { id?: string; name?: string; email?: string } | null }>(),
       ]);
       const signedIn = Boolean(me?.user);
+      setCurrentUser(
+        me?.user
+          ? { name: me.user.name || "", email: me.user.email || "" }
+          : null,
+      );
       const checkInRes = signedIn
         ? await fetchCheckInCached<{
             claimed?: boolean;
@@ -202,11 +208,25 @@ export default function HomePage({ initialLegal }: { initialLegal?: Partial<Publ
           </section>
 
           <aside className="home-right-column" aria-label={t.home.rightColumnAria}>
-            <UserProfileCard notificationCount={unreadCount} visitorRegion={visitorRegion} />
+            <UserProfileCard visitorRegion={visitorRegion} />
 
             <article className="home-card home-checkin-card" id="home-checkin">
               <div className="home-checkin-heading">
-                <h2>{t.home.checkinTitle}</h2>
+                <div className="home-checkin-title-row">
+                  <h2>{t.home.checkinTitle}</h2>
+                  <span
+                    className={`home-checkin-status ${!checkIn.enabled ? "is-paused" : checkIn.claimed ? "is-claimed" : "is-ready"}`}
+                    aria-live="polite"
+                  >
+                    {!checkIn.enabled ? (
+                      t.home.checkinPausedBadge
+                    ) : checkIn.claimed ? (
+                      <><Check size={12} aria-hidden="true" /> {t.home.checkinClaimedBadge(checkIn.todayReward)}</>
+                    ) : (
+                      t.home.checkinTapTodayBadge(checkIn.todayReward)
+                    )}
+                  </span>
+                </div>
                 <p>
                   {!checkIn.enabled
                     ? t.home.checkinPausedDesc
@@ -219,13 +239,15 @@ export default function HomePage({ initialLegal }: { initialLegal?: Partial<Publ
                 {weekItems.map((item, index) => {
                   const isToday = index === checkIn.nextDayIndex;
                   const isCompleted = index < checkIn.nextDayIndex || (isToday && checkIn.claimed);
+                  const isClaimable = isToday && !checkIn.claimed && checkIn.enabled && !checkinBusy;
                   return (
-                    <div className={`home-day-wrap ${isToday ? "today" : ""}`} key={`${index}`}>
+                    <div className={`home-day-wrap ${isToday ? "today" : ""} ${isCompleted ? "claimed" : ""}`} key={`${index}`}>
                       <button
-                        className={`home-day ${isToday ? "today" : ""} ${item.icon === "gift" ? "is-bonus" : ""}`}
+                        className={`home-day ${isToday ? "today" : ""} ${isCompleted ? "claimed" : ""} ${isClaimable ? "is-claimable" : ""} ${item.icon === "gift" ? "is-bonus" : ""}`}
                         type="button"
                         aria-label={t.home.dayAria(item.day, item.coins, isCompleted)}
-                        onClick={() => { if (isToday && !checkIn.claimed && checkIn.enabled) void claimCheckIn(); }}
+                        title={isClaimable ? t.home.checkinClaimCta(item.coins) : undefined}
+                        onClick={() => { if (isClaimable) void claimCheckIn(); }}
                       >
                         <span className={`home-day-icon ${item.icon === "gift" ? "is-gift" : ""}`}>
                           {isCompleted ? (
@@ -243,22 +265,9 @@ export default function HomePage({ initialLegal }: { initialLegal?: Partial<Publ
                   );
                 })}
               </div>
-              <button
-                className={`home-checkin-cta home-sheen ${checkIn.claimed ? "is-claimed" : ""}`}
-                type="button"
-                onClick={() => void claimCheckIn()}
-                disabled={checkinBusy || !checkIn.enabled}
-                aria-live="polite"
-              >
-                {!checkIn.enabled ? (
-                  <>{t.home.checkinPausedCta}</>
-                ) : checkIn.claimed ? (
-                  <><Check size={18} /> {t.home.checkinClaimedCta(checkIn.todayReward)}</>
-                ) : (
-                  <><CalendarCheck size={18} /> {t.home.checkinClaimCta(checkIn.todayReward)}</>
-                )}
-              </button>
             </article>
+
+            <HomeFeedbackCard user={currentUser} />
           </aside>
         </div>
 

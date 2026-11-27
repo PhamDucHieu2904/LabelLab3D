@@ -23,6 +23,7 @@ import {
   Minus,
   MousePointerClick,
   Package,
+  PackagePlus,
   Palette,
   Plus,
   RotateCcw,
@@ -2029,7 +2030,7 @@ export default function LabellabApp() {
   }> = [
     { id: "pkg-size", label: st.rail.sizeSpec, title: st.rail.sizeSpec, icon: Ruler },
     ...(activePackagingTemplate.features.bottlePacking !== false
-      ? [{ id: "pkg-pack" as const, label: st.rail.packBottles, title: st.rail.headingPackBottles, icon: Milk, activeDot: bottlePack.enabled }]
+      ? [{ id: "pkg-pack" as const, label: st.rail.packBottles, title: st.rail.headingPackBottles, icon: PackagePlus, activeDot: bottlePack.enabled }]
       : []),
     { id: "pkg-material", label: st.rail.material, title: st.rail.headingBoardMaterial, icon: Layers },
     { id: "pkg-structure", label: st.rail.structure, title: st.rail.headingStructure, icon: Sliders },
@@ -2078,7 +2079,7 @@ export default function LabellabApp() {
     if (isPackaging) {
       switch (effectiveTool) {
         case "pkg-pack":
-          return { icon: Milk, title: st.rail.headingPackBottles };
+          return { icon: PackagePlus, title: st.rail.headingPackBottles };
         case "pkg-material":
           return { icon: Layers, title: st.rail.headingBoardMaterial };
         case "pkg-structure":
@@ -2628,7 +2629,12 @@ export default function LabellabApp() {
                     disabled={exportBusy}
                     onSwitchSceneMode={switchMode}
                     onToggleStyle={() => {
-                      const nextStyle = whiteStyle ? "pink" : "white";
+                      const nextStyle: ScenePreferences["style"] =
+                        settings.style === "white"
+                          ? "pink"
+                          : settings.style === "pink"
+                            ? "dark"
+                            : "white";
                       setSettings((cur) => ({
                         ...cur,
                         style: nextStyle,
@@ -2809,7 +2815,12 @@ export default function LabellabApp() {
                           <div className={pkgStyles.sceneThemeGrid} role="group" aria-label={st.scenePanel.bgColor}>
                             {SCENE_THEME_OPTIONS.map((theme) => {
                               const active = settings.style === theme.id;
-                              const label = theme.id === "white" ? st.viewport.styleWhite : st.viewport.stylePink;
+                              const label =
+                                theme.id === "white"
+                                  ? st.viewport.styleWhite
+                                  : theme.id === "dark"
+                                    ? st.viewport.styleDark
+                                    : st.viewport.stylePink;
                               return (
                                 <button
                                   key={theme.id}
@@ -2825,7 +2836,13 @@ export default function LabellabApp() {
                                   }
                                 >
                                   <span
-                                    className={`${pkgStyles.sceneThemeDot} ${theme.id === "white" ? pkgStyles.sceneThemeDotWhite : ""}`}
+                                    className={`${pkgStyles.sceneThemeDot} ${
+                                      theme.id === "white"
+                                        ? pkgStyles.sceneThemeDotWhite
+                                        : theme.id === "dark"
+                                          ? pkgStyles.sceneThemeDotDark
+                                          : ""
+                                    }`}
                                     style={{ background: theme.color }}
                                     aria-hidden="true"
                                   />

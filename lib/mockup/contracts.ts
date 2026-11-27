@@ -132,6 +132,8 @@ export interface MockupRuntime {
   adjustFov(deltaDegrees: number): void;
   /** Translate the camera and focus point in the current view plane. */
   panView(horizontal: number, vertical: number): void;
+  /** Set continuous normalized pan velocity in the view plane (e.g. held WASD keys). */
+  setPanVelocity(horizontal: number, vertical: number): void;
   /** Factors above 1 zoom in; factors below 1 zoom out. */
   zoom(factor: number): void;
   resetView(): void;

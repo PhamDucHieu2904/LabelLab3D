@@ -61,7 +61,7 @@ interface Props {
   hasCustomFinishMask?: boolean;
   finishMaskName?: string;
   measuredFootprints: Record<string, BeverageFootprintMm>;
-  tone: "studio" | "pink" | "white";
+  tone: "studio" | "pink" | "white" | "dark";
   /** When provided, renders only the selected sidebar section cleanly. */
   activeSection?: PackagingInspectorSection;
   disabled?: boolean;

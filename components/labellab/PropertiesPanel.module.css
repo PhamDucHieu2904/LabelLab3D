@@ -22,6 +22,16 @@
   --prop-active-ink: #fff;
   --prop-track: #dfe2e7;
 }
+.root[data-theme="dark"] {
+  --prop-ink: #f4f5f7;
+  --prop-muted: #9fa4ad;
+  --prop-line: #32353d;
+  --prop-field: #1e2025;
+  --prop-soft: #2a2d34;
+  --prop-active: #ffffff;
+  --prop-active-ink: #111215;
+  --prop-track: #3a3d45;
+}
 .artworkOffset { margin: -3px 0 13px; }
 .artworkOffset .numberField { margin-bottom: 0; }
 .artworkOffset .numberBox input { width: 43px; }

@@ -15,7 +15,7 @@ import styles from "./PackagingStudio.module.css";
 
 interface Props {
   activeTemplateId: string;
-  tone: "neutral" | "pink" | "white";
+  tone: "neutral" | "pink" | "white" | "dark";
   disabled?: boolean;
   onSelectTemplate: (template: PackagingTemplateDefinition) => void;
 }

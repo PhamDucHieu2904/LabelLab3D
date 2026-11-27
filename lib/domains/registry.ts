@@ -37,9 +37,8 @@ export const STUDIO_DOMAINS: readonly StudioDomainMeta[] = Object.freeze([
     id: 'packaging',
     label: 'Boxes & Trays',
     shortLabel: 'Boxes & Trays',
-    description: 'Parametric millimeter CAD cartons, trays, mailers, and folding dielines.',
+    description: 'Parametric millimeter cartons, trays, mailers, and folding dielines.',
     available: true,
-    badge: 'CAD',
     defaultSceneMode: 'studio',
     capabilities: {
       parametricDimensions: true,

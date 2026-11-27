@@ -40,6 +40,15 @@
   --variant-active: #eceef0;
 }
 
+.panel[data-tone="dark"] {
+  --variant-ink: #f4f5f7;
+  --variant-muted: #9fa4ad;
+  --variant-surface: #181a1ff0;
+  --variant-line: #32353d;
+  --variant-row: #22252b;
+  --variant-active: #32363f;
+}
+
 .list { display: grid; gap: 5px; }
 .row {
   display: flex;

@@ -9,7 +9,7 @@ import styles from "./ModelVariantsPanel.module.css";
 type Props = {
   family: LabModelFamily;
   modelId: string;
-  tone: "pink" | "white" | "neutral";
+  tone: "pink" | "white" | "dark" | "neutral";
   libraryRef: RefObject<HTMLElement | null>;
   layoutRef: RefObject<HTMLDivElement | null>;
   busy: boolean;

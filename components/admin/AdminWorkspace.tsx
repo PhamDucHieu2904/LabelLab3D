@@ -3,13 +3,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { Activity, Box, ChevronRight, ExternalLink, FolderOpen, Gift, LayoutDashboard, LogOut, Menu, Newspaper, Rocket, Scale, Settings2, ShieldCheck, Users, Wallet, X } from "lucide-react";
+import { Activity, Box, ChevronRight, ExternalLink, FolderOpen, Gift, LayoutDashboard, LogOut, Menu, MessageSquareText, Newspaper, Rocket, Scale, Settings2, ShieldCheck, Users, Wallet, X } from "lucide-react";
 import { ADMIN_SECTIONS, adminHref, type AdminSection } from "@/lib/admin/navigation";
 import OverviewPanel from "./OverviewPanel";
 import s from "./AdminWorkspace.module.css";
 
 const CommercePanel = dynamic(() => import("./CommercePanel"));
 const ProductionUsersPanel = dynamic(() => import("./ProductionUsersPanel"));
+const FeedbackPanel = dynamic(() => import("./FeedbackPanel"));
 const ManagementPanel = dynamic(() => import("./ManagementPanel"));
 const OperationsPanel = dynamic(() => import("./OperationsPanel"));
 const LegalHubPanel = dynamic(() => import("./LegalHubPanel"));
@@ -18,6 +19,7 @@ const icons = {
   overview: LayoutDashboard,
   traffic: Activity,
   users: Users,
+  feedback: MessageSquareText,
   transactions: Wallet,
   models: Box,
   assets: FolderOpen,
@@ -33,6 +35,7 @@ export default function AdminWorkspace({ section }: { section: AdminSection }) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [adminUser, setAdminUser] = useState<{ name: string; email: string } | null>(null);
+  const [unreadFeedback, setUnreadFeedback] = useState(0);
   const current = ADMIN_SECTIONS.find((item) => item.key === section)!;
 
   useEffect(() => {
@@ -44,7 +47,26 @@ export default function AdminWorkspace({ section }: { section: AdminSection }) {
         setAdminUser({ name: payload.user.name || "Quản trị viên", email: payload.user.email || "" });
       })
       .catch(() => undefined);
-    return () => { active = false; };
+
+    void fetch("/api/admin/feedback?summary=1", { credentials: "same-origin", cache: "no-store" })
+      .then(async (res) => res.ok ? await res.json() as { summary?: { newCount?: number } } : null)
+      .then((payload) => {
+        if (!active) return;
+        setUnreadFeedback(Number(payload?.summary?.newCount ?? 0));
+      })
+      .catch(() => undefined);
+
+    const onFeedbackUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ newCount?: number }>).detail;
+      if (typeof detail?.newCount === "number") {
+        setUnreadFeedback(detail.newCount);
+      }
+    };
+    window.addEventListener("admin-feedback-updated", onFeedbackUpdated);
+    return () => {
+      active = false;
+      window.removeEventListener("admin-feedback-updated", onFeedbackUpdated);
+    };
   }, []);
 
   async function logout() {
@@ -81,7 +103,28 @@ export default function AdminWorkspace({ section }: { section: AdminSection }) {
                   >
                     <Icon size={19} strokeWidth={1.7} aria-hidden="true" />
                     {item.title}
-                    {section === item.key && <ChevronRight size={15} aria-hidden="true" />}
+                    {item.key === "feedback" && unreadFeedback > 0 && (
+                      <span
+                        style={{
+                          marginLeft: "auto",
+                          minWidth: 20,
+                          height: 20,
+                          padding: "0 6px",
+                          borderRadius: 999,
+                          background: "#b83d61",
+                          color: "#fff",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          display: "inline-grid",
+                          placeItems: "center",
+                        }}
+                      >
+                        {unreadFeedback > 99 ? "99+" : unreadFeedback}
+                      </span>
+                    )}
+                    {section === item.key && !(item.key === "feedback" && unreadFeedback > 0) && (
+                      <ChevronRight size={15} aria-hidden="true" />
+                    )}
                   </Link>
                 );
               })}
@@ -129,6 +172,7 @@ export default function AdminWorkspace({ section }: { section: AdminSection }) {
           {section === "overview" && <OverviewPanel />}
           {section === "traffic" && <OverviewPanel detailed />}
           {section === "users" && <><div className={s.pageHeading}><h1>Người dùng</h1></div><ProductionUsersPanel /></>}
+          {section === "feedback" && <><div className={s.pageHeading}><h1>Thư góp ý</h1></div><FeedbackPanel /></>}
           {section === "transactions" && <CommercePanel />}
           {["models", "assets", "content", "promotions", "releases"].includes(section) && (
             <>

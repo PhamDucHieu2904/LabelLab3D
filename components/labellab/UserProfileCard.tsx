@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
-import { Award, Bell, CalendarDays, Coins, ImageIcon, LogIn, Settings2, Sparkles, UserPlus, UserRound } from "lucide-react";
+import { Award, CalendarDays, Coins, Download, ImageIcon, LogIn, Sparkles, UserPlus, UserRound } from "lucide-react";
 import { numberLocale } from "@/lib/i18n/locale";
 import type { UiMessages } from "@/lib/i18n/messages";
 import type { CoinRegion } from "@/lib/payments/packages";
@@ -13,12 +13,11 @@ import { useLocale } from "./LocaleProvider";
 import styles from "./UserProfileCard.module.css";
 
 type WalletEntry = { id: string; amount: number; kind: string; reference?: string; balance: number; createdAt: string };
-type Badge = { id: string; name: string; description: string; awardedAt: string };
+type Badge = { id: string; slug?: string; name: string; description: string; awardedAt: string };
 type AccountPayload = { user?: { name?: string; email?: string; avatarUrl?: string | null } | null };
 type WalletPayload = { balance?: number; entries?: WalletEntry[]; badges?: Badge[] };
 type CheckinPayload = { history?: Array<{ day: string; coins: number }>; completedCount?: number };
 type UserProfileCardProps = {
-  notificationCount: number;
   visitorRegion?: CoinRegion;
 };
 
@@ -55,8 +54,14 @@ function initialsFrom(name: string) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
+function resolveDisplayBadge(badges: Badge[] | undefined, fallback: string): string {
+  const notable = (badges ?? []).find(
+    (b) => b.slug !== "first-checkin" && b.id !== "badge-first-checkin" && b.name.toLowerCase() !== "first check-in",
+  );
+  return notable?.name || fallback;
+}
+
 export default function UserProfileCard({
-  notificationCount,
   visitorRegion = "vietnam",
 }: UserProfileCardProps) {
   const { locale, t } = useLocale();
@@ -64,6 +69,7 @@ export default function UserProfileCard({
   const numLocale = numberLocale(locale);
   const openAuth = useAuthDialog();
   const { data: session, status } = useSession();
+  const [exporting, setExporting] = useState(false);
   const [account, setAccount] = useState<{
     name: string;
     email: string;
@@ -113,30 +119,49 @@ export default function UserProfileCard({
     };
   }, []);
 
+  async function downloadStatement() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const response = await fetch(`/api/account/wallet/statement?lang=${locale}`, {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") ?? "";
+      const match = disposition.match(/filename="([^"]+)"/);
+      const today = new Date().toISOString().slice(0, 10);
+      const fallbackName =
+        locale === "vi"
+          ? `hypermockup-sao-ke-coin-${today}.csv`
+          : `hypermockup-coin-statement-${today}.csv`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = match?.[1] || fallbackName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      // Keep UI usable if download fails transiently.
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const signedIn = Boolean(account) || status === "authenticated";
   const displayName = account?.name || (signedIn ? (session?.user?.name || session?.user?.email || pr.yourAccount) : pr.guestAccount);
   const displaySubtitle = account?.email || (signedIn ? (session?.user?.email || pr.signedIn) : pr.guestSubtitle);
   const avatarUrl = account?.avatarUrl || (status === "authenticated" ? (session?.user?.image || null) : null);
   const recentActivity: WalletEntry[] = account ? account.entries.slice(0, 3) : [];
+  const badgeTitle = resolveDisplayBadge(account?.badges, pr.defaultBadge);
 
   return (
     <article className={`home-card ${styles.card}`} aria-label={pr.ariaLabel}>
       <div className={styles.heading}>
         <span className={styles.eyebrow}>{pr.eyebrow}</span>
-        <div className={styles.actions}>
-          <a className={styles.iconButton} href="#home-updates" aria-label={pr.viewNotificationsAria(notificationCount)}>
-            <Bell aria-hidden="true" />
-            {notificationCount > 0 && <span className={styles.notificationDot} aria-hidden="true" />}
-          </a>
-          <button
-            className={styles.iconButton}
-            type="button"
-            aria-label={signedIn ? pr.accountDetailsAria : pr.signInAria}
-            onClick={() => { if (!signedIn) openAuth("login"); }}
-          >
-            <Settings2 aria-hidden="true" />
-          </button>
-        </div>
       </div>
 
       <div className={styles.identity}>
@@ -173,18 +198,30 @@ export default function UserProfileCard({
               </dd>
             </div>
           </dl>
-          {account?.badges && account.badges.length > 0 && (
-            <section className={styles.badges} aria-label={pr.badges}>
-              <h3><Award aria-hidden="true" />{pr.badges}</h3>
-              <div className={styles.badgeList}>
-                {account.badges.slice(0, 3).map((badge) => (
-                  <span key={badge.id} title={badge.description}>{badge.name}</span>
-                ))}
-              </div>
-            </section>
-          )}
+
+          <section className={styles.badges} aria-label={pr.badges}>
+            <span className={styles.badgeLabel}>
+              <Award aria-hidden="true" />
+              {pr.badges}
+            </span>
+            <strong className={styles.badgeValue}>{badgeTitle}</strong>
+          </section>
+
           <section className={styles.activity} aria-labelledby="recent-coin-usage-title">
-            <h3 id="recent-coin-usage-title">{pr.recentActivity}</h3>
+            <div className={styles.activityHeader}>
+              <h3 id="recent-coin-usage-title">{pr.recentActivity}</h3>
+              <button
+                type="button"
+                className={styles.statementBtn}
+                onClick={() => void downloadStatement()}
+                disabled={exporting}
+                aria-label={pr.downloadStatementAria}
+                title={pr.downloadStatementAria}
+              >
+                <Download aria-hidden="true" />
+                <span>{exporting ? pr.downloadingStatement : pr.downloadStatement}</span>
+              </button>
+            </div>
             {recentActivity.length > 0 ? (
               <ul className={styles.usageList}>
                 {recentActivity.map((entry) => (

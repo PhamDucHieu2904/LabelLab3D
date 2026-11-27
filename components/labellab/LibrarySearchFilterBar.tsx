@@ -11,7 +11,7 @@ export interface LibraryFilterOption<T extends string = string> {
 }
 
 interface Props<T extends string> {
-  tone: "neutral" | "pink" | "white";
+  tone: "neutral" | "pink" | "white" | "dark";
   query: string;
   placeholder: string;
   category: T;
