@@ -602,7 +602,6 @@ export default function OperationsPanel({ section }: { section: "activity" | "se
                   {textField("dielineCost", "Coin xuất Dieline 1:1 mm (SVG/PDF/DXF)", "number", 0, 10000)}
                   {textField("shareCost", "Coin tạo Link Share 3D cho khách duyệt (0 = miễn phí)", "number", 0, 10000)}
                   {textField("projectExtendCost", "Coin gia hạn dự án Cloud thêm 30 ngày (0 = miễn phí)", "number", 0, 10000)}
-                  {textField("freeDownloads", "Lượt tải miễn phí / ngày", "number", 0, 100)}
                 </>
               )}
               {settingsTab === "security" && (

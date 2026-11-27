@@ -331,6 +331,7 @@ export type UiMessages = {
     coinsAria: (amount: number) => string;
     entryWelcome: string;
     entryLaunchPromo: string;
+    entryEventGift: string;
     entryCheckin: string;
     entryPurchase: string;
     entryAdmin: string;
@@ -745,6 +746,7 @@ const VI_MESSAGES: UiMessages = {
     coinsAria: (amount) => `${amount} coins`,
     entryWelcome: "Quà chào mừng",
     entryLaunchPromo: "Quà ra mắt website",
+    entryEventGift: "Quà tặng sự kiện",
     entryCheckin: "Điểm danh hằng ngày",
     entryPurchase: "Nạp coin",
     entryAdmin: "Điều chỉnh từ Admin",
@@ -1163,6 +1165,7 @@ const EN_MESSAGES: UiMessages = {
     coinsAria: (amount) => `${amount} coins`,
     entryWelcome: "Welcome bonus",
     entryLaunchPromo: "Launch event bonus",
+    entryEventGift: "Event gift",
     entryCheckin: "Daily check-in",
     entryPurchase: "Coin purchase",
     entryAdmin: "Admin adjustment",

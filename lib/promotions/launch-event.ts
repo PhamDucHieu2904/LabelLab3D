@@ -9,7 +9,7 @@ export const LAUNCH_PROMO_END_ISO = "2026-12-04T16:59:59.999Z";
 
 export const LAUNCH_PROMO_START_DATE = "2026-11-27";
 export const LAUNCH_PROMO_END_DATE = "2026-12-04";
-export const LAUNCH_PROMO_MAX_CLAIMS_PER_IP = 3;
+export const LAUNCH_PROMO_MAX_CLAIMS_PER_IP = 5;
 
 export type LaunchPromoReason =
   | "ELIGIBLE"

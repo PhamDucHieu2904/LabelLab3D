@@ -72,6 +72,8 @@ const LEDGER_KIND_LABELS: Record<string, string> = {
   purchase: "Nạp coin",
   daily_checkin: "Điểm danh hằng ngày",
   welcome_bonus: "Quà chào mừng",
+  promo_bonus: "Ưu đãi ra mắt",
+  event_gift: "Quà tặng sự kiện",
   admin_adjustment: "Admin điều chỉnh",
   refund: "Hoàn tiền",
   reservation: "Giữ coin render",

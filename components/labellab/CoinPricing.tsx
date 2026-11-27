@@ -2,11 +2,17 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Check, CheckCircle2, Copy, CreditCard, Download, ExternalLink, Globe, Landmark, RefreshCw, ShieldCheck, Smartphone } from "lucide-react";
+import { Check, CheckCircle2, Copy, CreditCard, Download, ExternalLink, Globe, Landmark, RefreshCw, ShieldCheck, Smartphone, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { numberLocale } from "@/lib/i18n/locale";
 import { COIN_PACKAGES, getCoinPackagesByRegion, type CoinPackage, type CoinRegion } from "@/lib/payments/packages";
+import {
+  DEFAULT_TOPUP_MULTIPLIER,
+  resolveTopupCoins,
+  sanitizeTopupMultiplier,
+  type TopupMultiplierConfig,
+} from "@/lib/promotions/topup-multiplier";
 import { useAccount, useAuthDialog } from "./AuthDialog";
 import { useLocale } from "./LocaleProvider";
 import styles from "./CoinPricing.module.css";
@@ -36,6 +42,8 @@ type PaymentOrder = {
   id: string;
   orderCode: string;
   coins: number;
+  baseCoins?: number;
+  multiplier?: number;
   amount: number;
   currency: string;
   status: string;
@@ -58,6 +66,7 @@ export default function CoinPricing() {
   const [regionId, setRegionId] = useState<RegionId>("vietnam");
   const [allowRegionSwitch, setAllowRegionSwitch] = useState(false);
   const [packages, setPackages] = useState<readonly CoinPackage[]>(COIN_PACKAGES);
+  const [topupMultiplier, setTopupMultiplier] = useState<TopupMultiplierConfig>(DEFAULT_TOPUP_MULTIPLIER);
   const [intlReady, setIntlReady] = useState(false);
   const [intlSandbox, setIntlSandbox] = useState(false);
   const [selectedPackId, setSelectedPackId] = useState<string>("vn-pro");
@@ -125,7 +134,7 @@ export default function CoinPricing() {
     const poll = async () => {
       const updated = await pollOrderOnce(paymentOrder.id);
       if (cancelled || !updated) return;
-      setPaymentOrder(updated);
+      setPaymentOrder((prev) => (prev ? { ...prev, ...updated } : updated));
       if (updated.status === "paid") {
         setManualCheckHint("");
         window.dispatchEvent(new Event("labellab-account-changed"));
@@ -154,6 +163,7 @@ export default function CoinPricing() {
       void import("@/lib/client/api-cache")
         .then(({ fetchSiteConfigCached }) => fetchSiteConfigCached<{
           coinPackages?: CoinPackage[];
+          topupMultiplier?: Partial<TopupMultiplierConfig>;
           visitor?: {
             region?: RegionId;
             allowRegionSwitch?: boolean;
@@ -167,6 +177,9 @@ export default function CoinPricing() {
             : COIN_PACKAGES;
           if (Array.isArray(payload.coinPackages) && payload.coinPackages.length > 0) {
             setPackages(payload.coinPackages);
+          }
+          if (payload.topupMultiplier !== undefined) {
+            setTopupMultiplier(sanitizeTopupMultiplier(payload.topupMultiplier));
           }
           if (payload.visitor) {
             const canSwitch = Boolean(payload.visitor.allowRegionSwitch);
@@ -203,11 +216,18 @@ export default function CoinPricing() {
     ?? visiblePackages[0]
     ?? fallbackRegionPackages[0];
   const selectedPrice = prices.format(regionId === "vietnam" ? selectedPackage.vnd : selectedPackage.usd);
-  const selectedCoinsText = selectedPackage.coins.toLocaleString(numLocale);
+  const selectedQuote = resolveTopupCoins(selectedPackage.coins, topupMultiplier);
+  const effectiveOrderCoins = paymentOrder?.coins ?? selectedQuote.coins;
+  const effectiveOrderMultiplier = paymentOrder?.multiplier ?? selectedQuote.multiplier;
+  const effectiveOrderBaseCoins = paymentOrder?.baseCoins ?? selectedPackage.coins;
+  const selectedCoinsText = effectiveOrderCoins.toLocaleString(numLocale);
+  const isPromoMultiplierActive = topupMultiplier.enabled && topupMultiplier.multiplier > 1;
   const minFiveCoinValue = (() => {
     const rates = visiblePackages
-      .filter((item) => item.coins > 0)
-      .map((item) => ((regionId === "vietnam" ? item.vnd : item.usd) / item.coins) * 5)
+      .map((item) => {
+        const effCoins = resolveTopupCoins(item.coins, topupMultiplier).coins;
+        return effCoins > 0 ? ((regionId === "vietnam" ? item.vnd : item.usd) / effCoins) * 5 : NaN;
+      })
       .filter((value) => Number.isFinite(value) && value > 0);
     const lowest = rates.length > 0 ? Math.min(...rates) : (regionId === "vietnam" ? 250 : 0.03);
     if (regionId === "vietnam") {
@@ -308,7 +328,7 @@ export default function CoinPricing() {
             for (let attempt = 0; attempt < 12; attempt += 1) {
               const updated = await pollOrderOnce(orderId);
               if (updated) {
-                setPaymentOrder(updated);
+                setPaymentOrder((prev) => (prev ? { ...prev, ...updated } : updated));
                 if (updated.status === "paid") {
                   setEmbedConfirmed(false);
                   window.dispatchEvent(new Event("labellab-account-changed"));
@@ -379,7 +399,7 @@ export default function CoinPricing() {
     try {
       const updated = await pollOrderOnce(paymentOrder.id);
       if (updated) {
-        setPaymentOrder(updated);
+        setPaymentOrder((prev) => (prev ? { ...prev, ...updated } : updated));
         if (updated.status === "paid") {
           window.dispatchEvent(new Event("labellab-account-changed"));
         } else if (updated.status === "pending") {
@@ -509,7 +529,7 @@ export default function CoinPricing() {
                     {!qrLoaded && <div className={styles.qrSkeleton} aria-hidden="true">{p.qrLoading}</div>}
                     <Image
                       src={directQr.imageUrl}
-                      alt={p.qrAlt(selectedPackage.coins, directQr.bankName)}
+                      alt={p.qrAlt(effectiveOrderCoins, directQr.bankName)}
                       width={204}
                       height={204}
                       unoptimized
@@ -565,7 +585,16 @@ export default function CoinPricing() {
                 <dt>{p.summaryPack}</dt>
                 <dd>
                   {selectedCoinsText} coins
-                  {selectedPackage.bonusPct ? ` (+${selectedPackage.bonusPct}%)` : ""}
+                  {effectiveOrderMultiplier > 1 ? (
+                    <span className={styles.promoSummaryTag}>
+                      ×{effectiveOrderMultiplier} {locale === "vi" ? "từ" : "from"}{" "}
+                      {effectiveOrderBaseCoins.toLocaleString(numLocale)}
+                    </span>
+                  ) : selectedPackage.bonusPct ? (
+                    ` (+${selectedPackage.bonusPct}%)`
+                  ) : (
+                    ""
+                  )}
                 </dd>
               </div>
               <div><dt>{p.summaryPrice}</dt><dd>{selectedPrice}</dd></div>
@@ -784,12 +813,31 @@ export default function CoinPricing() {
 
   return (
     <article className={`home-card ${styles.card}`} aria-labelledby="coin-pricing-title">
-      <div className={styles.headingRow}>
-        <div className={styles.titleBlock}>
-          <h2 id="coin-pricing-title">{p.title}</h2>
-          <p>{regionId === "international" ? p.subtitleInternational(minFiveCoinValue) : p.subtitleVietnam(minFiveCoinValue)}</p>
+      <div className={styles.headingWrap}>
+        <div className={styles.headingRow}>
+          <div className={styles.titleBlock}>
+            <h2 id="coin-pricing-title">{p.title}</h2>
+            <p>{regionId === "international" ? p.subtitleInternational(minFiveCoinValue) : p.subtitleVietnam(minFiveCoinValue)}</p>
+          </div>
+          <Image className={styles.coinArt} src="/branding/hypermockup-coin.svg" alt="" width={56} height={56} />
         </div>
-        <Image className={styles.coinArt} src="/branding/hypermockup-coin.svg" alt="" width={56} height={56} />
+        {isPromoMultiplierActive && (
+          <div className={styles.multiplierBanner} role="status">
+            <Sparkles size={15} aria-hidden="true" />
+            <span>
+              <strong>
+                {topupMultiplier.label ||
+                  (locale === "vi"
+                    ? `Sự kiện ×${topupMultiplier.multiplier} Coin nạp`
+                    : `×${topupMultiplier.multiplier} Top-Up Coin Event`)}
+              </strong>
+              {" · "}
+              {locale === "vi"
+                ? `Nhận gấp ${topupMultiplier.multiplier}× số Coin cho mọi gói nạp!`
+                : `Get ${topupMultiplier.multiplier}× coins on every package!`}
+            </span>
+          </div>
+        )}
       </div>
 
       {allowRegionSwitch ? (
@@ -825,26 +873,32 @@ export default function CoinPricing() {
       <div className={styles.packs} role="group" aria-label={p.packsAria(regionLabel)}>
         {visiblePackages.map((item) => {
           const price = prices.format(regionId === "vietnam" ? item.vnd : item.usd);
-          const coinsText = item.coins.toLocaleString(numLocale);
+          const quote = resolveTopupCoins(item.coins, topupMultiplier);
+          const baseCoinsText = item.coins.toLocaleString(numLocale);
+          const coinsText = quote.coins.toLocaleString(numLocale);
           const isSelected = selectedPackage.id === item.id;
-          const badgeLabel = item.badge === "popular"
-            ? p.badgePopular(item.bonusPct ?? 10)
-            : item.badge === "best"
-              ? p.badgeBest(item.bonusPct ?? 20)
-              : item.bonusPct
-                ? p.badgeBonus(item.bonusPct)
-                : p.badgeStarter;
-          const badgeTone = item.badge === "popular"
-            ? styles.badgePopular
-            : item.badge === "best"
-              ? styles.badgeBest
-              : item.bonusPct
-                ? styles.badgeBonus
-                : styles.badgeStarter;
+          const badgeLabel = quote.bonusApplied
+            ? `×${quote.multiplier} COIN`
+            : item.badge === "popular"
+              ? p.badgePopular(item.bonusPct ?? 10)
+              : item.badge === "best"
+                ? p.badgeBest(item.bonusPct ?? 20)
+                : item.bonusPct
+                  ? p.badgeBonus(item.bonusPct)
+                  : p.badgeStarter;
+          const badgeTone = quote.bonusApplied
+            ? styles.badgeMultiplier
+            : item.badge === "popular"
+              ? styles.badgePopular
+              : item.badge === "best"
+                ? styles.badgeBest
+                : item.bonusPct
+                  ? styles.badgeBonus
+                  : styles.badgeStarter;
           return (
             <button
               key={item.id}
-              className={`${styles.pack} ${item.badge === "popular" ? styles.packPopular : ""}`}
+              className={`${styles.pack} ${item.badge === "popular" || quote.bonusApplied ? styles.packPopular : ""}`}
               type="button"
               aria-pressed={isSelected}
               aria-label={p.packAria(coinsText, item.bonusPct ?? 0, price)}
@@ -866,6 +920,7 @@ export default function CoinPricing() {
               }}
             >
               <span className={`${styles.packBadge} ${badgeTone}`}>{badgeLabel}</span>
+              {quote.bonusApplied && <s className={styles.baseCoinsStrike}>{baseCoinsText}</s>}
               <span className={styles.coinRow}>
                 <Image src="/branding/hypermockup-coin.svg" alt="" width={18} height={18} />
                 <strong>{coinsText}</strong>

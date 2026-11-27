@@ -12,6 +12,7 @@ const CommercePanel = dynamic(() => import("./CommercePanel"));
 const ProductionUsersPanel = dynamic(() => import("./ProductionUsersPanel"));
 const FeedbackPanel = dynamic(() => import("./FeedbackPanel"));
 const ManagementPanel = dynamic(() => import("./ManagementPanel"));
+const PromotionsEventsPanel = dynamic(() => import("./PromotionsEventsPanel"));
 const OperationsPanel = dynamic(() => import("./OperationsPanel"));
 const LegalHubPanel = dynamic(() => import("./LegalHubPanel"));
 
@@ -174,10 +175,16 @@ export default function AdminWorkspace({ section }: { section: AdminSection }) {
           {section === "users" && <><div className={s.pageHeading}><h1>Người dùng</h1></div><ProductionUsersPanel /></>}
           {section === "feedback" && <><div className={s.pageHeading}><h1>Thư góp ý</h1></div><FeedbackPanel /></>}
           {section === "transactions" && <CommercePanel />}
-          {["models", "assets", "content", "promotions", "releases"].includes(section) && (
+          {section === "promotions" && (
             <>
               <div className={s.pageHeading}><h1>{current.title}</h1></div>
-              <ManagementPanel key={section} section={section as "models" | "assets" | "content" | "promotions" | "releases"} />
+              <PromotionsEventsPanel />
+            </>
+          )}
+          {["models", "assets", "content", "releases"].includes(section) && (
+            <>
+              <div className={s.pageHeading}><h1>{current.title}</h1></div>
+              <ManagementPanel key={section} section={section as "models" | "assets" | "content" | "releases"} />
             </>
           )}
           {section === "legal" && <LegalHubPanel />}

@@ -6,8 +6,9 @@ import { recordLegalConsent, saveOrderReceipt } from "@/lib/server/legal";
 import { getPaymentProvider } from "@/lib/server/payment-provider";
 import { createPolarCheckoutSession, readPolarConfig } from "@/lib/server/polar";
 import { consumeRateLimit } from "@/lib/server/rate-limit";
+import { resolveTopupCoins } from "@/lib/promotions/topup-multiplier";
 import { buildSepayQrImageUrl, generateOrderCode, readSepayConfig, readSepayQrConfig } from "@/lib/server/sepay";
-import { getLiveCoinPackages } from "@/lib/server/site-config";
+import { getLiveCoinPackages, getLiveTopupMultiplier } from "@/lib/server/site-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,7 +49,10 @@ export async function POST(request: Request) {
     });
     if (!withinOrderLimit) throw new Error("AUTH_RATE_LIMIT");
 
-    const livePackages = await getLiveCoinPackages(runtimeEnv);
+    const [livePackages, topupMultiplier] = await Promise.all([
+      getLiveCoinPackages(runtimeEnv),
+      getLiveTopupMultiplier(runtimeEnv),
+    ]);
     const regionalPackages = livePackages.filter((pkg) => pkg.enabled && (!pkg.region || pkg.region === region));
     const selected = packageId
       ? regionalPackages.find((pkg) => pkg.id === packageId && (!Number.isSafeInteger(coins) || pkg.coins === coins)) ?? null
@@ -56,6 +60,9 @@ export async function POST(request: Request) {
         ? regionalPackages.find((pkg) => pkg.coins === coins) ?? null
         : null;
     if (!selected) throw new Error("INVALID_INPUT");
+
+    const topupQuote = resolveTopupCoins(selected.coins, topupMultiplier);
+    const creditedCoins = topupQuote.coins;
 
     const id = randomId("pay");
     const code = generateOrderCode();
@@ -75,7 +82,7 @@ export async function POST(request: Request) {
       const session = await createPolarCheckoutSession(polarConfig, {
         orderId: id,
         orderCode: code,
-        coins: selected.coins,
+        coins: creditedCoins,
         amountCents,
         customerId: user.id,
         customerEmail: user.email,
@@ -87,7 +94,7 @@ export async function POST(request: Request) {
       await requireDb(runtimeEnv).prepare(`INSERT INTO payment_orders
         (id,user_id,provider,order_code,package_coins,amount_minor,currency,status,provider_order_id,expires_at,created_at,updated_at)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
-        id, user.id, "polar", code, selected.coins, amountCents, "USD", "pending", session.checkoutId, expiresAt, now, now,
+        id, user.id, "polar", code, creditedCoins, amountCents, "USD", "pending", session.checkoutId, expiresAt, now, now,
       ).run();
 
       await recordLegalConsent(runtimeEnv, {
@@ -95,12 +102,31 @@ export async function POST(request: Request) {
         consentType: "checkout",
         ip,
         policyVersion: CURRENT_POLICY_VERSION,
-        metadata: { orderId: id, orderCode: code, provider: "polar", currency: "USD", country: market.country },
+        metadata: {
+          orderId: id,
+          orderCode: code,
+          provider: "polar",
+          currency: "USD",
+          country: market.country,
+          baseCoins: selected.coins,
+          creditedCoins,
+          multiplier: topupQuote.multiplier,
+        },
       });
 
       return json({
         mode: "polar_checkout",
-        order: { id, orderCode: code, coins: selected.coins, amount: amountCents, currency: "USD", status: "pending", expiresAt },
+        order: {
+          id,
+          orderCode: code,
+          coins: creditedCoins,
+          baseCoins: selected.coins,
+          multiplier: topupQuote.multiplier,
+          amount: amountCents,
+          currency: "USD",
+          status: "pending",
+          expiresAt,
+        },
         polar: {
           checkoutId: session.checkoutId,
           url: session.url,
@@ -119,7 +145,7 @@ export async function POST(request: Request) {
       await requireDb(runtimeEnv).prepare(`INSERT INTO payment_orders
         (id,user_id,provider,order_code,package_coins,amount_minor,currency,status,provider_order_id,expires_at,created_at,updated_at)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
-        id, user.id, "sepay", code, selected.coins, selected.vnd, "VND", "pending", null, expiresAt, now, now,
+        id, user.id, "sepay", code, creditedCoins, selected.vnd, "VND", "pending", null, expiresAt, now, now,
       ).run();
 
       if (body.receipt) {
@@ -130,12 +156,31 @@ export async function POST(request: Request) {
         consentType: "checkout",
         ip,
         policyVersion: CURRENT_POLICY_VERSION,
-        metadata: { orderId: id, orderCode: code, provider: "sepay", currency: "VND", country: market.country },
+        metadata: {
+          orderId: id,
+          orderCode: code,
+          provider: "sepay",
+          currency: "VND",
+          country: market.country,
+          baseCoins: selected.coins,
+          creditedCoins,
+          multiplier: topupQuote.multiplier,
+        },
       });
 
       return json({
         mode: "direct_qr",
-        order: { id, orderCode: code, coins: selected.coins, amount: selected.vnd, currency: "VND", status: "pending", expiresAt },
+        order: {
+          id,
+          orderCode: code,
+          coins: creditedCoins,
+          baseCoins: selected.coins,
+          multiplier: topupQuote.multiplier,
+          amount: selected.vnd,
+          currency: "VND",
+          status: "pending",
+          expiresAt,
+        },
         qr: {
           imageUrl: buildSepayQrImageUrl(qrConfig, { amount: selected.vnd, description: code, template: "qronly" }),
           downloadUrl: buildSepayQrImageUrl(qrConfig, { amount: selected.vnd, description: code, template: "compact", download: true }),
@@ -156,7 +201,7 @@ export async function POST(request: Request) {
     const checkout = provider.createCheckout({
       amount: selected.vnd,
       orderCode: code,
-      description: `HyperMockup nap ${selected.coins} coins`,
+      description: `HyperMockup nap ${creditedCoins} coins`,
       customerId: user.id,
       successUrl: `${base}/success?order=${encodeURIComponent(code)}&id=${encodeURIComponent(id)}`,
       errorUrl: `${base}/error?order=${encodeURIComponent(code)}&id=${encodeURIComponent(id)}`,
@@ -166,7 +211,7 @@ export async function POST(request: Request) {
     await requireDb(runtimeEnv).prepare(`INSERT INTO payment_orders
       (id,user_id,provider,order_code,package_coins,amount_minor,currency,status,provider_order_id,expires_at,created_at,updated_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
-      id, user.id, "sepay", code, selected.coins, selected.vnd, "VND", "pending", null, expiresAt, now, now,
+      id, user.id, "sepay", code, creditedCoins, selected.vnd, "VND", "pending", null, expiresAt, now, now,
     ).run();
 
     if (body.receipt) {
@@ -177,12 +222,31 @@ export async function POST(request: Request) {
       consentType: "checkout",
       ip,
       policyVersion: CURRENT_POLICY_VERSION,
-      metadata: { orderId: id, orderCode: code, provider: "sepay", currency: "VND", country: market.country },
+      metadata: {
+        orderId: id,
+        orderCode: code,
+        provider: "sepay",
+        currency: "VND",
+        country: market.country,
+        baseCoins: selected.coins,
+        creditedCoins,
+        multiplier: topupQuote.multiplier,
+      },
     });
 
     return json({
       mode: "gateway",
-      order: { id, orderCode: code, coins: selected.coins, amount: selected.vnd, currency: "VND", status: "pending", expiresAt },
+      order: {
+        id,
+        orderCode: code,
+        coins: creditedCoins,
+        baseCoins: selected.coins,
+        multiplier: topupQuote.multiplier,
+        amount: selected.vnd,
+        currency: "VND",
+        status: "pending",
+        expiresAt,
+      },
       qr: null,
       polar: null,
       checkout,

@@ -35,9 +35,7 @@ export const managementTabs: Record<ManagementSection, ManagementTab[]> = {
     {id:'layout',name:'Trang chủ',columns:['placement','order'],fields:[f('placement','Khu vực'),f('order','Thứ tự','number')]},
   ],
   promotions:[
-    {id:'rewards',name:'Điểm danh & quà tặng',columns:['reward','limit','schedule'],fields:[{...f('reward','Coin mỗi lượt','number'),min:0}, {...f('limit','Giới hạn mỗi người / ngày','number'),min:0},f('schedule','Lịch thưởng / danh sách coin'),f('condition','Điều kiện','textarea')]},
-    {id:'campaigns',name:'Chiến dịch',columns:['start','end','reward'],fields:[f('start','Bắt đầu','date'),f('end','Kết thúc','date'),{...f('reward','Coin thưởng','number'),min:0}, {...f('limit','Tổng lượt tối đa','number'),min:0},f('condition','Điều kiện','textarea')]},
-    {id:'coupons',name:'Mã ưu đãi',columns:['code','discount','limit'],fields:[{...f('code','Mã ưu đãi'),required:true},{...f('discount','Giảm giá (%)','number'),min:0,max:100},{...f('limit','Giới hạn lượt dùng','number'),min:0},f('end','Hết hạn','date'),f('region','Khu vực','select',['Tất cả','Việt Nam','Quốc tế'])]},
+    {id:'rewards',name:'Điểm danh hằng ngày',columns:['reward','limit','schedule'],fields:[{...f('reward','Coin mỗi lượt','number'),min:0}, {...f('limit','Giới hạn mỗi người / ngày','number'),min:0},f('schedule','Lịch thưởng / danh sách coin'),f('condition','Điều kiện','textarea')]},
   ],
   releases:[{id:'releases',name:'Lịch sử phiên bản',columns:['version','author','note'],fields:[f('version','Phiên bản'),f('author','Người phát hành'),f('note','Ghi chú','textarea')]}],
 };
@@ -58,9 +56,7 @@ export function createManagementData():Record<string,ManagementRecord[]> {
  banners:[row('banner-1','Bộ sưu tập mới',{placement:'Trang chủ · đầu trang',image:'/branding/hypermockup-logo.svg',url:'/studio',alt:'HyperMockup',order:'1'},'Đang tắt')],
  announcements:[row('notice-1','Chào mừng đến HyperMockup',{category:'Hệ thống',pinned:'Không',text:'Tạo mockup bao bì 3D và bản vẽ dieline 1:1 mm trực tiếp trên trình duyệt.',titleEn:'Welcome to HyperMockup',textEn:'Create 3D packaging mockups and 1:1 mm dielines right in your browser.',ctaLabel:'Mở Studio',ctaLabelEn:'Open Studio',start:'2026-10-31',end:'2026-12-31',url:'/studio'},'Đang tắt')],
  layout:['Demo 3D','Thư viện model','Thông tin người dùng','Điểm danh','Bảng giá coin'].map((name,i)=>row(`layout-${i}`,name,{placement:'Trang chủ',order:String(i+1)})),
- rewards:[row('checkin','Điểm danh hằng ngày',{reward:'10',limit:'1',schedule:'10, 10, 10, 20, 10, 10, 30',condition:'Điểm danh liên tiếp 7 ngày; bỏ lỡ 1 ngày đặt lại về Ngày 1.'}),row('wheel','Vòng quay hằng ngày',{reward:'0',limit:'1',schedule:'0, 1, 2, 3, 5, 10',condition:'Cấu hình mẫu; xác suất sẽ thiết lập khi nối backend.'},'Đang tắt'),row('share','Chia sẻ website',{reward:'2',limit:'1',schedule:'Hằng ngày',condition:'Chia sẻ hợp lệ sau khi xác minh.'},'Đang tắt'),row('free-download','Lượt tải miễn phí',{reward:'0',limit:'1',schedule:'Hằng ngày',condition:'Một lượt tải mỗi ngày.'})],
- campaigns:[row('welcome','Quà thành viên mới',{start:'2026-10-31',end:'2026-12-31',reward:'20',limit:'1000',condition:'Xác minh email lần đầu.'},'Đang tắt')],
- coupons:[row('coupon-welcome','Ưu đãi ra mắt',{code:'WELCOME10',discount:'10',limit:'100',end:'2026-12-31',region:'Tất cả'},'Đang tắt')],
+ rewards:[row('checkin','Điểm danh hằng ngày',{reward:'10',limit:'1',schedule:'10, 10, 10, 20, 10, 10, 30',condition:'Điểm danh liên tiếp 7 ngày; bỏ lỡ 1 ngày đặt lại về Ngày 1.'})],
  releases:[row('release-demo','Bản dựng giao diện',{version:'0.1.0',author:'Quản trị viên',note:'Dữ liệu mẫu ban đầu'},'Đang sử dụng')],
  };
  data[BUILTIN_MARKER_KEY]=LAB_MODELS.map(m=>({id:m.id,name:m.name,status:'builtin',updated:'',values:{}}));
@@ -71,8 +67,25 @@ export function createManagementData():Record<string,ManagementRecord[]> {
 
 export const BUILTIN_MARKER_KEY = '_builtinModels';
 export const BUILTIN_CATEGORY_MARKER_KEY = '_builtinCategories';
+const LEGACY_PLACEHOLDER_REWARD_IDS = new Set(['wheel', 'share', 'free-download']);
+const LEGACY_PLACEHOLDER_CAMPAIGN_IDS = new Set(['welcome']);
+const LEGACY_PLACEHOLDER_COUPON_IDS = new Set(['coupon-welcome']);
+
 export function migrateManagementData(initial: Record<string, ManagementRecord[]>, saved: Record<string, ManagementRecord[]>): Record<string, ManagementRecord[]> {
  const result: Record<string, ManagementRecord[]> = { ...initial, ...saved };
+ if (Array.isArray(result.rewards)) {
+   result.rewards = result.rewards.filter(r => !LEGACY_PLACEHOLDER_REWARD_IDS.has(r.id));
+ }
+ if (Array.isArray(result.campaigns)) {
+   const remainingCampaigns = result.campaigns.filter(r => !LEGACY_PLACEHOLDER_CAMPAIGN_IDS.has(r.id));
+   if (remainingCampaigns.length > 0) result.campaigns = remainingCampaigns;
+   else delete result.campaigns;
+ }
+ if (Array.isArray(result.coupons)) {
+   const remainingCoupons = result.coupons.filter(r => !LEGACY_PLACEHOLDER_COUPON_IDS.has(r.id));
+   if (remainingCoupons.length > 0) result.coupons = remainingCoupons;
+   else delete result.coupons;
+ }
  const previous = new Set((saved[BUILTIN_MARKER_KEY] ?? []).map(r => r.id));
  const previousCategories = new Set((saved[BUILTIN_CATEGORY_MARKER_KEY] ?? []).map(r => r.id));
  const legacyKnown = new Set(['basil-strawberry', 'can-mango', 'pet-aloe']);

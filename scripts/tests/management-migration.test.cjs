@@ -93,3 +93,32 @@ test('existing admin caches import the new PP category once and preserve later d
   migrated.categories = migrated.categories.filter(row => row.id !== 'pp');
   assert.equal(migrateManagementData(initial, migrated).categories.some(row => row.id === 'pp'), false);
 });
+
+test('unimplemented promotion placeholders are excluded from initial data and stripped from legacy D1 caches while preserving check-in edits', () => {
+  const initial = createManagementData();
+  assert.deepEqual(managementTabs.promotions.map(tab => tab.id), ['rewards']);
+  assert.deepEqual(initial.rewards.map(row => row.id), ['checkin']);
+  assert.equal(initial.campaigns, undefined);
+  assert.equal(initial.coupons, undefined);
+
+  const legacySaved = structuredClone(initial);
+  legacySaved.rewards = [
+    { ...initial.rewards[0], values: { ...initial.rewards[0].values, reward: '15', schedule: '15, 15, 15, 25, 15, 15, 40' } },
+    { id: 'wheel', name: 'Vòng quay hằng ngày', status: 'Đang tắt', updated: '31/10/2026', values: { reward: '0' } },
+    { id: 'share', name: 'Chia sẻ website', status: 'Đang tắt', updated: '31/10/2026', values: { reward: '2' } },
+    { id: 'free-download', name: 'Lượt tải miễn phí', status: 'Đang bật', updated: '31/10/2026', values: { reward: '0', limit: '1' } },
+  ];
+  legacySaved.campaigns = [
+    { id: 'welcome', name: 'Quà thành viên mới', status: 'Đang tắt', updated: '31/10/2026', values: { reward: '20' } },
+  ];
+  legacySaved.coupons = [
+    { id: 'coupon-welcome', name: 'Ưu đãi ra mắt', status: 'Đang tắt', updated: '31/10/2026', values: { code: 'WELCOME10' } },
+  ];
+
+  const migrated = migrateManagementData(initial, legacySaved);
+  assert.deepEqual(migrated.rewards.map(row => row.id), ['checkin']);
+  assert.equal(migrated.rewards[0].values.reward, '15');
+  assert.equal(migrated.rewards[0].values.schedule, '15, 15, 15, 25, 15, 15, 40');
+  assert.equal(migrated.campaigns, undefined);
+  assert.equal(migrated.coupons, undefined);
+});

@@ -311,7 +311,7 @@ export default function ManagementPanel({ section }: { section: ManagementSectio
           <CheckCircle2 size={16} />
           <span>
             {section === "promotions"
-              ? "Điểm danh hằng ngày đang đồng bộ trực tiếp với Cloudflare D1 và trang chủ — sửa coin, lịch 7 ngày hoặc bật/tắt sẽ có hiệu lực ngay."
+              ? "Điểm danh hằng ngày đang đồng bộ trực tiếp với Cloudflare D1 và trang chủ — sửa coin, lịch 7 ngày hoặc bật/tắt sẽ có hiệu lực ngay. Banner sự kiện ra mắt +100 Coin được quản lý tại mục Nội dung → Thông báo."
               : "Mục Thông báo đang đồng bộ trực tiếp với khu vực Admin updates trên trang chủ."}
           </span>
         </div>

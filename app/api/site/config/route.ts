@@ -9,6 +9,7 @@ import {
   extractLiveAnnouncements,
   getLiveCoinPackages,
   getLiveSiteSettings,
+  getLiveTopupMultiplier,
   loadManagementData,
 } from "@/lib/server/site-config";
 
@@ -18,10 +19,11 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const runtimeEnv = await env();
-    const [management, coinPackages, settings, reqHeaders, currentUser] = await Promise.all([
+    const [management, coinPackages, settings, topupMultiplier, reqHeaders, currentUser] = await Promise.all([
       loadManagementData(runtimeEnv),
       getLiveCoinPackages(runtimeEnv),
       getLiveSiteSettings(runtimeEnv),
+      getLiveTopupMultiplier(runtimeEnv),
       headers(),
       sessionUser().catch(() => null),
     ]);
@@ -36,6 +38,11 @@ export async function GET() {
       checkIn: extractCheckInConfig(management),
       announcements: extractLiveAnnouncements(management),
       coinPackages: coinPackages.filter((pkg) => pkg.enabled),
+      topupMultiplier: {
+        enabled: topupMultiplier.enabled,
+        multiplier: topupMultiplier.multiplier,
+        label: topupMultiplier.label,
+      },
       visitor: market,
       payments: {
         vietnamEnabled: Boolean(sepayQr || (sepayGw.merchantId && sepayGw.secretKey && sepayGw.ipnSecret)),

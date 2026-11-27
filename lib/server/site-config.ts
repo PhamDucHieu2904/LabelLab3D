@@ -16,6 +16,11 @@ import {
   VIP_CUSTOM_MODEL_ANNOUNCEMENT_ID,
 } from "@/lib/labellab/updates";
 import { LAUNCH_PROMO_ANNOUNCEMENT_ID } from "@/lib/promotions/launch-event";
+import {
+  DEFAULT_TOPUP_MULTIPLIER,
+  sanitizeTopupMultiplier,
+  type TopupMultiplierConfig,
+} from "@/lib/promotions/topup-multiplier";
 import { nowIso, requireDb, type AppEnv } from "./db";
 
 export type LiveCheckInConfig = {
@@ -523,4 +528,38 @@ export async function getLiveSiteSettings(env: AppEnv): Promise<LiveSiteSettings
     return unlocked;
   }
   return settings;
+}
+
+export async function getLiveTopupMultiplier(env: AppEnv): Promise<TopupMultiplierConfig> {
+  const db = await ensureSiteTables(env);
+  const row = await db
+    .prepare("SELECT value_json AS valueJson, updated_at AS updatedAt FROM site_config WHERE key=?")
+    .bind("topup_multiplier")
+    .first<{ valueJson: string; updatedAt?: string }>();
+  if (!row?.valueJson) return { ...DEFAULT_TOPUP_MULTIPLIER };
+  try {
+    const parsed = JSON.parse(row.valueJson) as Record<string, unknown>;
+    return sanitizeTopupMultiplier({ ...parsed, updatedAt: row.updatedAt ?? parsed.updatedAt ?? null });
+  } catch {
+    return { ...DEFAULT_TOPUP_MULTIPLIER };
+  }
+}
+
+export async function saveLiveTopupMultiplier(
+  env: AppEnv,
+  input: { enabled: boolean; multiplier: number; label?: string },
+  actorId: string | null,
+): Promise<TopupMultiplierConfig> {
+  const sanitized = sanitizeTopupMultiplier(input);
+  const updatedAt = await writeConfigJson(
+    env,
+    "topup_multiplier",
+    {
+      enabled: sanitized.enabled,
+      multiplier: sanitized.multiplier,
+      label: sanitized.label,
+    },
+    actorId,
+  );
+  return { ...sanitized, updatedAt };
 }

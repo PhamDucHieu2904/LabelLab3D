@@ -6,6 +6,11 @@
   color: #633047;
 }
 
+.headingWrap {
+  display: grid;
+  gap: 8px;
+}
+
 .headingRow {
   display: flex;
   align-items: center;
@@ -203,6 +208,44 @@
 .badgeBest {
   color: #7c2d12;
   background: rgba(245, 158, 11, .22);
+}
+.badgeMultiplier {
+  color: #ffffff;
+  background: linear-gradient(135deg, #c72b5e, #e1652f);
+  box-shadow: 0 3px 10px rgba(199, 43, 94, .26);
+}
+.multiplierBanner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(199, 43, 94, .12), rgba(245, 158, 11, .16));
+  border: 1px solid rgba(199, 43, 94, .28);
+  color: #8f1d44;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.multiplierBanner svg {
+  flex: 0 0 auto;
+  color: #c72b5e;
+}
+.baseCoinsStrike {
+  font-size: 11px;
+  line-height: 1;
+  color: #9e7384;
+  text-decoration: line-through;
+  font-variant-numeric: tabular-nums;
+}
+.promoSummaryTag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(199, 43, 94, .14);
+  color: #a1204c;
+  font-size: 12px;
+  font-weight: 700;
 }
 .coinRow {
   display: flex;
