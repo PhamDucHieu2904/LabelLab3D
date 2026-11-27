@@ -249,6 +249,20 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
     return () => cancelAnimationFrame(id);
   }, [panelCollapsed]);
 
+  // Prevent mobile pull-to-refresh and rubber-band overscroll while inspecting full-screen 3D shares.
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlOverscroll = html.style.overscrollBehavior;
+    const prevBodyOverscroll = body.style.overscrollBehavior;
+    html.style.overscrollBehavior = "none";
+    body.style.overscrollBehavior = "none";
+    return () => {
+      html.style.overscrollBehavior = prevHtmlOverscroll;
+      body.style.overscrollBehavior = prevBodyOverscroll;
+    };
+  }, []);
+
   // Build and dispose PackagingSubjectController cleanly whenever viewing a packaging item
   useEffect(() => {
     if (!activeItem || activeItem.payload.kind !== "packaging" || !assetsReady) {

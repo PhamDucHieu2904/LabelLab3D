@@ -6,7 +6,9 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  overscroll-behavior: none;
   user-select: none;
+  -webkit-user-select: none;
   font-family: var(--font-mona-sans), "Mona Sans", system-ui, sans-serif;
 }
 
@@ -337,6 +339,8 @@
   min-height: 0;
   width: 100%;
   height: 100%;
+  touch-action: none;
+  overscroll-behavior: none;
 }
 
 .panelReopenBtn {
@@ -393,6 +397,7 @@
   align-items: center;
   gap: 8px;
   max-width: calc(100% - 24px);
+  touch-action: auto;
   transition: left 200ms ease;
 }
 

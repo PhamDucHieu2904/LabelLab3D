@@ -456,6 +456,19 @@ test('SharedProjectViewer renders desktop right-side rounded panel while keeping
   assert.ok(viewerTsx.includes('styles.panelReopenBtn'), 'Provides reopen button when desktop panel is collapsed');
   assert.ok(viewerCss.includes('border-radius: 20px'), 'Desktop right panel uses rounded corners');
   assert.ok(viewerCss.includes('@media (max-width: 900px)'), 'Preserves mobile bottom-bar layout below 900px');
+  assert.ok(viewerCss.includes('overscroll-behavior: none'), 'Prevents mobile pull-to-refresh inside share viewer');
+  assert.ok(viewerCss.includes('touch-action: none'), 'Locks touch gestures on the 3D share viewport');
+  assert.ok(viewerTsx.includes('overscrollBehavior = "none"'), 'Locks root overscroll while 3D share viewer is mounted');
+
+  const runtimeSrc = fs.readFileSync(path.resolve(ROOT, 'lib/mockup/runtime.ts'), 'utf8');
+  assert.ok(
+    runtimeSrc.includes("canvas.style.touchAction = fullTouchViewport ? 'none' : 'pan-y pinch-zoom'"),
+    'Full 3D viewports use touch-action: none so mobile pinch-zoom and 1-finger orbit work natively',
+  );
+  assert.ok(
+    runtimeSrc.includes('activeShowcasePinchDistance'),
+    'Showcase spin mode supports 2-finger pinch zoom on mobile touch screens',
+  );
 });
 
 test('share link expiry enforces a strict 30-day maximum and never allows infinite links', async () => {

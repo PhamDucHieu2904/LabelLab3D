@@ -217,6 +217,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   const yawAxis = new THREE.Vector3(0, 1, 0), dragAxis = new THREE.Vector3(), up = new THREE.Vector3();
   const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
   const pointers = new Map<number, { x: number; y: number }>();
+  let showcasePinchDist = 0;
   let dragging = false, orbitDragging = false, motionTime = 0, lastInputAt = -Infinity, returnElapsed = 0;
   let returnFrom: THREE.Quaternion | null = null;
   let activeHoverTarget: InteractivePickTarget | null = null;
@@ -226,14 +227,19 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   const singleLabelHoverTint = new THREE.Color('#2563eb');
   const savedSingleLabelMaterials = new Map<THREE.MeshStandardMaterial, { color: THREE.Color; emissive: THREE.Color; emissiveIntensity: number }>();
   const interactivePickingEnabled = Boolean(options.onHoverTarget || options.onPickTarget);
+  const fullTouchViewport = options.enableWheelZoom !== false;
   const controls = new OrbitControls(camera, canvas);
   controls.enablePan = false;
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
   controls.minPolarAngle = 0.04; controls.maxPolarAngle = Math.PI - 0.04;
   controls.rotateSpeed = 0.65; controls.zoomSpeed = 0.8;
-  // Page scrolling and browser pinch zoom remain available over the preview.
-  canvas.style.touchAction = 'pan-y pinch-zoom';
+  controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+  // Full interactive 3D viewports (Studio & Share Viewer) own 1-finger orbit & 2-finger pinch-zoom
+  // so mobile browsers never hijack them for pull-to-refresh or page zoom.
+  // Scrollable embeds (`enableWheelZoom: false`) keep page scrolling & browser pinch zoom intact.
+  canvas.style.touchAction = fullTouchViewport ? 'none' : 'pan-y pinch-zoom';
+  host.style.touchAction = fullTouchViewport ? 'none' : '';
   const lights = settings.lights.map(light => {
     const result = light.type === 'hemisphere' ? new THREE.HemisphereLight(light.color, light.groundColor, light.intensity)
       : new THREE.DirectionalLight(light.color, light.intensity);
@@ -1799,6 +1805,14 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     if (up.y >= -0.25) targetPose.copy(candidatePose);
     lastInputAt = motionTime; returnFrom = null; requestRender();
   };
+  const activeShowcasePinchDistance = (): number => {
+    if (pointers.size !== 2) return 0;
+    const iter = pointers.values();
+    const a = iter.next().value;
+    const b = iter.next().value;
+    if (!a || !b) return 0;
+    return Math.hypot(b.x - a.x, b.y - a.y);
+  };
   const pointerDown = (event: PointerEvent) => {
     if (interactivePickingEnabled && !captureGate.busy && !contextLost && event.button === 0 && !clickCandidate) {
       clickCandidate = {
@@ -1815,15 +1829,18 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     }
     const rootObj = procedural?.subject.root ?? active?.root;
     if (animation.mode !== 'showcase' || !rootObj || captureGate.busy || contextLost || event.button !== 0 || pointers.has(event.pointerId)) return;
-    if ((event.pointerType === 'touch' || event.pointerType === 'pen') && event.target !== hitRegion.element) return;
-    const rect = canvas.getBoundingClientRect();
-    if (!(rect.width > 0 && rect.height > 0)) return;
-    pointer.set((event.clientX - rect.left) / rect.width * 2 - 1, 1 - (event.clientY - rect.top) / rect.height * 2);
-    product.updateWorldMatrix(true, true); camera.updateMatrixWorld(); raycaster.setFromCamera(pointer, camera);
-    if (!hitVisibleProduct(raycaster, visibleProductGestureMeshes(rootObj))) return;
+    if (!fullTouchViewport) {
+      if ((event.pointerType === 'touch' || event.pointerType === 'pen') && event.target !== hitRegion.element) return;
+      const rect = canvas.getBoundingClientRect();
+      if (!(rect.width > 0 && rect.height > 0)) return;
+      pointer.set((event.clientX - rect.left) / rect.width * 2 - 1, 1 - (event.clientY - rect.top) / rect.height * 2);
+      product.updateWorldMatrix(true, true); camera.updateMatrixWorld(); raycaster.setFromCamera(pointer, camera);
+      if (!hitVisibleProduct(raycaster, visibleProductGestureMeshes(rootObj))) return;
+    }
     targetPose.copy(pose); returnFrom = null;
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     try { canvas.setPointerCapture(event.pointerId); } catch { pointers.delete(event.pointerId); return; }
+    showcasePinchDist = activeShowcasePinchDistance();
     dragging = true; hitRegion.beginDrag(); applyInteractiveCursor();
     lastInputAt = motionTime; requestRender();
   };
@@ -1841,6 +1858,14 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     const previous = pointers.get(event.pointerId);
     if (previous) {
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pointers.size === 2 && fullTouchViewport) {
+        const nextDist = activeShowcasePinchDistance();
+        if (showcasePinchDist > 4 && nextDist > 4) {
+          zoomCamera(THREE.MathUtils.clamp(nextDist / showcasePinchDist, 0.75, 1.35));
+        }
+        showcasePinchDist = nextDist;
+        return;
+      }
       if (pointers.size > 1) return;
       const bounds = canvas.getBoundingClientRect();
       const dx = (event.clientX - previous.x) * (bounds.width > 0 ? host.clientWidth / bounds.width : 1);
@@ -1888,6 +1913,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     const hadShowcasePointer = pointers.delete(event.pointerId);
     if (hadShowcasePointer) {
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+      showcasePinchDist = activeShowcasePinchDistance();
       dragging = pointers.size > 0;
       if (!dragging) { hitRegion.endDrag(); lastInputAt = motionTime; }
       requestRender();
@@ -1915,7 +1941,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     cancelHoverRaf();
     clickCandidate = null;
     orbitDragging = false;
-    const ids = [...pointers.keys()]; pointers.clear(); dragging = false;
+    const ids = [...pointers.keys()]; pointers.clear(); showcasePinchDist = 0; dragging = false;
     hitRegion.endDrag();
     for (const id of ids) if (canvas.hasPointerCapture(id)) {
       try { canvas.releasePointerCapture(id); } catch { /* The browser may have cancelled capture already. */ }
@@ -2016,11 +2042,22 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
     const pixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? host.clientHeight : 1);
     zoomCamera(Math.exp(THREE.MathUtils.clamp(-pixels * 0.001 * controls.zoomSpeed, -0.5, 0.5)));
   };
+  const blockNativeTouchMove = (event: TouchEvent) => {
+    if (fullTouchViewport && event.cancelable) event.preventDefault();
+  };
+  const blockSafariGesture = (event: Event) => {
+    if (fullTouchViewport && event.cancelable) event.preventDefault();
+  };
   host.addEventListener('pointerdown', pointerDown); host.addEventListener('pointermove', pointerMove);
   host.addEventListener('pointerup', pointerUp); host.addEventListener('pointercancel', pointerUp);
   host.addEventListener('pointerleave', pointerLeave);
   canvas.addEventListener('lostpointercapture', pointerUp);
   host.addEventListener('wheel', wheel, { passive: false });
+  if (fullTouchViewport) {
+    host.addEventListener('touchmove', blockNativeTouchMove, { passive: false });
+    host.addEventListener('gesturestart', blockSafariGesture, { passive: false });
+    host.addEventListener('gesturechange', blockSafariGesture, { passive: false });
+  }
   const onControlsStart = () => { if (!captureGate.busy) { cameraTransition = null; pauseFromInteraction(); } };
   const onControlsEnd = () => {
     orbitDragging = false;
@@ -2566,6 +2603,11 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       host.removeEventListener('pointerleave', pointerLeave);
       canvas.removeEventListener('lostpointercapture', pointerUp);
       host.removeEventListener('wheel', wheel);
+      if (fullTouchViewport) {
+        host.removeEventListener('touchmove', blockNativeTouchMove);
+        host.removeEventListener('gesturestart', blockSafariGesture);
+        host.removeEventListener('gesturechange', blockSafariGesture);
+      }
       controls.removeEventListener('start', onControlsStart); controls.removeEventListener('end', onControlsEnd); controls.removeEventListener('change', onControlsChange); controls.dispose();
       detachProcedural();
       discard(active); active = null; discard(cached); cached = null; [...candidates].forEach(discard);
