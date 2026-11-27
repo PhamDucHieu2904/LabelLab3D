@@ -487,6 +487,7 @@
   gap: 4px;
   cursor: pointer;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .camPill:hover {
@@ -507,6 +508,7 @@
   height: 16px;
   background: rgba(100, 116, 139, 0.3);
   margin: 0 2px;
+  flex-shrink: 0;
 }
 
 .camIcon {
@@ -519,6 +521,7 @@
   display: grid;
   place-items: center;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .camIcon:hover {
@@ -1274,19 +1277,118 @@
 
 @media (max-width: 720px) {
   .topBar {
-    padding: 10px 12px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px 12px 8px;
+  }
+  .titleRow {
+    flex-wrap: nowrap;
+    gap: 8px;
   }
   .titleRow h1 {
-    font-size: 14px;
+    font-size: 14.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .activeBadge {
+    max-width: 52%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 1;
+  }
+  .topControls {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+  .qualitySelectWrap {
+    margin-left: auto;
+  }
+  .segment button {
+    height: 26px;
+    padding: 0 9px;
+    font-size: 11px;
+  }
+  .pillBtn,
+  .iconBtn,
+  .topControls .qualitySelect {
+    height: 30px;
+    font-size: 11.5px;
+  }
+  .iconBtn {
+    width: 30px;
+  }
+  .floatingControls,
+  .floatingControlsWithPanel {
+    bottom: 10px;
+    gap: 6px;
+    max-width: calc(100vw - 16px);
+  }
+  .foldCard {
+    gap: 8px;
+    padding: 6px 12px;
+    max-width: 100%;
+  }
+  .foldSliderLabel {
+    gap: 6px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .foldSliderLabel input[type="range"] {
+    width: clamp(92px, 34vw, 130px);
+  }
+  .cameraRow {
+    gap: 2px;
+    padding: 4px 6px;
+  }
+  .camPill {
+    height: 26px;
+    padding: 0 7px;
+    font-size: 11px;
+    gap: 3px;
+  }
+  .camIcon {
+    width: 26px;
+    height: 26px;
+  }
+  .divider {
+    height: 14px;
+    margin: 0 1px;
   }
   .switcherDock,
   .switcherDockCollapsed {
     padding: 8px 12px 12px;
+  }
+  .searchInputWrap {
+    max-width: none;
   }
   .dragHint {
     display: none;
   }
   .brandBadge {
     display: none;
+  }
+}
+
+@media (max-width: 400px) {
+  .cameraRow {
+    gap: 1px;
+    padding: 4px 5px;
+  }
+  .camPill {
+    padding: 0 6px;
+    font-size: 10.5px;
+  }
+  .camIcon {
+    width: 24px;
+    height: 24px;
+  }
+  .segment button {
+    padding: 0 7px;
+    font-size: 10.5px;
   }
 }
