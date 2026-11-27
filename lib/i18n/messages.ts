@@ -428,7 +428,7 @@ const VI_MESSAGES: UiMessages = {
     switchToEn: "Chuyển sang Tiếng Anh",
   },
   home: {
-    srTitle: "Bảng điều khiển mockup bao bì 3D HyperMockup",
+    srTitle: "HyperMockup — Tạo Mockup Bao Bì 3D Chai, Lon, Hộp & Dieline CAD 1:1 mm Online",
     showcaseAria: "Mockup 3D nổi bật",
     webOptimized: "Tối ưu web",
     eyebrow: "Hiện thực hóa ý tưởng",
@@ -846,7 +846,7 @@ const EN_MESSAGES: UiMessages = {
     switchToEn: "Switch to English",
   },
   home: {
-    srTitle: "HyperMockup 3D packaging mockup dashboard",
+    srTitle: "HyperMockup — Online 3D Packaging Mockup Studio for Bottles, Cans, Boxes & 1:1 mm CAD Dielines",
     showcaseAria: "Featured 3D mockup",
     webOptimized: "Web optimized",
     eyebrow: "Make it real",

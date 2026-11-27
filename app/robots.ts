@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { SITE_URL } from "@/lib/seo/site";
 
 const BLOCKED_AI_AND_SCRAPER_BOTS = [
   "GPTBot",
@@ -29,10 +30,11 @@ export default function robots(): MetadataRoute.Robots {
       })),
       {
         userAgent: "*",
-        allow: "/",
-        disallow: ["/admin", "/api/", "/payment/", "/studio", "/s/"],
+        allow: ["/", "/studio", "/about", "/contact", "/legal/"],
+        disallow: ["/admin", "/api/", "/payment/", "/s/"],
       },
     ],
-    sitemap: "https://hypermockup.com/sitemap.xml",
+    host: SITE_URL,
+    sitemap: `${SITE_URL}/sitemap.xml`,
   };
 }

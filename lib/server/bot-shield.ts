@@ -103,10 +103,12 @@ const ALLOWED_SOCIAL_PREVIEW_BOT_TOKENS = [
 
 const PUBLIC_SEO_PATHS = new Set([
   "/",
+  "/studio",
   "/about",
   "/contact",
   "/robots.txt",
   "/sitemap.xml",
+  "/manifest.webmanifest",
 ]);
 
 const WINDOW_MS = 60_000;
@@ -128,7 +130,13 @@ export function resetBotShieldStateForTests() {
 }
 
 export function isStaticOrBypassPath(pathname: string): boolean {
-  if (pathname === "/robots.txt" || pathname === "/sitemap.xml" || pathname === "/favicon.ico" || pathname === "/icon.svg") {
+  if (
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml" ||
+    pathname === "/manifest.webmanifest" ||
+    pathname === "/favicon.ico" ||
+    pathname === "/icon.svg"
+  ) {
     return true;
   }
   for (const prefix of STATIC_PREFIXES) {

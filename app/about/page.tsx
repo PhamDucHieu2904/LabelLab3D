@@ -7,6 +7,7 @@ import {
   isValidMoitUrl,
   type LegalOperatorInfo,
 } from "@/lib/legal/policies";
+import { buildBreadcrumbJsonLd, buildPageMetadata, serializeJsonLd } from "@/lib/seo/site";
 import { env } from "@/lib/server/http";
 import { extractOperatorInfo } from "@/lib/server/legal";
 import { readServerLocale } from "@/lib/server/locale";
@@ -30,19 +31,22 @@ export async function generateMetadata({
 }: {
   searchParams: Promise<{ lang?: string }>;
 }): Promise<Metadata> {
-  const [query, operator] = await Promise.all([searchParams, loadOperatorInfo()]);
+  const query = await searchParams;
   const locale = await readServerLocale(query.lang);
-  return locale === "en"
-    ? {
-        title: `About | ${operator.siteName}`,
-        description:
-          "Learn about HyperMockup — browser-based 3D packaging mockup & parametric mm CAD dieline studio built with 100% original commercial 3D assets.",
-      }
-    : {
-        title: `Giới thiệu | ${operator.siteName}`,
-        description:
-          "Tìm hiểu về HyperMockup — nền tảng tạo mockup bao bì 3D & xuất dieline CAD (mm) ngay trên trình duyệt với 100% tài sản 3D nguyên bản.",
-      };
+  return buildPageMetadata({
+    title:
+      locale === "en"
+        ? "About — 3D Packaging Mockup & CAD Dieline Platform"
+        : "Giới thiệu — Nền tảng Mockup Bao Bì 3D & Dieline CAD",
+    description:
+      locale === "en"
+        ? "Learn about HyperMockup — browser-based 3D packaging mockup & parametric mm CAD dieline studio built with 100% original commercial 3D assets."
+        : "Tìm hiểu về HyperMockup — nền tảng tạo mockup bao bì 3D & xuất dieline CAD (mm) ngay trên trình duyệt với 100% tài sản 3D nguyên bản.",
+    path: "/about",
+    locale,
+    explicitLang: query.lang,
+    includeHreflang: true,
+  });
 }
 
 export default async function AboutPage({
@@ -119,8 +123,19 @@ export default async function AboutPage({
         },
       ];
 
+  const breadcrumbJsonLd = serializeJsonLd(
+    buildBreadcrumbJsonLd([
+      { name: en ? "Home" : "Trang chủ", path: "/" },
+      { name: en ? "About" : "Giới thiệu", path: "/about" },
+    ]),
+  );
+
   return (
     <main className={styles.page}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: breadcrumbJsonLd }}
+      />
       <article className={styles.card}>
         <div className={styles.topBar}>
           <Link className={styles.back} href="/">

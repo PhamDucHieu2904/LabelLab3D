@@ -9,6 +9,7 @@ import {
   type LegalOperatorInfo,
   type LegalSlug,
 } from "@/lib/legal/policies";
+import { buildBreadcrumbJsonLd, buildPageMetadata, serializeJsonLd } from "@/lib/seo/site";
 import { env } from "@/lib/server/http";
 import { extractOperatorInfo } from "@/lib/server/legal";
 import { readServerLocale } from "@/lib/server/locale";
@@ -45,10 +46,14 @@ export async function generateMetadata({
   const locale = await readServerLocale(query.lang);
   const docs = buildLegalDocuments(operator, locale);
   const page = docs[docSlug];
-  return {
-    title: `${page.title} | ${operator.siteName}`,
+  return buildPageMetadata({
+    title: page.title,
     description: page.intro,
-  };
+    path: `/legal/${docSlug}`,
+    locale,
+    explicitLang: query.lang,
+    includeHreflang: true,
+  });
 }
 
 export default async function LegalPage({
@@ -65,8 +70,19 @@ export default async function LegalPage({
   const page = docs[docSlug];
   const hasMoit = isValidMoitUrl(operator.moitStatusUrl);
 
+  const breadcrumbJsonLd = serializeJsonLd(
+    buildBreadcrumbJsonLd([
+      { name: locale === "en" ? "Home" : "Trang chủ", path: "/" },
+      { name: page.title, path: `/legal/${docSlug}` },
+    ]),
+  );
+
   return (
     <main className={styles.page}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: breadcrumbJsonLd }}
+      />
       <article className={styles.card}>
         <div className={styles.topBar}>
           <Link className={styles.back} href="/">

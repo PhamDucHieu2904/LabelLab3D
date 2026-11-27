@@ -1,7 +1,14 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { getUiMessages } from "@/lib/i18n/messages";
+import { NOINDEX_ROBOTS } from "@/lib/seo/site";
 import { readServerLocale } from "@/lib/server/locale";
 import PaymentResult from "./PaymentResult";
+
+export const metadata: Metadata = {
+  title: "Kết quả thanh toán SePay",
+  robots: NOINDEX_ROBOTS,
+};
 
 export default async function SepayResultPage({ params, searchParams }: {
   params: Promise<{ status: string }>;

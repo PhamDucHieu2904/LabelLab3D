@@ -10,7 +10,6 @@ import {
   Pause,
   Play,
   RotateCcw,
-  Sparkles,
   SunMedium,
 } from "lucide-react";
 import {
@@ -244,15 +243,14 @@ export default function HomeHeroShowcase() {
 
       {/* Crisp, high-contrast bottom editorial & CTA deck */}
       <div className={styles.bottom}>
-        <div className={styles.metaRow}>
-          <span className={styles.eyebrow}>{t.home.eyebrow}</span>
-          <span className={styles.specChip}>
-            <Sparkles size={11} aria-hidden="true" />
-            {activeSpec}
-          </span>
-        </div>
+        <div className={styles.headlineGroup}>
+          <div className={styles.metaRow}>
+            <span className={styles.eyebrow}>{t.home.eyebrow}</span>
+            <span className={styles.specChip}>{activeSpec}</span>
+          </div>
 
-        <h2 className={styles.title}>{t.home.heroTitle}</h2>
+          <h2 className={styles.title}>{t.home.heroTitle}</h2>
+        </div>
 
         <div className={styles.actions}>
           <Link className={`${styles.primaryCta} home-sheen`} href={activeScene.studioHref}>

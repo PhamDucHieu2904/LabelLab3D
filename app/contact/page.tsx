@@ -7,6 +7,7 @@ import {
   isValidMoitUrl,
   type LegalOperatorInfo,
 } from "@/lib/legal/policies";
+import { buildBreadcrumbJsonLd, buildFaqJsonLd, buildPageMetadata, serializeJsonLd } from "@/lib/seo/site";
 import { env } from "@/lib/server/http";
 import { extractOperatorInfo } from "@/lib/server/legal";
 import { readServerLocale } from "@/lib/server/locale";
@@ -33,15 +34,17 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const [query, operator] = await Promise.all([searchParams, loadOperatorInfo()]);
   const locale = await readServerLocale(query.lang);
-  return locale === "en"
-    ? {
-        title: `Contact & Support | ${operator.siteName}`,
-        description: `Contact ${operator.siteName} directly at ${operator.contactEmail} for coin top-up support, 3D Studio bug reports, new model requests, or legal/privacy inquiries.`,
-      }
-    : {
-        title: `Liên hệ & Hỗ trợ | ${operator.siteName}`,
-        description: `Liên hệ trực tiếp ${operator.siteName} qua email ${operator.contactEmail} để hỗ trợ đơn nạp coin, báo lỗi 3D Studio, đề xuất mẫu bao bì mới hoặc yêu cầu pháp lý.`,
-      };
+  return buildPageMetadata({
+    title: locale === "en" ? "Contact & Support" : "Liên hệ & Hỗ trợ",
+    description:
+      locale === "en"
+        ? `Contact ${operator.siteName} directly at ${operator.contactEmail} for coin top-up support, 3D Studio bug reports, new model requests, or legal/privacy inquiries.`
+        : `Liên hệ trực tiếp ${operator.siteName} qua email ${operator.contactEmail} để hỗ trợ đơn nạp coin, báo lỗi 3D Studio, đề xuất mẫu bao bì mới hoặc yêu cầu pháp lý.`,
+    path: "/contact",
+    locale,
+    explicitLang: query.lang,
+    includeHreflang: true,
+  });
 }
 
 export default async function ContactPage({
@@ -110,8 +113,24 @@ export default async function ContactPage({
         },
       ];
 
+  const faqJsonLd = serializeJsonLd(buildFaqJsonLd(faqs));
+  const breadcrumbJsonLd = serializeJsonLd(
+    buildBreadcrumbJsonLd([
+      { name: en ? "Home" : "Trang chủ", path: "/" },
+      { name: en ? "Contact & Support" : "Liên hệ & Hỗ trợ", path: "/contact" },
+    ]),
+  );
+
   return (
     <main className={styles.page}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: faqJsonLd }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: breadcrumbJsonLd }}
+      />
       <article className={styles.card}>
         <div className={styles.topBar}>
           <Link className={styles.back} href="/">

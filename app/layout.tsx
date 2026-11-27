@@ -4,6 +4,7 @@ import { AuthDialogProvider } from "@/components/labellab/AuthDialog";
 import CookieConsentBanner from "@/components/labellab/CookieConsentBanner";
 import { LocaleProvider } from "@/components/labellab/LocaleProvider";
 import { GuideDialogProvider } from "@/components/labellab/UserGuideModal";
+import { buildRootJsonLd, buildRootMetadata, serializeJsonLd } from "@/lib/seo/site";
 import { readServerLocale } from "@/lib/server/locale";
 import "./globals.css";
 
@@ -31,37 +32,23 @@ const accentFont = Luckiest_Guy({
   variable: "--font-luckiest-guy",
 });
 
-export const metadata: Metadata = {
-  metadataBase: new URL("https://hypermockup.com"),
-  title: "HyperMockup",
-  description:
-    "HyperMockup — Create realistic 3D packaging and product mockups with real-time materials, lighting, and high-resolution renders.",
-  alternates: {
-    canonical: "/",
-  },
-  icons: {
-    icon: [{ url: "/branding/hypermockup-icon.svg?v=2", type: "image/svg+xml" }],
-    shortcut: "/branding/hypermockup-icon.svg?v=2",
-    apple: "/branding/hypermockup-icon.svg?v=2",
-  },
-  openGraph: {
-    title: "HyperMockup",
-    description:
-      "Create realistic 3D packaging and product mockups in your browser.",
-    url: "https://hypermockup.com",
-    siteName: "HyperMockup",
-    type: "website",
-    images: [{ url: "/branding/hypermockup-icon.svg", width: 358, height: 358, alt: "HyperMockup" }],
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await readServerLocale();
+  return buildRootMetadata(locale);
+}
 
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const initialLocale = await readServerLocale();
+  const rootJsonLd = serializeJsonLd(buildRootJsonLd(initialLocale));
   return (
     <html lang={initialLocale}>
       <body className={`${uiFont.variable} ${titleFont.variable} ${accentFont.variable}`}>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: rootJsonLd }}
+        />
         <LocaleProvider initialLocale={initialLocale}>
           <AuthDialogProvider>
             <GuideDialogProvider>
