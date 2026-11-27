@@ -316,3 +316,61 @@ test('coin reserve API charges 5/10/15/30 coins for renders and 10 coins for 1:1
   }));
   assert.equal(badFormat.status, 400);
 });
+
+test('bug bounty 1000 coins and VIP custom 3D model announcements are seeded and migrated once into existing DBs', async () => {
+  const { DatabaseSync } = require('node:sqlite');
+  const load = createLoader();
+  const siteConfig = load(path.resolve(ROOT, 'lib/server/site-config.ts'));
+  const updates = load(path.resolve(ROOT, 'lib/labellab/updates.ts'));
+  const launchConst = load(path.resolve(ROOT, 'lib/promotions/launch-event.ts'));
+
+  // Fresh production management includes both pinned right after launch promo
+  const initial = siteConfig.createInitialProductionManagement();
+  const live = siteConfig.extractLiveAnnouncements(initial, '2026-11-27');
+  assert.equal(live[0].id, launchConst.LAUNCH_PROMO_ANNOUNCEMENT_ID);
+  assert.equal(live[1].id, updates.BUG_BOUNTY_ANNOUNCEMENT_ID);
+  assert.equal(live[1].url, '/#home-feedback');
+  assert.equal(live[2].id, updates.VIP_CUSTOM_MODEL_ANNOUNCEMENT_ID);
+  assert.equal(live[2].url, '/contact');
+
+  // Existing DB without the new announcements imports them once after launch promo, and respects later admin deletion
+  const sqlite = new DatabaseSync(':memory:');
+  sqlite.exec('CREATE TABLE users (id TEXT PRIMARY KEY);');
+  const wrap = (query, bound = []) => ({
+    bind(...values) { return wrap(query, values); },
+    async first() { return sqlite.prepare(query).get(...bound) ?? null; },
+    async all() { return { success: true, results: sqlite.prepare(query).all(...bound) }; },
+    async run() { sqlite.prepare(query).run(...bound); return { success: true }; },
+    _execSync() { sqlite.prepare(query).run(...bound); return { success: true }; },
+  });
+  const env = {
+    DB: {
+      prepare(query) { return wrap(query, []); },
+      async batch(stmts) { stmts.forEach((s) => s._execSync()); },
+    },
+  };
+
+  const legacySaved = structuredClone(initial);
+  delete legacySaved[siteConfig.BUILTIN_ANNOUNCEMENT_MARKER_KEY];
+  legacySaved.announcements = legacySaved.announcements.filter(
+    (row) => row.id !== updates.BUG_BOUNTY_ANNOUNCEMENT_ID && row.id !== updates.VIP_CUSTOM_MODEL_ANNOUNCEMENT_ID,
+  );
+  await siteConfig.writeConfigJson(env, 'management', legacySaved, null);
+
+  const loaded = await siteConfig.loadManagementData(env);
+  assert.deepEqual(
+    loaded.announcements.slice(0, 3).map((r) => r.id),
+    [
+      launchConst.LAUNCH_PROMO_ANNOUNCEMENT_ID,
+      updates.BUG_BOUNTY_ANNOUNCEMENT_ID,
+      updates.VIP_CUSTOM_MODEL_ANNOUNCEMENT_ID,
+    ],
+  );
+
+  // Admin deletes bug bounty -> stays deleted on reload
+  loaded.announcements = loaded.announcements.filter((r) => r.id !== updates.BUG_BOUNTY_ANNOUNCEMENT_ID);
+  await siteConfig.writeConfigJson(env, 'management', loaded, null);
+  const reloaded = await siteConfig.loadManagementData(env);
+  assert.equal(reloaded.announcements.some((r) => r.id === updates.BUG_BOUNTY_ANNOUNCEMENT_ID), false);
+  assert.equal(reloaded.announcements.some((r) => r.id === updates.VIP_CUSTOM_MODEL_ANNOUNCEMENT_ID), true);
+});

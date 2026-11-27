@@ -33,6 +33,9 @@ export const LEGACY_DEMO_ANNOUNCEMENT_TITLES: ReadonlySet<string> = new Set([
   "Parametric CAD boxes & dielines ready in Studio",
 ]);
 
+export const BUG_BOUNTY_ANNOUNCEMENT_ID = "promo-bug-bounty-1000";
+export const VIP_CUSTOM_MODEL_ANNOUNCEMENT_ID = "vip-custom-3d-model";
+
 export const LABELLAB_UPDATES: readonly DefaultAnnouncementSeed[] = Object.freeze([
   {
     id: LAUNCH_PROMO_ANNOUNCEMENT_ID,
@@ -49,6 +52,36 @@ export const LABELLAB_UPDATES: readonly DefaultAnnouncementSeed[] = Object.freez
     time: "27/11/2026",
     start: LAUNCH_PROMO_START_DATE,
     end: LAUNCH_PROMO_END_DATE,
+    unread: true,
+  },
+  {
+    id: BUG_BOUNTY_ANNOUNCEMENT_ID,
+    tone: "pink",
+    category: "Ưu đãi",
+    pinned: true,
+    title: "Phát hiện bug báo Admin — Tặng ngay 1.000 xu",
+    body: "Ai phát hiện bug trong quá trình sử dụng hãy báo lỗi lên Admin qua khung Góp ý ở trang chủ hoặc trang Liên hệ để được kiểm tra và tặng ngay 1.000 xu thưởng vào tài khoản!",
+    titleEn: "Bug Bounty: Report a Bug to Admin & Get 1,000 Coins",
+    bodyEn: "Spot a bug while using HyperMockup? Report it directly to Admin via the homepage Feedback box or Contact page to receive 1,000 bonus coins once verified!",
+    ctaLabel: "Báo lỗi cho Admin",
+    ctaLabelEn: "Report Bug to Admin",
+    url: "/#home-feedback",
+    time: "27/11/2026",
+    unread: true,
+  },
+  {
+    id: VIP_CUSTOM_MODEL_ANNOUNCEMENT_ID,
+    tone: "blue",
+    category: "Hệ thống",
+    pinned: true,
+    title: "Đặc quyền User VIP: Liên hệ Admin vẽ mô hình 3D thường dùng",
+    body: "Đối với các User VIP, các bạn có thể liên hệ trực tiếp Admin để yêu cầu vẽ mô hình 3D mà bạn thường dùng (chai, lon, hộp, túi...). Gửi thông số hoặc mẫu tham khảo qua trang Liên hệ hay khung Góp ý để được hỗ trợ dựng riêng.",
+    titleEn: "VIP Perk: Contact Admin for Custom 3D Models You Frequently Use",
+    bodyEn: "For VIP users: you can contact Admin directly to request custom 3D packaging models that you use frequently. Share your reference or dimensions via the Contact page or Feedback box!",
+    ctaLabel: "Liên hệ Admin",
+    ctaLabelEn: "Contact Admin",
+    url: "/contact",
+    time: "27/11/2026",
     unread: true,
   },
   {

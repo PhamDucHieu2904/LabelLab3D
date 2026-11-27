@@ -9,7 +9,12 @@ import {
   type CoinPackageBadge,
   type CoinRegion,
 } from "@/lib/payments/packages";
-import { LABELLAB_UPDATES, LEGACY_DEMO_ANNOUNCEMENT_TITLES } from "@/lib/labellab/updates";
+import {
+  BUG_BOUNTY_ANNOUNCEMENT_ID,
+  LABELLAB_UPDATES,
+  LEGACY_DEMO_ANNOUNCEMENT_TITLES,
+  VIP_CUSTOM_MODEL_ANNOUNCEMENT_ID,
+} from "@/lib/labellab/updates";
 import { LAUNCH_PROMO_ANNOUNCEMENT_ID } from "@/lib/promotions/launch-event";
 import { nowIso, requireDb, type AppEnv } from "./db";
 
@@ -148,6 +153,18 @@ export async function writeConfigJson(env: AppEnv, key: string, value: unknown, 
   return now;
 }
 
+export const BUILTIN_ANNOUNCEMENT_MARKER_KEY = "_builtinAnnouncements";
+const LEGACY_SEEDED_ANNOUNCEMENT_IDS = new Set([
+  "release-cad-boxes",
+  "release-hdri-cloud",
+  "promo-checkin-streak",
+]);
+const AUTO_SEED_ANNOUNCEMENT_IDS = [
+  LAUNCH_PROMO_ANNOUNCEMENT_ID,
+  BUG_BOUNTY_ANNOUNCEMENT_ID,
+  VIP_CUSTOM_MODEL_ANNOUNCEMENT_ID,
+] as const;
+
 export function createInitialProductionManagement(): Record<string, ManagementRecord[]> {
   const base = createManagementData();
   const today = new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
@@ -184,6 +201,13 @@ export function createInitialProductionManagement(): Record<string, ManagementRe
       url: item.url,
     },
   }));
+  base[BUILTIN_ANNOUNCEMENT_MARKER_KEY] = LABELLAB_UPDATES.map((item) => ({
+    id: item.id,
+    name: item.id,
+    status: "builtin",
+    updated: "",
+    values: {},
+  }));
   return persistentManagementData(base);
 }
 
@@ -206,15 +230,43 @@ export async function loadManagementData(env: AppEnv): Promise<Record<string, Ma
   // Any announcement created or customized by the admin is preserved verbatim.
   if (isLegacyDemoAnnouncementSet(migrated.announcements)) {
     migrated.announcements = initial.announcements;
+    migrated[BUILTIN_ANNOUNCEMENT_MARKER_KEY] = initial[BUILTIN_ANNOUNCEMENT_MARKER_KEY];
   } else {
-    // Ensure the official launch event announcement is seeded into existing databases too.
+    // Seed newly added official announcements once into existing databases while respecting later admin deletions.
     const existingList = Array.isArray(migrated.announcements) ? migrated.announcements : [];
-    if (!existingList.some((row) => row.id === LAUNCH_PROMO_ANNOUNCEMENT_ID)) {
-      const launchSeed = initial.announcements.find((row) => row.id === LAUNCH_PROMO_ANNOUNCEMENT_ID);
-      if (launchSeed) {
-        migrated.announcements = [launchSeed, ...existingList];
+    const savedMarkers = Array.isArray(saved[BUILTIN_ANNOUNCEMENT_MARKER_KEY])
+      ? saved[BUILTIN_ANNOUNCEMENT_MARKER_KEY]
+      : [];
+    const knownSeeded = savedMarkers.length > 0
+      ? new Set(savedMarkers.map((row) => row.id))
+      : new Set(LEGACY_SEEDED_ANNOUNCEMENT_IDS);
+
+    const additions: ManagementRecord[] = [];
+    for (const id of AUTO_SEED_ANNOUNCEMENT_IDS) {
+      if (knownSeeded.has(id) || existingList.some((row) => row.id === id)) continue;
+      const seed = initial.announcements.find((row) => row.id === id);
+      if (seed) additions.push(seed);
+    }
+    if (additions.length > 0) {
+      const launchIdx = existingList.findIndex((row) => row.id === LAUNCH_PROMO_ANNOUNCEMENT_ID);
+      if (launchIdx >= 0 && !additions.some((row) => row.id === LAUNCH_PROMO_ANNOUNCEMENT_ID)) {
+        migrated.announcements = [
+          ...existingList.slice(0, launchIdx + 1),
+          ...additions,
+          ...existingList.slice(launchIdx + 1),
+        ];
+      } else {
+        migrated.announcements = [...additions, ...existingList];
       }
     }
+    const mergedMarkers = new Set([...knownSeeded, ...LABELLAB_UPDATES.map((item) => item.id)]);
+    migrated[BUILTIN_ANNOUNCEMENT_MARKER_KEY] = [...mergedMarkers].map((id) => ({
+      id,
+      name: id,
+      status: "builtin",
+      updated: "",
+      values: {},
+    }));
   }
   return persistentManagementData(migrated);
 }
