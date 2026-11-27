@@ -83,14 +83,21 @@ const ALLOWED_SEARCH_BOT_TOKENS = [
   "bingbot",
   "duckduckbot",
   "applebot",
+];
+
+// Dedicated link-preview crawlers only — never add bare "zalo" here because Zalo's
+// real mobile in-app browser sends "Zalo iOS/..." / "ZaloAndroid/..." in User-Agent!
+const ALLOWED_SOCIAL_PREVIEW_BOT_TOKENS = [
   "facebookexternalhit",
   "facebot",
   "twitterbot",
   "linkedinbot",
-  "zalo",
   "telegrambot",
   "discordbot",
   "slackbot",
+  "zalopreview",
+  "zalo-bot",
+  "zalo_crawler",
 ];
 
 const PUBLIC_SEO_PATHS = new Set([
@@ -209,6 +216,13 @@ function checkBurstLimit(ip: string, sensitive: boolean, nowMs: number): { ok: b
   return { ok: true };
 }
 
+function isSharePreviewPath(pathname: string): boolean {
+  return (
+    pathname.startsWith("/s/") ||
+    /^\/api\/share\/public\/[^/]+\/assets\/[^/]+$/.test(pathname)
+  );
+}
+
 export function evaluateIncomingRequest(input: BotShieldInput): BotShieldDecision {
   const pathname = input.pathname || "/";
   const category = classifyRequestCategory(pathname);
@@ -230,10 +244,18 @@ export function evaluateIncomingRequest(input: BotShieldInput): BotShieldDecisio
 
   const uaLower = (input.userAgent || "").trim().toLowerCase();
   const isAllowedSearchBot = uaLower.length > 0 && ALLOWED_SEARCH_BOT_TOKENS.some((token) => uaLower.includes(token));
+  const isSocialPreviewBot =
+    !isAllowedSearchBot &&
+    uaLower.length > 0 &&
+    ALLOWED_SOCIAL_PREVIEW_BOT_TOKENS.some((token) => uaLower.includes(token));
 
-  // 2. Allow legitimate search/social bots ONLY on public pages, never on API/admin/studio.
-  if (isAllowedSearchBot) {
-    if (isPublicSeoPath(pathname) && (input.method === "GET" || input.method === "HEAD")) {
+  // 2. Allow legitimate search crawlers on public SEO pages only; allow social link-preview
+  //    bots on public SEO pages plus /s/* share preview cards & public OG thumbnails.
+  if (isAllowedSearchBot || isSocialPreviewBot) {
+    const isReadMethod = input.method === "GET" || input.method === "HEAD";
+    const routeAllowed =
+      isPublicSeoPath(pathname) || (isSocialPreviewBot && isSharePreviewPath(pathname));
+    if (routeAllowed && isReadMethod) {
       return { allowed: true, isKnownBot: true, category };
     }
     return { allowed: false, status: 403, reason: "BOT_RESTRICTED_ROUTE", category };

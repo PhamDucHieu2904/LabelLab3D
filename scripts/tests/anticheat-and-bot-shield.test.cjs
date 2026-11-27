@@ -106,6 +106,51 @@ test('Bot Shield always allows payment webhooks and legitimate SEO bots on publi
   assert.equal(googleApi.allowed, false);
   assert.equal(googleApi.status, 403);
   assert.equal(googleApi.reason, 'BOT_RESTRICTED_ROUTE');
+
+  // Real Zalo iOS & Android in-app browsers MUST be treated as normal human visitors on /s/, /studio, and /api/
+  const zaloIosUA =
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Zalo iOS/240801 ZaloTheme/light';
+  const zaloAndroidUA =
+    'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/128.0.0.0 Mobile Safari/537.36 ZaloAndroid/240801';
+  for (const ua of [zaloIosUA, zaloAndroidUA]) {
+    for (const targetPath of ['/s/QNb8a9setnGaI1c4', '/api/share/public/QNb8a9setnGaI1c4/assets/abc123', '/studio']) {
+      const res = botShield.evaluateIncomingRequest({
+        pathname: targetPath,
+        method: 'GET',
+        userAgent: ua,
+        ip: '113.161.72.10',
+      });
+      assert.equal(res.allowed, true, `Zalo in-app browser allowed on ${targetPath}`);
+      assert.equal(res.isKnownBot, false, `Zalo in-app browser not classified as bot on ${targetPath}`);
+    }
+  }
+
+  // Social link-preview crawlers can read OpenGraph metadata & share thumbnail assets, but never /studio or /api/account/*
+  const fbPreviewShare = botShield.evaluateIncomingRequest({
+    pathname: '/s/QNb8a9setnGaI1c4',
+    method: 'GET',
+    userAgent: 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+    ip: '173.252.87.10',
+  });
+  assert.equal(fbPreviewShare.allowed, true);
+  assert.equal(fbPreviewShare.isKnownBot, true);
+
+  const fbPreviewThumb = botShield.evaluateIncomingRequest({
+    pathname: '/api/share/public/QNb8a9setnGaI1c4/assets/0123456789abcdef',
+    method: 'GET',
+    userAgent: 'facebookexternalhit/1.1',
+    ip: '173.252.87.10',
+  });
+  assert.equal(fbPreviewThumb.allowed, true);
+
+  const fbPreviewAccount = botShield.evaluateIncomingRequest({
+    pathname: '/api/account/me',
+    method: 'GET',
+    userAgent: 'facebookexternalhit/1.1',
+    ip: '173.252.87.10',
+  });
+  assert.equal(fbPreviewAccount.allowed, false);
+  assert.equal(fbPreviewAccount.status, 403);
 });
 
 test('Bot Shield enforces per-IP burst rate limiting and returns 429', () => {
