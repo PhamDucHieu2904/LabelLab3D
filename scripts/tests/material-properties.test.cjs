@@ -350,3 +350,74 @@ test('live finish and liquid edits are reversible and isolated from imported mat
   handle.dispose();
   root.children.forEach(mesh => { assert.equal(mesh.material, originals[mesh.material.name]); mesh.geometry.dispose(); mesh.material.dispose(); });
 });
+
+test('high roughness attenuates clearcoat and dielectric glare on physical can/bottle labels and reverses cleanly', async () => {
+  const root = new THREE.Group();
+  const labelMat = new THREE.MeshPhysicalMaterial({
+    color: '#111111',
+    roughness: 0.28,
+    metalness: 0.18,
+    clearcoat: 0.35,
+    clearcoatRoughness: 0.15,
+  });
+  labelMat.name = 'printed-label';
+  const glassBody = new THREE.MeshPhysicalMaterial({
+    color: '#ffffff',
+    roughness: 0.04,
+    transmission: 1,
+    clearcoat: 0.5,
+    clearcoatRoughness: 0.05,
+  });
+  glassBody.name = 'Body';
+  root.add(
+    new THREE.Mesh(new THREE.BoxGeometry(), labelMat),
+    new THREE.Mesh(new THREE.BoxGeometry(), glassBody),
+  );
+  const handle = createAppearanceHandle(
+    root,
+    { id: 'can-matte-test', packaging: 'can', materialSlots: { label: ['printed-label'], body: ['Body'] } },
+    { editable: true },
+  );
+  await handle.apply({ slots: { label: { metalness: 0, roughness: 0.15, clearcoat: 0.35 } } });
+  const liveLabel = root.children[0].material;
+  const liveBody = root.children[1].material;
+  assert.ok(liveLabel instanceof THREE.MeshPhysicalMaterial);
+  assert.equal(liveLabel.roughness, 0.15);
+  assert.equal(liveLabel.clearcoat, 0.35);
+  assert.equal(liveLabel.clearcoatRoughness, 0.15);
+
+  // Mid-range satin (50%): clearcoat fades sharply and softens
+  handle.setLiveOverrides({ label: { roughness: 0.5, metalness: 0.3 } });
+  assert.equal(liveLabel.roughness, 0.5);
+  assert.equal(liveLabel.metalness, 0.3);
+  assert.ok(liveLabel.clearcoat < 0.06, `expected low satin clearcoat, got ${liveLabel.clearcoat}`);
+  assert.ok(liveLabel.clearcoatRoughness > 0.65);
+
+  // 100% matte roughness: ZERO clearcoat lacquer & soft matte dielectric response
+  handle.setLiveOverrides({ label: { roughness: 1, metalness: 0.3 } });
+  assert.equal(liveLabel.roughness, 1);
+  assert.equal(liveLabel.clearcoat, 0);
+  assert.equal(liveLabel.clearcoatRoughness, 1);
+  assert.ok(liveLabel.specularIntensity >= 0.3 && liveLabel.specularIntensity <= 0.4, `expected soft matte specularIntensity, got ${liveLabel.specularIntensity}`);
+
+  // 0% mirror gloss: full clearcoat and tight 0 clearcoatRoughness
+  handle.setLiveOverrides({ label: { roughness: 0, metalness: 0 } });
+  assert.equal(liveLabel.roughness, 0);
+  assert.equal(liveLabel.clearcoat, 0.35);
+  assert.equal(liveLabel.clearcoatRoughness, 0);
+  assert.equal(liveLabel.specularIntensity, 1);
+
+  // Transmissive glass body stays untouched by matte clearcoat attenuation
+  handle.setLiveOverrides({ body: { roughness: 0.9 } });
+  assert.equal(liveBody.clearcoat, 0.5);
+
+  // Resetting overrides restores exact authored glossy defaults
+  handle.setLiveOverrides({});
+  assert.equal(liveLabel.roughness, 0.15);
+  assert.equal(liveLabel.clearcoat, 0.35);
+  assert.equal(liveLabel.clearcoatRoughness, 0.15);
+  assert.equal(liveLabel.specularIntensity, 1);
+
+  handle.dispose();
+  root.children.forEach(mesh => { mesh.geometry.dispose(); mesh.material.dispose(); });
+});

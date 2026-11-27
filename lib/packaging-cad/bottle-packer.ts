@@ -25,6 +25,7 @@ import {
   type BasilWebSeedMetadata,
 } from '../viewer/basil-web-seed-contract';
 import { preparePetRingGeometry } from '../viewer/pet-ring-geometry';
+import { computeRoughnessCoupledPhysicalFinish } from '../viewer/roughness-finish';
 import {
   MM_TO_METRE,
   type BottlePackConfig,
@@ -1432,14 +1433,24 @@ export function createBottlePacker(callbacks?: {
           typeof visual.labelMetalness === 'number' && Number.isFinite(visual.labelMetalness)
             ? visual.labelMetalness
             : (slotSpec?.metalness ?? (isCan ? 0 : 0.02));
-        const mat = isCan
+        const canLabelCoupled = isCan
+          ? computeRoughnessCoupledPhysicalFinish(labelRough, {
+              roughness: slotSpec?.roughness ?? 0.15,
+              clearcoat: slotSpec?.clearcoat ?? 0.35,
+              clearcoatRoughness: 0.14,
+              specularIntensity: 1,
+              anisotropy: 0,
+            })
+          : null;
+        const mat = isCan && canLabelCoupled
           ? new THREE.MeshPhysicalMaterial({
               color: labelTexture ? '#ffffff' : (safeHex(slotSpec?.color) ?? '#f8f7f3'),
               map: labelTexture,
               roughness: labelRough,
               metalness: labelMetal,
-              clearcoat: slotSpec?.clearcoat ?? 0.35,
-              clearcoatRoughness: 0.14,
+              clearcoat: canLabelCoupled.clearcoat,
+              clearcoatRoughness: canLabelCoupled.clearcoatRoughness,
+              specularIntensity: canLabelCoupled.specularIntensity,
               envMapIntensity: 1.35,
               polygonOffset: true,
               polygonOffsetFactor: -1,
@@ -1650,13 +1661,23 @@ export function createBottlePacker(callbacks?: {
             : (slotSpec?.roughness ?? (isPlasticCap ? 0.29 : 0.3));
         // Glass bottle caps stay opaque so clear glass necks refract rear caps realistically.
         const deferCapAfterTransmission = isTransmissivePet;
-        const mat = isPlasticCap
+        const plasticCapCoupled = isPlasticCap
+          ? computeRoughnessCoupledPhysicalFinish(capRough, {
+              roughness: slotSpec?.roughness ?? 0.29,
+              clearcoat: 0.16,
+              clearcoatRoughness: 0.24,
+              specularIntensity: 1,
+              anisotropy: 0,
+            })
+          : null;
+        const mat = isPlasticCap && plasticCapCoupled
           ? new THREE.MeshPhysicalMaterial({
               color: new THREE.Color(capHex),
               metalness: capMetal,
               roughness: capRough,
-              clearcoat: 0.16,
-              clearcoatRoughness: 0.24,
+              clearcoat: plasticCapCoupled.clearcoat,
+              clearcoatRoughness: plasticCapCoupled.clearcoatRoughness,
+              specularIntensity: plasticCapCoupled.specularIntensity,
               envMapIntensity: 1.22,
               transparent: deferCapAfterTransmission,
               opacity: 1,

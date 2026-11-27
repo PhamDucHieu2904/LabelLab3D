@@ -6,6 +6,11 @@ import { liquidColorUpdates, type LiveMaterialOverrides } from './material-adjus
 import { configureLiveLiquidOptics, liquidOpticsUpdates } from './liquid-adjustments';
 import { configurePetRingMaterial, isPetRingMaterial } from './pet-ring-material';
 import { createPetRingMaterialContext } from './pet-ring-context';
+import {
+  applyRoughnessCoupledPhysicalFinish,
+  readAuthoredPhysicalFinish,
+  type AuthoredPhysicalFinish,
+} from './roughness-finish';
 
 type MaterialBinding = { mesh: THREE.Mesh; original: THREE.Material; index: number };
 export interface AppearanceHandle {
@@ -89,7 +94,13 @@ export function createAppearanceHandle(root: THREE.Object3D, asset: ProductAsset
   const ownedTextures = new Set<THREE.Texture>();
   let disposed = false;
   let revision = 0;
-  let liveBindings: Array<{ material: THREE.MeshStandardMaterial; slot: string; base: Required<Pick<LiveMaterialOverrides[string], 'color' | 'metalness' | 'roughness' | 'textureOffsetX'>>; waterColor: string }> = [];
+  let liveBindings: Array<{
+    material: THREE.MeshStandardMaterial;
+    slot: string;
+    base: Required<Pick<LiveMaterialOverrides[string], 'color' | 'metalness' | 'roughness' | 'textureOffsetX'>>;
+    physicalBase: AuthoredPhysicalFinish;
+    waterColor: string;
+  }> = [];
   root.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
     const materials = Array.isArray(child.material) ? child.material : [child.material];
@@ -112,14 +123,22 @@ export function createAppearanceHandle(root: THREE.Object3D, asset: ProductAsset
       return values;
     },
     setLiveOverrides(overrides = {}) {
-      for (const { material, slot, base, waterColor } of liveBindings) {
+      for (const { material, slot, base, physicalBase, waterColor } of liveBindings) {
         const edit = overrides[slot] ?? {};
         // Profiled water filters color in its volume shader, not twice through
         // both the PBR surface and scattering. Its surface tint stays calibrated.
         const color = !liquidColorUpdates.has(material) && /^#[0-9a-f]{6}$/i.test(edit.color ?? '') ? edit.color! : base.color;
         material.color.set(color);
         material.metalness = Number.isFinite(edit.metalness) ? Math.max(0, Math.min(1, edit.metalness!)) : base.metalness;
-        material.roughness = Number.isFinite(edit.roughness) ? Math.max(0, Math.min(1, edit.roughness!)) : base.roughness;
+        const nextRoughness = Number.isFinite(edit.roughness) ? Math.max(0, Math.min(1, edit.roughness!)) : base.roughness;
+        material.roughness = nextRoughness;
+        if (
+          slot !== 'liquid' &&
+          slot !== 'inclusions' &&
+          !(slot === 'body' && material instanceof THREE.MeshPhysicalMaterial && material.transmission > 0)
+        ) {
+          applyRoughnessCoupledPhysicalFinish(material, nextRoughness, physicalBase);
+        }
         if (slot === 'liquid' || slot === 'inclusions') {
           const water = overrides.liquid?.color;
           const nextWaterColor = /^#[0-9a-f]{6}$/i.test(water ?? '') ? water! : waterColor;
@@ -229,6 +248,19 @@ export function createAppearanceHandle(root: THREE.Object3D, asset: ProductAsset
           // Explicit finish edits must survive the calibrated optical defaults.
           if (override.metalness !== undefined) material.metalness = override.metalness;
           if (override.roughness !== undefined) material.roughness = override.roughness;
+          if (
+            override.roughness !== undefined &&
+            override.clearcoat === undefined &&
+            slot !== 'liquid' &&
+            slot !== 'inclusions' &&
+            !(slot === 'body' && material instanceof THREE.MeshPhysicalMaterial && material.transmission > 0)
+          ) {
+            const authoredPhysical =
+              binding.original instanceof THREE.MeshStandardMaterial
+                ? readAuthoredPhysicalFinish(binding.original)
+                : readAuthoredPhysicalFinish(material);
+            applyRoughnessCoupledPhysicalFinish(material, override.roughness, authoredPhysical);
+          }
           if (options.editable && slot === 'liquid') configureLiveLiquidOptics(material, bottleRole || slot);
           if (slot === 'label' && material.map && (override.textureOffsetX !== undefined || options.editable)) {
             // Offset may also target embedded artwork. Clone only its transform;
@@ -265,7 +297,28 @@ export function createAppearanceHandle(root: THREE.Object3D, asset: ProductAsset
         if (!(material instanceof THREE.MeshStandardMaterial)) return;
         const slot = slotFor(binding);
         if (!slot) return;
-        liveBindings.push({ material, slot, waterColor, base: { color: `#${material.color.getHexString()}`, metalness: material.metalness, roughness: material.roughness, textureOffsetX: material.map?.offset.x ?? 0 } });
+        const originalBase =
+          binding.original instanceof THREE.MeshStandardMaterial
+            ? readAuthoredPhysicalFinish(binding.original)
+            : readAuthoredPhysicalFinish(material);
+        const currentPhysical = readAuthoredPhysicalFinish(material);
+        const slotOverride = resolveMaterialOverride(overrides[slot] ?? {});
+        const physicalBase: AuthoredPhysicalFinish =
+          slotOverride.roughness !== undefined && slotOverride.clearcoat === undefined
+            ? originalBase
+            : currentPhysical;
+        liveBindings.push({
+          material,
+          slot,
+          waterColor,
+          physicalBase,
+          base: {
+            color: `#${material.color.getHexString()}`,
+            metalness: material.metalness,
+            roughness: material.roughness,
+            textureOffsetX: material.map?.offset.x ?? 0,
+          },
+        });
       });
     },
     dispose() { if (disposed) return; disposed = true; revision += 1; restore(); bottle?.dispose?.(); ringOptics?.dispose(); },
