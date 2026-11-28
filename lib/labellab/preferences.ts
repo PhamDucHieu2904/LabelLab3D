@@ -160,6 +160,8 @@ const modelIds = [
   "can-mango",
   "pet-aloe",
   "pet-500-full-label",
+  "pet-1500-short-label",
+  "pet-1500-juice",
   "pet-nata-watermelon",
   "pet-320-full-nata",
   "pet-1000-juice",
@@ -221,7 +223,7 @@ export function parsePreferences(value: unknown): ScenePreferences {
     const glass290 = screwcap290 && !pullcap;
     const juicePet = selectedModelId === "pet-350-juice" || selectedModelId === "pet-1000-juice";
     const newNata = selectedModelId === "pet-320-full-nata";
-    const fullAloe = selectedModelId === "pet-500-full-label";
+    const fullAloe = selectedModelId === "pet-500-full-label" || selectedModelId === "pet-1500-short-label" || selectedModelId === "pet-1500-juice";
     const nativeCapMetalness = batch?.capMetalness ?? (pet ? 0 : 1);
     const nativeCapRoughness = batch?.capRoughness ?? (pullcap ? .5527864098548889 : coffeeGlass ? .28 : pet ? 0.29 : can ? 0.22 : defaults.capRoughness);
     const nativeBodyMetalness = can ? 1 : 0;

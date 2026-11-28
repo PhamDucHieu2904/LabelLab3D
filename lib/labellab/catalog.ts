@@ -19,6 +19,8 @@ import pet350Manifest from "../../public/models/bottles/pet-350-juice.manifest.j
 import pet320FullManifest from "../../public/models/bottles/pet-320-full-nata.manifest.json";
 import pet500FullManifest from "../../public/models/bottles/pet-500-full-label.manifest.json";
 import pet1000Manifest from "../../public/models/bottles/pet-1000-juice.manifest.json";
+import pet1500ShortManifest from "../../public/models/bottles/pet-1500-short-label.manifest.json";
+import pet1500FullManifest from "../../public/models/bottles/pet-1500-juice.manifest.json";
 import { BATCH_MODELS, BATCH_MATERIAL_DEFAULTS } from './bottle-batch';
 
 /** Published source snapshot. Private draft records are never imported. */
@@ -587,6 +589,59 @@ const pet500FullAloeModel: LabModel = {
   frontYaw: 0,
 };
 
+const pet1500ShortAloeModel: LabModel = {
+  id: "pet-1500-short-label",
+  name: "PET - 1.5 L · Aloe",
+  description: "1500 mL · 1.5 litre PET bottle · short label · Aloe vera · blank label, ready for artwork.",
+  category: "pet",
+  volume: "1.5 L",
+  poster: withPosterVer("/models/bottles/pet-1500-short-label-poster.webp"),
+  asset: {
+    id: "pet-1500-short-label",
+    name: "PET - 1.5 L · Aloe",
+    volumeMl: 1500,
+    packaging: "pet",
+    src: `${pet1500ShortManifest.src}?v=${pet1500ShortManifest.sha256.slice(0, 12)}`,
+    poster: withPosterVer("/models/bottles/pet-1500-short-label-poster.webp"),
+    materialSlots: pet1500ShortManifest.materialSlots,
+    textureSamplers: { label: { wrapS: "repeat", wrapT: "clamp" } },
+    orientation: [0, 0, 0],
+    cameraFraming: "bounds",
+  },
+  appearance: {
+    id: "pet-1500-short:aloe-blank",
+    requiredSlots: ["body", "cap", "label", "liquid", "inclusions"],
+    slots: {
+      body: { color: "#ffffff", metalness: 0 },
+      cap: { color: "#ffffff", metalness: 0, roughness: 0.29 },
+      label: { color: "#ffffff", metalness: 0, roughness: 0.15, clearcoat: 0.2 },
+      liquid: { color: "#ffb52e" },
+      inclusions: { color: "#ffffff", metalness: 0, roughness: 0.18 },
+    },
+  },
+  frontYaw: 0,
+};
+
+const pet1500FullAloeModel: LabModel = {
+  ...pet1500ShortAloeModel,
+  id: "pet-1500-juice",
+  name: "PET - 1.5 L · Full label",
+  description: "1500 mL · 1.5 litre PET bottle · full label · Aloe vera · blank label, ready for artwork.",
+  poster: withPosterVer("/models/bottles/pet-1500-juice-poster.webp"),
+  asset: {
+    ...pet1500ShortAloeModel.asset,
+    id: "pet-1500-juice",
+    name: "PET - 1.5 L · Full label",
+    src: `${pet1500FullManifest.src}?v=${pet1500FullManifest.sha256.slice(0, 12)}`,
+    poster: withPosterVer("/models/bottles/pet-1500-juice-poster.webp"),
+    materialSlots: pet1500FullManifest.materialSlots,
+  },
+  appearance: {
+    ...pet1500ShortAloeModel.appearance,
+    id: "pet-1500-full:aloe-blank",
+  },
+};
+
 const pet320NataModel = fromPublished("cojo-pet320-watermelon-3d", {
   id: "pet-nata-watermelon",
   name: "PET - 320 mL 1",
@@ -627,7 +682,8 @@ export const LAB_MODELS: LabModel[] = [
   pet500FullAloeModel,
   pet1000JuiceModel,
   findBatch("pet-1000-short-juice"),
-  findBatch("pet-1500-juice"),
+  pet1500ShortAloeModel,
+  pet1500FullAloeModel,
 
   // PP Bottles (500 mL → 2 L)
   findBatch("pp-500"),
@@ -842,11 +898,14 @@ export const LAB_MODEL_FAMILIES: LabModelFamily[] = [
   {
     id: "pet-1500-juice",
     name: "PET - 1.5 L",
-    description: "1500 mL · 1.5 litre PET bottle · Juice",
+    description: "1500 mL · 1.5 litre PET bottle · Aloe vera · short & full label",
     category: "pet",
     volume: "1.5 L",
-    poster: findBatch("pet-1500-juice").poster,
-    variants: [{ id: "standard", label: "Juice", order: 0, modelId: "pet-1500-juice", available: true }],
+    poster: pet1500ShortAloeModel.poster,
+    variants: [
+      { id: "aloe", label: "1.5L 1", order: 0, modelId: pet1500ShortAloeModel.id, available: true },
+      { id: "standard", label: "1.5L 2", order: 1, modelId: pet1500FullAloeModel.id, available: true },
+    ],
   },
 
   // --- PP BOTTLES ---
@@ -963,7 +1022,7 @@ export function getModelMaterialDefaults(id?: string | null): MaterialPreference
       ? "milk"
       : model.id === "basil-strawberry" || model.id === "glass-290-pullcap-basil"
         ? "basil-seed"
-        : model.id === "pet-aloe" || model.id === "pet-500-full-label"
+        : model.id === "pet-aloe" || model.id === "pet-500-full-label" || model.id === "pet-1500-short-label" || model.id === "pet-1500-juice"
           ? "aloe"
           : model.id === "pet-nata-watermelon" || model.id === "pet-320-full-nata"
             ? "nata-de-coco"

@@ -43,7 +43,7 @@ test('all nine authored PET collars have valid closed optical sleeves without so
   const { createPetRingTraceData } = load(filename);
   const { preparePetRingGeometry } = load(path.resolve(__dirname, '../../lib/viewer/pet-ring-geometry.ts'));
   await MeshoptDecoder.ready;
-  for (const file of ['pet-320-nata','pet-320-full-nata','pet-325-juice','pet-330-energy','pet-350-juice','pet-500-short-label','pet-500-full-label','pet-1000-juice','pet-1000-short-juice','pet-1500-juice']) {
+  for (const file of ['pet-320-nata','pet-320-full-nata','pet-325-juice','pet-330-energy','pet-350-juice','pet-500-short-label','pet-500-full-label','pet-1000-juice','pet-1000-short-juice','pet-1500-short-label','pet-1500-juice']) {
     const bytes = fs.readFileSync(path.resolve(__dirname, `../../public/models/bottles/${file}.glb`));
     const { document: doc, binary } = parseGlb(bytes);
     const decoded = doc.extensionsRequired?.includes('KHR_draco_mesh_compression') ? await decodeDracoPrimitives(bytes) : null;

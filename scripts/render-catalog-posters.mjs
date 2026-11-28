@@ -53,6 +53,7 @@ const POSTER_TARGETS = [
   { id: 'pet-500-full-label', out: 'models/bottles/pet-500-full-label-poster.webp' },
   { id: 'pet-1000-juice', out: 'models/bottles/pet-1000-juice-poster.webp' },
   { id: 'pet-1000-short-juice', out: 'models/bottles/pet-1000-short-juice-poster.webp' },
+  { id: 'pet-1500-short-label', out: 'models/bottles/pet-1500-short-label-poster.webp' },
   { id: 'pet-1500-juice', out: 'models/bottles/pet-1500-juice-poster.webp' },
 
   // PP Bottles (6)

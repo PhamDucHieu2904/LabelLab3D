@@ -1,0 +1,93 @@
+{
+  "id": "pet-1500-short-label",
+  "src": "/models/bottles/pet-1500-short-label.glb",
+  "sourceName": "Pet 1500ml model short label - Aloe Vera Pulp web.glb",
+  "sourceBytes": 5525608,
+  "sourceSha256": "0ec3162a2a3614c2d80af4ecc01cb3751c2116c6dc3118f1dbb3cb1aaed711b4",
+  "bytes": 687596,
+  "sha256": "72c2ba751fce60a2949256403248d80b4aa5b755139ed611e6395345a45b24bc",
+  "binarySha256": "a37f75f720715b87f6450ddd94f92c0c16991f2bc9ef35ec339c5b8dcc418579",
+  "sourceToMetres": 0.1,
+  "units": "metres",
+  "volumeMl": 1500,
+  "packaging": "pet",
+  "defaultLiquid": "aloe",
+  "materialSlots": {
+    "inclusions": [
+      "AloeVeraPulp"
+    ],
+    "body": [
+      "PlasticBody"
+    ],
+    "ring": [
+      "Ring"
+    ],
+    "cap": [
+      "PlasticCap"
+    ],
+    "label": [
+      "Label"
+    ],
+    "liquid": [
+      "Water"
+    ]
+  },
+  "compression": {
+    "extension": "KHR_draco_mesh_compression",
+    "encoder": "draco3dgltf 1.5.7",
+    "method": "edgebreaker",
+    "precisionBits": {
+      "POSITION": 18,
+      "NORMAL": 14,
+      "TEXCOORD_0": 16
+    },
+    "lossless": false,
+    "simplification": false,
+    "uncompressedBytes": 4795680,
+    "savedPercent": 85.66,
+    "triangles": 175720,
+    "topologyPreserved": true,
+    "maxPositionErrorMeters": 8.768418609013389e-7,
+    "maxNormalAngleDegrees": 0.031757281558252734,
+    "maxUvError": 0.00000762939453125,
+    "maxUvErrorAt4096px": 0.03125,
+    "sceneSha256": "9bea5b0ef971fd4f5fe5c1ba08d3d09c3cb8a1ccdcdb9f142738a4db15bc714c",
+    "decodedPositionHashes": [
+      "89055e207c3d292b5bafa65815b04072aaa3ca0df574968abf669eb139f32f9c",
+      "23192ad6dd76b3762d74850ee8cc04418139f3a16d0c50c8c2d02f963dc44e54",
+      "b10522293a74a92310409250000b05e52ed827e82c0c8e376b5d1dfa61dcc3ea",
+      "40d0530ab456981bd0326c0f312c4e60e398d7b951391fe65d89bfaeb1e806ba",
+      "bc3bf217dfcde9b02ffbc7ba79cfe7a08d1e73fa1835b2edc7e8e5135fa00931",
+      "57aa4ae8850c2f581aa0622c9e24db6b087da2420e486cfd3fd27e700514011c"
+    ],
+    "decodedAttributeHashes": [
+      {
+        "POSITION": "89055e207c3d292b5bafa65815b04072aaa3ca0df574968abf669eb139f32f9c",
+        "NORMAL": "13c48eb47a2e5bcb885b96b487661b101073662ed6906c8cf8d0430ce5f6936a"
+      },
+      {
+        "POSITION": "23192ad6dd76b3762d74850ee8cc04418139f3a16d0c50c8c2d02f963dc44e54",
+        "NORMAL": "590506856a26778a0800955f2c7888c7bccc513a8d3c3bb06942cc58d49827b7",
+        "TEXCOORD_0": "6b31f77ebde6afbded76959127f8881c8d44d25ef0f51e2e05a3b1a4b8b50aee"
+      },
+      {
+        "POSITION": "b10522293a74a92310409250000b05e52ed827e82c0c8e376b5d1dfa61dcc3ea",
+        "NORMAL": "3f713e3d630f6f9b0eddac4cc2c5aea484572ff3df63b1bc3f039904c2a0da93",
+        "TEXCOORD_0": "1407b11947a234190ffd6be9c5e5049e7c1f06818eaea81db2be453904482faa"
+      },
+      {
+        "POSITION": "40d0530ab456981bd0326c0f312c4e60e398d7b951391fe65d89bfaeb1e806ba",
+        "NORMAL": "5646d20f5951c023c341e8b5909330d6abcd83474725a25286d8411d0b32ebca"
+      },
+      {
+        "POSITION": "bc3bf217dfcde9b02ffbc7ba79cfe7a08d1e73fa1835b2edc7e8e5135fa00931",
+        "NORMAL": "21e49bae36fdd7227fc5c108550920aaa4dc6f320d11a9ec514228fe3426ee05",
+        "TEXCOORD_0": "662c8f61daa86d2b9aaac33bebc7d50389f4657db1ed4f27894f35ed5e3983de"
+      },
+      {
+        "POSITION": "57aa4ae8850c2f581aa0622c9e24db6b087da2420e486cfd3fd27e700514011c",
+        "NORMAL": "1784d1db90a9bf435acab9c320496e813ad8c0294daf8c2355aacc567e2384bd"
+      }
+    ]
+  }
+}

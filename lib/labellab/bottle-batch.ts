@@ -1,6 +1,5 @@
 import type { LabModel } from './catalog';
 import type { MaterialPreferences } from './preferences';
-import pet1500 from '../../public/models/bottles/pet-1500-juice.manifest.json';
 import pet325 from '../../public/models/bottles/pet-325-juice.manifest.json';
 import pet1000Short from '../../public/models/bottles/pet-1000-short-juice.manifest.json';
 import pp1250 from '../../public/models/bottles/pp-1250.manifest.json';
@@ -13,7 +12,6 @@ import pp500Variant2 from '../../public/models/bottles/pp-500-2.manifest.json';
 const definitions = [
   { manifest: pet325, name: 'PET - 325 mL', volume: '325 mL', packaging: 'pet' },
   { manifest: pet1000Short, name: 'PET - 1 L 2', volume: '1 L', packaging: 'pet' },
-  { manifest: pet1500, name: 'PET - 1.5 L', volume: '1.5 L', packaging: 'pet' },
   { manifest: pp500, name: 'PP - 500 mL 1', volume: '500 mL', packaging: 'pp' },
   { manifest: pp500Variant2, name: 'PP - 500 mL 2', volume: '500 mL', packaging: 'pp' },
   { manifest: pp1000, name: 'PP - 1 L 1', volume: '1 L', packaging: 'pp' },

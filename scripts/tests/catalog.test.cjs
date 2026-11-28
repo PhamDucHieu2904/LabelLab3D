@@ -214,7 +214,7 @@ test('all models use blank labels, unified category-volume names, grouped order,
   }
 });
 
-for (const [id,volume,type,color] of [['pet-320-full-nata',320,'nata-de-coco','#ff4430'],['pet-500-full-label',500,'aloe','#ffb52e'],['pet-1000-juice',1000,'fruit-juice','#E8B64F']]) {
+for (const [id,volume,type,color] of [['pet-320-full-nata',320,'nata-de-coco','#ff4430'],['pet-500-full-label',500,'aloe','#ffb52e'],['pet-1000-juice',1000,'fruit-juice','#E8B64F'],['pet-1500-short-label',1500,'aloe','#ffb52e'],['pet-1500-juice',1500,'aloe','#ffb52e']]) {
   test(`${id}: semantic parts, material defaults and saved projects use the new Draco model`, () => {
     const {parsePreferences}=loadSource(path.join(root,'lib/labellab/preferences'));
     const {getModelMaterialDefaults}=loadSource(path.join(root,'lib/labellab/catalog'));
@@ -222,7 +222,7 @@ for (const [id,volume,type,color] of [['pet-320-full-nata',320,'nata-de-coco','#
     assert.ok(model,'model must be registered');
     assert.equal(model.asset.volumeMl,volume);
     assert.equal(model.category,'pet');
-    assert.equal(model.asset.cameraFraming, id === 'pet-1000-juice' ? 'bounds' : undefined,
+    assert.equal(model.asset.cameraFraming, id === 'pet-1000-juice' || id === 'pet-1500-short-label' || id === 'pet-1500-juice' ? 'bounds' : undefined,
       'full-label index 1 uses the shared index-0 framing path');
     assert.equal(parsePreferences({modelId:id}).modelId,id);
     const defaults=getModelMaterialDefaults(id), restored=parsePreferences({modelId:id});
@@ -232,7 +232,7 @@ for (const [id,volume,type,color] of [['pet-320-full-nata',320,'nata-de-coco','#
     assert.equal(restored.capColor,defaults.capColor); assert.equal(restored.liquidCustomized,defaults.liquidCustomized);
     const bytes=fs.readFileSync(path.join(root,'public',model.asset.src.split('?')[0]));
     const d=JSON.parse(bytes.subarray(20,20+bytes.readUInt32LE(12)));
-    for(const role of ['body','cap','label','liquid',...(volume===320||volume===500?['inclusions']:[])]) {
+    for(const role of ['body','cap','label','liquid',...(volume===320||volume===500||volume===1500?['inclusions']:[])]) {
       assert.ok(model.asset.materialSlots[role].length>0);
       for(const name of model.asset.materialSlots[role]) assert.ok(d.materials.some(m=>m.name===name));
     }
@@ -248,6 +248,13 @@ for (const [id,volume,type,color] of [['pet-320-full-nata',320,'nata-de-coco','#
         ['Aloe',0,'pet-aloe'],['Full label',1,'pet-500-full-label'],
       ]);
       assert.equal(getDefaultFamilyVariant(family).modelId,'pet-aloe');
+    } else if(volume===1500) {
+      const family=getLabModelFamily(id);
+      assert.equal(family,getLabModelFamily('pet-1500-juice'));
+      assert.deepEqual(getOrderedFamilyVariants(family).map(v=>[v.label,v.order,v.modelId]),[
+        ['1.5L 1',0,'pet-1500-short-label'],['1.5L 2',1,'pet-1500-juice'],
+      ]);
+      assert.equal(getDefaultFamilyVariant(family).modelId,'pet-1500-short-label');
     } else assert.equal(getLabModelFamily(id),getLabModelFamily('pet-nata-watermelon'));
   });
 }
@@ -372,7 +379,7 @@ test(`${modelId} preserves supplied geometry/UVs and restores Milk coffee / Latt
 }
 
 
-for(const [id,volume,category,liquid] of [['pet-1500-juice',1500,'pet',true],['pet-325-juice',325,'pet',true],['pet-1000-short-juice',1000,'pet',true],['pp-2000',2000,'pp',false],['pp-1250',1250,'pp',false],['pp-1000',1000,'pp',false],['pp-1000-2',1000,'pp',false],['pp-500',500,'pp',false],['pp-500-2',500,'pp',false]]) {
+for(const [id,volume,category,liquid] of [['pet-325-juice',325,'pet',true],['pet-1000-short-juice',1000,'pet',true],['pp-2000',2000,'pp',false],['pp-1250',1250,'pp',false],['pp-1000',1000,'pp',false],['pp-1000-2',1000,'pp',false],['pp-500',500,'pp',false],['pp-500-2',500,'pp',false]]) {
  test(`${id}: batch library persists accurate packaging and supported Properties`,()=>{
   const {parsePreferences,pickMaterialPreferences}=loadSource(path.join(root,'lib/labellab/preferences'));
   const {getModelMaterialDefaults}=loadSource(path.join(root,'lib/labellab/catalog'));
@@ -407,7 +414,7 @@ test('PET ring materials are exposed through an independent semantic slot', () =
     ['pet-aloe', 'Ring'], ['pet-500-full-label', 'Ring'], ['pet-nata-watermelon', 'pet-ring'],
     ['pet-320-full-nata', 'Ring'], ['pet-350-juice', 'Ring'],
     ['pet-330-energy', 'Ring'], ['pet-1000-juice', 'Ring'],
-    ['pet-1500-juice', 'Ring'], ['pet-325-juice', 'Ring'],
+    ['pet-1500-short-label', 'Ring'], ['pet-1500-juice', 'Ring'], ['pet-325-juice', 'Ring'],
     ['pet-1000-short-juice', 'Ring'],
   ];
   for (const [id, name] of namedRings) {

@@ -64,7 +64,7 @@ test('missing identifiers fall back safely and returned settings cannot mutate p
 });
 
 test('legacy native models infer matching optics and a first slider edit retains the remaining look', () => {
-  for (const [modelId, typeId] of [['pet-nata-watermelon', 'nata-de-coco'], ['pet-aloe', 'aloe'], ['pet-500-full-label', 'aloe'],
+  for (const [modelId, typeId] of [['pet-nata-watermelon', 'nata-de-coco'], ['pet-aloe', 'aloe'], ['pet-500-full-label', 'aloe'], ['pet-1500-short-label', 'aloe'], ['pet-1500-juice', 'aloe'],
     ['basil-strawberry', 'basil-seed'], ['glass-290-chia', 'chia'], ['glass-290-milk', 'milk'], ['can-320', 'fruit-juice']]) {
     const restored = parsePreferences({ modelId, liquidColor: '#123456' });
     const optics = getLiquidType(typeId).settings;

@@ -85,6 +85,7 @@ export const KNOWN_BEVERAGE_FOOTPRINTS_MM: Readonly<Record<string, BeverageFootp
   'pet-350-juice': { diameterXMm: 61.5, diameterZMm: 61.5, heightMm: 175.0 },
   'pet-1000-juice': { diameterXMm: 78.0, diameterZMm: 78.0, heightMm: 266.0 },
   'pet-1000-short-juice': { diameterXMm: 78.0, diameterZMm: 78.0, heightMm: 266.0 },
+  'pet-1500-short-label': { diameterXMm: 88.0, diameterZMm: 88.0, heightMm: 308.0 },
   'pet-1500-juice': { diameterXMm: 88.0, diameterZMm: 88.0, heightMm: 308.0 },
 
   'pp-500': { diameterXMm: 65.0, diameterZMm: 65.0, heightMm: 194.0 },

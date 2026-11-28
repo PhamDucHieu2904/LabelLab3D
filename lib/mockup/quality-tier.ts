@@ -99,6 +99,7 @@ const HEAVY_ASSET_IDS = new Set([
   'pet-aloe',
   'pet-320-full-nata',
   'pet-nata-watermelon',
+  'pet-1500-short-label',
   'pet-1500-juice',
 ]);
 

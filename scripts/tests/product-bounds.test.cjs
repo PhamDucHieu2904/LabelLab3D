@@ -80,3 +80,16 @@ test('500 ml full label matches index 0 physical footprint and animated camera s
     assert.ok(Math.abs(distances[1] / distances[0] - 1) < .01, `same animated size at aspect ${aspect}`);
   }
 });
+
+test('1500 ml short-label Aloe matches 1500 ml Juice physical footprint and animated camera scale', async () => {
+  const models = await Promise.all(['pet-1500-short-label', 'pet-1500-juice'].map(sceneFromAsset));
+  const bounds = models.map(model => measureProductBounds(model));
+  const sizes = bounds.map(box => box.getSize(new THREE.Vector3()));
+  assert.ok(Math.abs(sizes[0].y - sizes[1].y) < .001, '1500 ml heights match within 1 mm');
+  assert.ok(Math.abs(sizes[0].x - sizes[1].x) < .002, '1500 ml widths match within 2 mm');
+  const pose = new THREE.Quaternion().setFromEuler(new THREE.Euler(.1, .2, -.1));
+  for (const aspect of [1, 4 / 5, 9 / 16, 16 / 9]) {
+    const distances = bounds.map(box => fitMockupCamera(mockupShowcaseBounds(box, pose), new THREE.Vector3(0, 0, 1), aspect, 27));
+    assert.ok(Math.abs(distances[1] / distances[0] - 1) < .01, `same animated size at aspect ${aspect}`);
+  }
+});

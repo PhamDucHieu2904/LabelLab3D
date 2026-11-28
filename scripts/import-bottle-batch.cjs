@@ -6,7 +6,6 @@ const {compressDraco}=require('./lib/draco-bottle-compression.cjs');
 
 const sourceRoot='D:/3D model/Model Bottle Can/Blender Model 1/';
 const BATCH_BOTTLES=[
-  {id:'pet-1500-juice',source:sourceRoot+'Pet 1500ml model full label web.glb',volumeMl:1500,packaging:'pet',slots:{body:['PlasticBody'],ring:['Ring'],cap:['PlasticCap'],label:['Label'],liquid:['Water']}},
   {id:'pet-325-juice',source:'D:/3D model/325mlModel web.glb',volumeMl:325,packaging:'pet',slots:{body:['PlasticBody'],ring:['Ring'],cap:['Cap'],label:['Label'],liquid:['Water']}},
   {id:'pet-1000-short-juice',source:sourceRoot+'Pet 1L bottle model short web.glb',volumeMl:1000,packaging:'pet',splitWater:true,slots:{body:['Body'],cap:['Cap'],label:['Label'],liquid:['Water']}},
   {id:'pp-2000',source:sourceRoot+'PP 2L model web.glb',volumeMl:2000,packaging:'pp',slots:{body:['Body'],cap:['Cap'],label:['Label']},encodingMethod:'sequential'},

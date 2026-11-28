@@ -22,6 +22,7 @@ export const ARTWORK_DIELINES: Readonly<Partial<Record<string, ArtworkDieline>>>
   'pet-500-full-label': { width: 220, height: 153, unit: 'mm' },
   'pet-1000-juice': { width: 268, height: 217, unit: 'mm' },
   'pet-1000-short-juice': { width: 296, height: 190, unit: 'mm' },
+  'pet-1500-short-label': { width: 296, height: 97, unit: 'mm' },
   'pet-1500-juice': { width: 296, height: 257, unit: 'mm' },
   'pet-325-juice': { width: 192, height: 158, unit: 'mm' },
   'pet-330-energy': { width: 183, height: 77, unit: 'mm' },
@@ -51,9 +52,7 @@ export const ARTWORK_DIELINES: Readonly<Partial<Record<string, ArtworkDieline>>>
 };
 
 /** Dielines recorded for models that are not in the catalog yet. */
-export const PENDING_ARTWORK_DIELINES: Readonly<Partial<Record<string, ArtworkDieline>>> = {
-  'pet-1500-short-label': { width: 296, height: 97, unit: 'mm' },
-};
+export const PENDING_ARTWORK_DIELINES: Readonly<Partial<Record<string, ArtworkDieline>>> = {};
 
 const MIN = 0.01;
 const finite=(v:number,f=0)=>Number.isFinite(v)?v:f;

@@ -34,7 +34,7 @@ test('Draco retains face winding and UV seams through the shipped decoder', asyn
   await assert.rejects(compareDraco(writeGlb(moved,source.binary),packed.bytes),/scene/i);
 });
 
-for(const [id,triangles,budget] of [['pet-320-full-nata',214240,1240124],['pet-500-full-label',272560,1200000],['pet-1000-juice',86548,1000000]]) {
+for(const [id,triangles,budget] of [['pet-320-full-nata',214240,1240124],['pet-500-full-label',272560,1200000],['pet-1000-juice',86548,1000000],['pet-1500-short-label',175720,1000000],['pet-1500-juice',187080,1000000]]) {
   test(`${id}: real Draco asset keeps all triangles within the download and precision budgets`, async () => {
     const file=path.resolve(__dirname,`../../public/models/bottles/${id}.glb`);
     assert.ok(fs.existsSync(file),'compressed bottle must exist');
