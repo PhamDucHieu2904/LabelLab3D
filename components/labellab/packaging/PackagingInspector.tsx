@@ -11,6 +11,7 @@ import {
   ImagePlus,
   Layers,
   Milk,
+  Package,
   RotateCcw,
   Ruler,
   Shuffle,
@@ -36,11 +37,21 @@ import {
   PACKAGING_FINISH_PRESETS,
 } from "@/lib/packaging-cad/materials/paper-presets";
 import {
+  canPackRetailBoxes,
   computeBottlePackLayout,
+  DEFAULT_PACKABLE_BOX_TEMPLATE_ID,
   getBeverageFootprintMm,
+  getPackableRetailBoxTemplates,
+  getRetailBoxFootprintMm,
+  isPackableRetailBoxTemplate,
   PACK_GRID_PRESETS,
+  snapPackedBoxYawDeg,
   type BeverageFootprintMm,
 } from "@/lib/packaging-cad/pack-layout";
+import {
+  createDefaultPackagingParams,
+  getPackagingTemplate,
+} from "@/lib/packaging-cad/templates/registry";
 import { getLabModel, LAB_MODELS } from "@/lib/labellab/catalog";
 import type { CustomProjectRecord } from "@/lib/labellab/project-store";
 import { useLocale } from "../LocaleProvider";
@@ -56,6 +67,9 @@ interface Props {
   activeBeverageModelId: string;
   hasActiveBeverageArtwork: boolean;
   savedBottleProjects: readonly CustomProjectRecord[];
+  savedRetailBoxProjects?: readonly CustomProjectRecord[];
+  loadedPackedBoxName?: string;
+  loadedPackedBoxParams?: PackagingParams;
   projectThumbnails: Record<string, string>;
   hasPackLabelOverride: boolean;
   hasCustomFinishMask?: boolean;
@@ -85,6 +99,9 @@ export default function PackagingInspector({
   activeBeverageModelId,
   hasActiveBeverageArtwork,
   savedBottleProjects,
+  savedRetailBoxProjects = [],
+  loadedPackedBoxName,
+  loadedPackedBoxParams,
   projectThumbnails,
   hasPackLabelOverride,
   hasCustomFinishMask = false,
@@ -110,8 +127,16 @@ export default function PackagingInspector({
   const activeFinishPreset = getPackagingFinishPreset(params.finishMode);
   const showSection = (section: PackagingInspectorSection) =>
     !activeSection || activeSection === section;
+  const supportsBoxPacking = canPackRetailBoxes(template.id);
+  const isPackingBox = bottlePack.itemKind === "box" && supportsBoxPacking;
+  const packableRetailBoxTemplates = getPackableRetailBoxTemplates();
+  const totalSavedProjectsCount =
+    savedBottleProjects.length + (supportsBoxPacking ? savedRetailBoxProjects.length : 0);
+
   const [packSourceTab, setPackSourceTab] = useState<"projects" | "catalog">(
-    bottlePack.customProjectId ? "projects" : "catalog",
+    bottlePack.customProjectId || (supportsBoxPacking && bottlePack.boxProjectId)
+      ? "projects"
+      : "catalog",
   );
 
   const packModelGroups: ReadonlyArray<{
@@ -124,21 +149,54 @@ export default function PackagingInspector({
     { label: pkg.groupPp, category: "pp" },
   ];
 
-  const activeCustomProject = bottlePack.customProjectId
+  const activeCustomProject = !isPackingBox && bottlePack.customProjectId
     ? savedBottleProjects.find((p) => p.id === bottlePack.customProjectId)
     : undefined;
+  const activeCustomBoxProject =
+    isPackingBox && bottlePack.boxProjectId
+      ? savedRetailBoxProjects.find((p) => p.id === bottlePack.boxProjectId)
+      : undefined;
+  const activeBoxTemplateId =
+    activeCustomBoxProject?.packagingParams?.templateId ??
+    (loadedPackedBoxParams && isPackableRetailBoxTemplate(loadedPackedBoxParams.templateId)
+      ? loadedPackedBoxParams.templateId
+      : bottlePack.boxTemplateId && isPackableRetailBoxTemplate(bottlePack.boxTemplateId)
+        ? bottlePack.boxTemplateId
+        : DEFAULT_PACKABLE_BOX_TEMPLATE_ID);
+  const activeBoxTemplate = getPackagingTemplate(activeBoxTemplateId);
+  const activeBoxParams =
+    activeCustomBoxProject?.packagingParams ??
+    loadedPackedBoxParams ??
+    createDefaultPackagingParams(activeBoxTemplateId);
+
   const selectedBottle = getLabModel(activeCustomProject?.settings.modelId ?? bottlePack.modelId);
   const bottleFootprint =
     measuredFootprints[selectedBottle.id] ??
     getBeverageFootprintMm(selectedBottle.id, selectedBottle.asset.volumeMl);
+  const activeItemFootprint = isPackingBox
+    ? getRetailBoxFootprintMm(activeBoxParams)
+    : bottleFootprint;
   const packLayout = bottlePack.enabled
-    ? computeBottlePackLayout(solved, bottleFootprint, bottlePack)
+    ? computeBottlePackLayout(solved, activeItemFootprint, bottlePack)
     : null;
-  const syncedWithActiveStudio = !activeCustomProject && selectedBottle.id === activeBeverageModelId;
-  const selectValue = activeCustomProject ? `project:${activeCustomProject.id}` : selectedBottle.id;
-  const activeThumb =
-    (activeCustomProject ? projectThumbnails[activeCustomProject.id] : undefined) ??
-    selectedBottle.poster;
+  const syncedWithActiveStudio =
+    !isPackingBox && !activeCustomProject && selectedBottle.id === activeBeverageModelId;
+  const selectValue = isPackingBox
+    ? activeCustomBoxProject
+      ? `box-project:${activeCustomBoxProject.id}`
+      : `box-template:${activeBoxTemplateId}`
+    : activeCustomProject
+      ? `project:${activeCustomProject.id}`
+      : selectedBottle.id;
+  const activeThumb = isPackingBox
+    ? activeCustomBoxProject
+      ? projectThumbnails[activeCustomBoxProject.id]
+      : undefined
+    : (activeCustomProject ? projectThumbnails[activeCustomProject.id] : undefined) ??
+      selectedBottle.poster;
+  const activeBoxDisplayName =
+    activeCustomBoxProject?.name ?? loadedPackedBoxName ?? activeBoxTemplate.shortName;
+  const snappedBoxYaw = snapPackedBoxYawDeg(bottlePack.facingYawDeg);
 
   const selectMaterial = (preset: BoardMaterialPreset) => {
     onChange({
@@ -358,11 +416,13 @@ export default function PackagingInspector({
 
             {!bottlePack.enabled ? (
               <p style={{ margin: 0, fontSize: 10.5, lineHeight: 1.45, color: "var(--pkg-muted)" }}>
-                {pkg.packIntro(template.shortName.toLowerCase())}
+                {supportsBoxPacking
+                  ? pkg.packIntroWithBoxes(template.shortName.toLowerCase())
+                  : pkg.packIntro(template.shortName.toLowerCase())}
               </p>
             ) : (
               <>
-                {/* Source Tabs: Saved Custom Projects vs Standard Beverage Catalog */}
+                {/* Source Tabs: Saved Custom Projects vs Standard Catalog */}
                 <div className={styles.comboSourceSwitch} role="group" aria-label={pkg.packTitle}>
                   <button
                     type="button"
@@ -371,7 +431,7 @@ export default function PackagingInspector({
                     onClick={() => setPackSourceTab("projects")}
                   >
                     <BookmarkCheck size={12} aria-hidden="true" />
-                    <span>{pkg.myProjectsTab(savedBottleProjects.length)}</span>
+                    <span>{pkg.myProjectsTab(totalSavedProjectsCount)}</span>
                   </button>
                   <button
                     type="button"
@@ -384,44 +444,138 @@ export default function PackagingInspector({
                 </div>
 
                 {packSourceTab === "projects" ? (
-                  savedBottleProjects.length > 0 ? (
+                  totalSavedProjectsCount > 0 ? (
                     <div className={styles.customProjectList} role="group" aria-label={pkg.myCustomProjectsGroup}>
-                      {savedBottleProjects.map((project) => {
-                        const base = getLabModel(project.settings.modelId);
-                        const active = activeCustomProject?.id === project.id;
-                        const thumb = projectThumbnails[project.id] || base.poster;
-                        return (
-                          <button
-                            key={project.id}
-                            type="button"
-                            className={`${styles.customProjectCard} ${active ? styles.customProjectCardActive : ""}`}
-                            aria-pressed={active}
-                            disabled={disabled}
-                            onClick={() =>
-                              onChangeBottlePack({
-                                customProjectId: project.id,
-                                modelId: project.settings.modelId,
-                                packLabelArtworkId: undefined,
-                              })
-                            }
+                      {supportsBoxPacking && savedRetailBoxProjects.length > 0 && (
+                        <>
+                          <div
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              letterSpacing: "0.02em",
+                              color: "var(--pkg-muted)",
+                              padding: "2px 2px 0",
+                            }}
                           >
-                            {thumb && <img src={thumb} alt="" className={styles.customProjectThumb} />}
-                            <span className={styles.customProjectMeta}>
-                              <strong>{project.name}</strong>
-                              <small>
-                                {base.name} · {base.volume}
-                              </small>
-                              <span className={styles.customProjectDots}>
-                                <i title={project.settings.liquidColor} style={{ backgroundColor: project.settings.liquidColor }} />
-                                <i title={project.settings.capColor} style={{ backgroundColor: project.settings.capColor }} />
-                                <i title={project.settings.bodyColor} style={{ backgroundColor: project.settings.bodyColor }} />
-                                {project.artworkBlob && <span className={styles.customProjectTag}>{pkg.customLabelTag}</span>}
-                              </span>
-                            </span>
-                            {active && <Check size={14} color="#2563eb" aria-hidden="true" />}
-                          </button>
-                        );
-                      })}
+                            {pkg.savedRetailBoxesGroup}
+                          </div>
+                          {savedRetailBoxProjects.map((project) => {
+                            const pParams = project.packagingParams;
+                            if (!pParams) return null;
+                            const boxTpl = getPackagingTemplate(pParams.templateId);
+                            const active = isPackingBox && activeCustomBoxProject?.id === project.id;
+                            const thumb = projectThumbnails[project.id];
+                            return (
+                              <button
+                                key={project.id}
+                                type="button"
+                                className={`${styles.customProjectCard} ${active ? styles.customProjectCardActive : ""}`}
+                                aria-pressed={active}
+                                disabled={disabled}
+                                onClick={() =>
+                                  onChangeBottlePack({
+                                    itemKind: "box",
+                                    boxProjectId: project.id,
+                                    boxTemplateId: pParams.templateId,
+                                    customProjectId: undefined,
+                                    packLabelArtworkId: undefined,
+                                    facingYawDeg: 0,
+                                  })
+                                }
+                              >
+                                {thumb ? (
+                                  <img src={thumb} alt="" className={styles.customProjectThumb} />
+                                ) : (
+                                  <span
+                                    className={styles.customProjectThumb}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      color: "var(--pkg-muted)",
+                                    }}
+                                  >
+                                    <Package size={16} aria-hidden="true" />
+                                  </span>
+                                )}
+                                <span className={styles.customProjectMeta}>
+                                  <strong>{project.name}</strong>
+                                  <small>
+                                    {boxTpl.code} · {Math.round(pParams.lengthMm)}×{Math.round(pParams.widthMm)}×
+                                    {Math.round(pParams.heightMm)} mm
+                                  </small>
+                                  <span className={styles.customProjectDots}>
+                                    <i title={pParams.outsideColor} style={{ backgroundColor: pParams.outsideColor }} />
+                                    <i title={pParams.insideColor} style={{ backgroundColor: pParams.insideColor }} />
+                                    {project.packagingArtwork && (
+                                      <span className={styles.customProjectTag}>{pkg.boxArtworkTag}</span>
+                                    )}
+                                  </span>
+                                </span>
+                                {active && <Check size={14} color="#2563eb" aria-hidden="true" />}
+                              </button>
+                            );
+                          })}
+                        </>
+                      )}
+
+                      {savedBottleProjects.length > 0 && (
+                        <>
+                          {supportsBoxPacking && savedRetailBoxProjects.length > 0 && (
+                            <div
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 700,
+                                letterSpacing: "0.02em",
+                                color: "var(--pkg-muted)",
+                                padding: "4px 2px 0",
+                              }}
+                            >
+                              {pkg.savedBottlesGroup}
+                            </div>
+                          )}
+                          {savedBottleProjects.map((project) => {
+                            const base = getLabModel(project.settings.modelId);
+                            const active = !isPackingBox && activeCustomProject?.id === project.id;
+                            const thumb = projectThumbnails[project.id] || base.poster;
+                            return (
+                              <button
+                                key={project.id}
+                                type="button"
+                                className={`${styles.customProjectCard} ${active ? styles.customProjectCardActive : ""}`}
+                                aria-pressed={active}
+                                disabled={disabled}
+                                onClick={() =>
+                                  onChangeBottlePack({
+                                    itemKind: "beverage",
+                                    customProjectId: project.id,
+                                    boxProjectId: undefined,
+                                    boxTemplateId: undefined,
+                                    modelId: project.settings.modelId,
+                                    packLabelArtworkId: undefined,
+                                  })
+                                }
+                              >
+                                {thumb && <img src={thumb} alt="" className={styles.customProjectThumb} />}
+                                <span className={styles.customProjectMeta}>
+                                  <strong>{project.name}</strong>
+                                  <small>
+                                    {base.name} · {base.volume}
+                                  </small>
+                                  <span className={styles.customProjectDots}>
+                                    <i title={project.settings.liquidColor} style={{ backgroundColor: project.settings.liquidColor }} />
+                                    <i title={project.settings.capColor} style={{ backgroundColor: project.settings.capColor }} />
+                                    <i title={project.settings.bodyColor} style={{ backgroundColor: project.settings.bodyColor }} />
+                                    {project.artworkBlob && <span className={styles.customProjectTag}>{pkg.customLabelTag}</span>}
+                                  </span>
+                                </span>
+                                {active && <Check size={14} color="#2563eb" aria-hidden="true" />}
+                              </button>
+                            );
+                          })}
+                        </>
+                      )}
+
                       <button
                         type="button"
                         className={styles.dielineExportBtn}
@@ -438,7 +592,7 @@ export default function PackagingInspector({
                         <strong>{pkg.noCustomProjectsHighlight1}</strong>
                         {pkg.noCustomProjectsMid}
                         <strong>{pkg.noCustomProjectsHighlight2}</strong>
-                        {pkg.noCustomProjectsTail}
+                        {supportsBoxPacking ? pkg.noCustomProjectsTailOuter : pkg.noCustomProjectsTail}
                       </span>
                       <button
                         type="button"
@@ -452,13 +606,25 @@ export default function PackagingInspector({
                   )
                 ) : (
                   <div className={styles.comboModelRow}>
-                    {activeThumb && (
+                    {activeThumb ? (
                       <img
                         src={activeThumb}
                         alt=""
                         className={styles.comboModelThumb}
                       />
-                    )}
+                    ) : isPackingBox ? (
+                      <span
+                        className={styles.comboModelThumb}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "var(--pkg-muted)",
+                        }}
+                      >
+                        <Package size={18} aria-hidden="true" />
+                      </span>
+                    ) : null}
                     <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
                       <select
                         className={styles.comboSelect}
@@ -467,12 +633,42 @@ export default function PackagingInspector({
                         value={selectValue}
                         onChange={(e) => {
                           const raw = e.target.value;
+                          if (raw.startsWith("box-project:")) {
+                            const pid = raw.slice("box-project:".length);
+                            const found = savedRetailBoxProjects.find((p) => p.id === pid);
+                            if (found?.packagingParams) {
+                              onChangeBottlePack({
+                                itemKind: "box",
+                                boxProjectId: found.id,
+                                boxTemplateId: found.packagingParams.templateId,
+                                customProjectId: undefined,
+                                packLabelArtworkId: undefined,
+                                facingYawDeg: 0,
+                              });
+                              return;
+                            }
+                          }
+                          if (raw.startsWith("box-template:")) {
+                            const tid = raw.slice("box-template:".length);
+                            onChangeBottlePack({
+                              itemKind: "box",
+                              boxTemplateId: tid,
+                              boxProjectId: undefined,
+                              customProjectId: undefined,
+                              packLabelArtworkId: undefined,
+                              facingYawDeg: 0,
+                            });
+                            return;
+                          }
                           if (raw.startsWith("project:")) {
                             const pid = raw.slice("project:".length);
                             const found = savedBottleProjects.find((p) => p.id === pid);
                             if (found) {
                               onChangeBottlePack({
+                                itemKind: "beverage",
                                 customProjectId: found.id,
+                                boxProjectId: undefined,
+                                boxTemplateId: undefined,
                                 modelId: found.settings.modelId,
                                 packLabelArtworkId: undefined,
                               });
@@ -480,12 +676,29 @@ export default function PackagingInspector({
                             }
                           }
                           onChangeBottlePack({
+                            itemKind: "beverage",
                             customProjectId: undefined,
+                            boxProjectId: undefined,
+                            boxTemplateId: undefined,
                             modelId: raw,
                             packLabelArtworkId: undefined,
                           });
                         }}
                       >
+                        {supportsBoxPacking && savedRetailBoxProjects.length > 0 && (
+                          <optgroup label={pkg.savedRetailBoxesGroup}>
+                            {savedRetailBoxProjects.map((project) => {
+                              const p = project.packagingParams;
+                              if (!p) return null;
+                              const bt = getPackagingTemplate(p.templateId);
+                              return (
+                                <option key={project.id} value={`box-project:${project.id}`}>
+                                  ★ {project.name} ({bt.code} · {Math.round(p.lengthMm)}×{Math.round(p.widthMm)})
+                                </option>
+                              );
+                            })}
+                          </optgroup>
+                        )}
                         {savedBottleProjects.length > 0 && (
                           <optgroup label={pkg.myCustomProjectsGroup}>
                             {savedBottleProjects.map((project) => {
@@ -496,6 +709,16 @@ export default function PackagingInspector({
                                 </option>
                               );
                             })}
+                          </optgroup>
+                        )}
+                        {supportsBoxPacking && (
+                          <optgroup label={pkg.groupRetailBoxes}>
+                            {packableRetailBoxTemplates.map((bt) => (
+                              <option key={bt.id} value={`box-template:${bt.id}`}>
+                                {bt.shortName} ({bt.code} · {bt.defaultDimensions.length}×{bt.defaultDimensions.width}×
+                                {bt.defaultDimensions.height})
+                              </option>
+                            ))}
                           </optgroup>
                         )}
                         {packModelGroups.map((group) => {
@@ -514,9 +737,17 @@ export default function PackagingInspector({
                       </select>
                       <div className={styles.comboMetaLine}>
                         <span>
-                          Ø {Math.round(bottleFootprint.diameterXMm)} × {Math.round(bottleFootprint.heightMm)} mm
+                          {isPackingBox
+                            ? `${Math.round(activeItemFootprint.diameterXMm)} × ${Math.round(activeItemFootprint.diameterZMm)} × ${Math.round(activeItemFootprint.heightMm)} mm`
+                            : `Ø ${Math.round(bottleFootprint.diameterXMm)} × ${Math.round(bottleFootprint.heightMm)} mm`}
                         </span>
-                        {activeCustomProject ? (
+                        {isPackingBox ? (
+                          <span className={styles.comboSyncTag}>
+                            {activeCustomBoxProject
+                              ? pkg.customTag(activeCustomBoxProject.name)
+                              : activeBoxTemplate.code}
+                          </span>
+                        ) : activeCustomProject ? (
                           <span className={styles.comboSyncTag}>{pkg.customTag(activeCustomProject.name)}</span>
                         ) : syncedWithActiveStudio ? (
                           <span className={styles.comboSyncTag}>
@@ -528,39 +759,49 @@ export default function PackagingInspector({
                   </div>
                 )}
 
-                {packSourceTab === "projects" && activeCustomProject && (
+                {packSourceTab === "projects" && (activeCustomProject || activeCustomBoxProject) && (
                   <div className={styles.comboMetaLine}>
                     <span>
-                      Ø {Math.round(bottleFootprint.diameterXMm)} × {Math.round(bottleFootprint.heightMm)} mm
+                      {isPackingBox
+                        ? `${Math.round(activeItemFootprint.diameterXMm)} × ${Math.round(activeItemFootprint.diameterZMm)} × ${Math.round(activeItemFootprint.heightMm)} mm`
+                        : `Ø ${Math.round(bottleFootprint.diameterXMm)} × ${Math.round(bottleFootprint.heightMm)} mm`}
                     </span>
-                    <span className={styles.comboSyncTag}>{pkg.activeTag(activeCustomProject.name)}</span>
+                    <span className={styles.comboSyncTag}>
+                      {pkg.activeTag(
+                        isPackingBox
+                          ? activeBoxDisplayName
+                          : activeCustomProject!.name,
+                      )}
+                    </span>
                   </div>
                 )}
 
-                {/* Quick Replace Bottle Label for ALL bottles in tray */}
-                <div className={styles.comboLabelRow}>
-                  <button
-                    type="button"
-                    className={styles.comboLabelBtn}
-                    disabled={disabled}
-                    onClick={onOpenBottleLabelEditor}
-                    title={pkg.replaceAllLabelsTitle}
-                  >
-                    <ImagePlus size={13} aria-hidden="true" />
-                    <span>{pkg.replaceAllLabels(bottlePack.cols * bottlePack.rows)}</span>
-                  </button>
-                  {hasPackLabelOverride && (
+                {/* Quick Replace Bottle Label for ALL bottles in tray (beverage mode only) */}
+                {!isPackingBox && (
+                  <div className={styles.comboLabelRow}>
                     <button
                       type="button"
-                      className={styles.comboResetLink}
+                      className={styles.comboLabelBtn}
                       disabled={disabled}
-                      onClick={onClearPackLabelOverride}
-                      title={pkg.resetLabelTitle}
+                      onClick={onOpenBottleLabelEditor}
+                      title={pkg.replaceAllLabelsTitle}
                     >
-                      {pkg.resetShort}
+                      <ImagePlus size={13} aria-hidden="true" />
+                      <span>{pkg.replaceAllLabels(bottlePack.cols * bottlePack.rows)}</span>
                     </button>
-                  )}
-                </div>
+                    {hasPackLabelOverride && (
+                      <button
+                        type="button"
+                        className={styles.comboResetLink}
+                        disabled={disabled}
+                        onClick={onClearPackLabelOverride}
+                        title={pkg.resetLabelTitle}
+                      >
+                        {pkg.resetShort}
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {/* Quick Pack Count Grid Presets */}
                 <div className={styles.comboGridPills} role="group" aria-label={pkg.packTitle}>
@@ -662,7 +903,11 @@ export default function PackagingInspector({
                   disabled={disabled}
                   onClick={onAutoFitBottlePack}
                 >
-                  <Wand2 size={13} /> {pkg.autoFitCta(bottlePack.cols * bottlePack.rows, selectedBottle.volume)}
+                  <Wand2 size={13} />{" "}
+                  {pkg.autoFitCta(
+                    bottlePack.cols * bottlePack.rows,
+                    isPackingBox ? activeBoxDisplayName : selectedBottle.volume,
+                  )}
                 </button>
 
                 <div className={styles.sliderRow}>
@@ -683,25 +928,52 @@ export default function PackagingInspector({
                   />
                 </div>
 
-                <div className={styles.sliderRow}>
-                  <div className={styles.sliderHead}>
-                    <label htmlFor="pkg-bottle-yaw">{pkg.labelFacingAngle}</label>
-                    <output>{Math.round(bottlePack.facingYawDeg)}°</output>
+                {isPackingBox ? (
+                  <div className={styles.sliderRow}>
+                    <div className={styles.sliderHead}>
+                      <span>{pkg.boxOrientation}</span>
+                      <output>{snappedBoxYaw === -90 ? "270°" : `${snappedBoxYaw}°`}</output>
+                    </div>
+                    <div className={styles.segmented} role="group" aria-label={pkg.boxOrientation}>
+                      {[
+                        { deg: 0, label: "0°" },
+                        { deg: 90, label: "90°" },
+                        { deg: 180, label: "180°" },
+                        { deg: -90, label: "270°" },
+                      ].map((opt) => (
+                        <button
+                          key={opt.deg}
+                          type="button"
+                          aria-pressed={snappedBoxYaw === opt.deg}
+                          disabled={disabled}
+                          onClick={() => onChangeBottlePack({ facingYawDeg: opt.deg })}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <input
-                    id="pkg-bottle-yaw"
-                    type="range"
-                    className={styles.rangeInput}
-                    min={-180}
-                    max={180}
-                    step={5}
-                    disabled={disabled}
-                    value={bottlePack.facingYawDeg}
-                    onChange={(e) => onChangeBottlePack({ facingYawDeg: Number(e.target.value) })}
-                  />
-                </div>
+                ) : (
+                  <div className={styles.sliderRow}>
+                    <div className={styles.sliderHead}>
+                      <label htmlFor="pkg-bottle-yaw">{pkg.labelFacingAngle}</label>
+                      <output>{Math.round(bottlePack.facingYawDeg)}°</output>
+                    </div>
+                    <input
+                      id="pkg-bottle-yaw"
+                      type="range"
+                      className={styles.rangeInput}
+                      min={-180}
+                      max={180}
+                      step={5}
+                      disabled={disabled}
+                      value={bottlePack.facingYawDeg}
+                      onChange={(e) => onChangeBottlePack({ facingYawDeg: Number(e.target.value) })}
+                    />
+                  </div>
+                )}
 
-                {template.id === "fefco-0201-rsc" && (
+                {!isPackingBox && template.id === "fefco-0201-rsc" && (
                   <label className={styles.switchRow}>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                       <span>{t.studio.library.honeycombDividers}</span>
@@ -721,6 +993,26 @@ export default function PackagingInspector({
                   </label>
                 )}
 
+                {!isPackingBox && template.id === "fefco-0427-mailer" && (
+                  <label className={styles.switchRow}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <span>{t.studio.library.productInsert}</span>
+                      {bottlePack.productInsert && (
+                        <span className={styles.comboSyncTag}>
+                          {t.studio.library.productInsertSlots(bottlePack.cols * bottlePack.rows)}
+                        </span>
+                      )}
+                    </span>
+                    <input
+                      type="checkbox"
+                      aria-label={t.studio.library.productInsert}
+                      checked={Boolean(bottlePack.productInsert)}
+                      disabled={disabled}
+                      onChange={(e) => onChangeBottlePack({ productInsert: e.target.checked })}
+                    />
+                  </label>
+                )}
+
                 <label className={styles.switchRow}>
                   <span>{pkg.autoResizeOnGrid}</span>
                   <input
@@ -731,13 +1023,14 @@ export default function PackagingInspector({
                   />
                 </label>
 
-                <div className={styles.switchRow}>
-                  <label htmlFor="pkg-organic-jitter" style={{ display: "inline-flex", alignItems: "center", gap: 6, flex: 1, cursor: "pointer" }}>
-                    <span>{pkg.organicJitter}</span>
-                  </label>
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    {bottlePack.organicJitter && (
-                      <button
+                {!isPackingBox && (
+                  <div className={styles.switchRow}>
+                    <label htmlFor="pkg-organic-jitter" style={{ display: "inline-flex", alignItems: "center", gap: 6, flex: 1, cursor: "pointer" }}>
+                      <span>{pkg.organicJitter}</span>
+                    </label>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      {bottlePack.organicJitter && (
+                        <button
                         type="button"
                         className={styles.dockIconBtn}
                         style={{ minWidth: 24, height: 24, padding: "0 5px" }}
@@ -768,6 +1061,7 @@ export default function PackagingInspector({
                     />
                   </div>
                 </div>
+                )}
               </>
             )}
           </div>
@@ -1123,6 +1417,69 @@ export default function PackagingInspector({
                   onChange={(e) => onChange({ lidDepthMm: Number(e.target.value) }, true)}
                   onPointerUp={() => onChange({}, false)}
                 />
+              </div>
+            )}
+
+            {f.frontRimLockTabs && (
+              <div
+                onMouseEnter={() => onHoverPart("lid")}
+                onMouseLeave={() => onHoverPart(null)}
+                style={{ display: "flex", flexDirection: "column", gap: 8 }}
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  <span style={{ fontSize: 11, fontWeight: 550 }}>{pkg.frontRimLockTabs}</span>
+                  <div className={styles.segmented} role="group" aria-label={pkg.frontRimLockTabs}>
+                    {([0, 1, 2, 3] as const).map((count) => (
+                      <button
+                        key={count}
+                        type="button"
+                        aria-pressed={params.frontLockTabCount === count}
+                        disabled={disabled}
+                        onClick={() => onChange({ frontLockTabCount: count })}
+                      >
+                        {count === 0 ? pkg.noTabs : String(count)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {params.frontLockTabCount > 0 && (
+                  <div className={styles.sliderRow}>
+                    <div className={styles.sliderHead}>
+                      <label htmlFor="pkg-front-tab-w">{pkg.lockTabWidth}</label>
+                      <output>{Math.round(params.lockTabWidthMm)} mm</output>
+                    </div>
+                    <input
+                      id="pkg-front-tab-w"
+                      type="range"
+                      className={styles.rangeInput}
+                      min={8}
+                      max={34}
+                      step={1}
+                      disabled={disabled}
+                      value={Math.min(34, Math.max(8, params.lockTabWidthMm))}
+                      onChange={(e) => onChange({ lockTabWidthMm: Number(e.target.value) }, true)}
+                      onPointerUp={() => onChange({}, false)}
+                    />
+                  </div>
+                )}
+                <div className={styles.sliderRow}>
+                  <div className={styles.sliderHead}>
+                    <label htmlFor="pkg-a21-tuck-len">{pkg.tuckFlapLength}</label>
+                    <output>{Math.round(params.tuckFlapLengthMm)} mm</output>
+                  </div>
+                  <input
+                    id="pkg-a21-tuck-len"
+                    type="range"
+                    className={styles.rangeInput}
+                    min={12}
+                    max={34}
+                    step={1}
+                    disabled={disabled}
+                    value={params.tuckFlapLengthMm}
+                    onChange={(e) => onChange({ tuckFlapLengthMm: Number(e.target.value) }, true)}
+                    onPointerUp={() => onChange({}, false)}
+                  />
+                </div>
               </div>
             )}
 

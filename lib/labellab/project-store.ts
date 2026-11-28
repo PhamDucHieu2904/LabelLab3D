@@ -6,6 +6,11 @@ import type {
   PanelDesignOverlay,
 } from '../packaging-cad/types';
 import { parseBottlePackConfig, parsePackagingParams } from '../packaging-cad/preferences';
+import {
+  DEFAULT_PACKABLE_BOX_TEMPLATE_ID,
+  isPackableRetailBoxTemplate,
+} from '../packaging-cad/pack-layout';
+import { createDefaultPackagingParams } from '../packaging-cad/templates/registry';
 
 export type CustomProjectKind = 'beverage' | 'packaging';
 
@@ -40,6 +45,16 @@ export interface PackedBottleSnapshot {
   name?: string;
   settings?: ScenePreferences;
   labelBlob?: Blob;
+}
+
+/**
+ * Self-contained Tier-2 retail box snapshot packed inside a Tier-3 outer tray/carton.
+ * Strictly non-recursive: only stores the inner box's closed geometry parameters & artwork.
+ */
+export interface PackedBoxSnapshot {
+  name?: string;
+  packagingParams: PackagingParams;
+  packagingArtwork?: PackagingArtworkSnapshot;
 }
 
 export interface ProjectGroup {
@@ -82,6 +97,8 @@ export interface CustomProjectRecord {
   packagingArtwork?: PackagingArtworkSnapshot;
   /** Self-contained snapshot of the packed bottle/can inside a box/tray for reliable 3D sharing. */
   packedBottle?: PackedBottleSnapshot;
+  /** Self-contained snapshot of the packed Tier-2 retail box inside a Tier-3 tray/carton. */
+  packedBox?: PackedBoxSnapshot;
 }
 
 export interface GroupedProject {
@@ -211,6 +228,26 @@ function parsePackedBottleSnapshot(raw: unknown): PackedBottleSnapshot | undefin
   };
 }
 
+function parsePackedBoxSnapshot(raw: unknown): PackedBoxSnapshot | undefined {
+  if (!isObject(raw) || !isObject(raw.packagingParams)) return undefined;
+  const packagingParams = parsePackagingParams(raw.packagingParams);
+  if (!isPackableRetailBoxTemplate(packagingParams.templateId)) return undefined;
+  const name =
+    typeof raw.name === 'string' && raw.name.trim() ? sanitizeProjectName(raw.name) : undefined;
+  const packagingArtwork = parsePackagingArtworkSnapshot(raw.packagingArtwork);
+  return {
+    ...(name ? { name } : {}),
+    packagingParams: {
+      ...packagingParams,
+      foldProgress: 1,
+      showDimensions: false,
+      showFaceLabels: false,
+      showCreaseLines: false,
+    },
+    ...(packagingArtwork ? { packagingArtwork } : {}),
+  };
+}
+
 export function parseProjectGroup(raw: unknown): ProjectGroup | null {
   if (!isObject(raw)) return null;
   if (typeof raw.id !== 'string' || !raw.id.trim() || raw.id.length > 100) return null;
@@ -304,6 +341,7 @@ export function parseCustomProjectRecord(raw: unknown): CustomProjectRecord | nu
     : undefined;
   const packagingArtwork = parsePackagingArtworkSnapshot(raw.packagingArtwork);
   const packedBottle = parsePackedBottleSnapshot(raw.packedBottle);
+  const packedBox = parsePackedBoxSnapshot(raw.packedBox);
 
   return {
     id: raw.id,
@@ -323,6 +361,7 @@ export function parseCustomProjectRecord(raw: unknown): CustomProjectRecord | nu
     ...(bottlePack ? { bottlePack } : {}),
     ...(packagingArtwork ? { packagingArtwork } : {}),
     ...(packedBottle ? { packedBottle } : {}),
+    ...(packedBox ? { packedBox } : {}),
   };
 }
 
@@ -484,7 +523,7 @@ export async function capturePackedBottleSnapshot(
   effectiveLabelUrl: string | undefined,
   fallbackSettings?: ScenePreferences,
 ): Promise<PackedBottleSnapshot | undefined> {
-  if (!bottlePack.enabled) return undefined;
+  if (!bottlePack.enabled || bottlePack.itemKind === 'box') return undefined;
   const labelBlob =
     (await fetchUrlAsImageBlob(effectiveLabelUrl)) ?? customBottle?.artworkBlob;
   const settings = customBottle?.settings ?? fallbackSettings;
@@ -493,6 +532,36 @@ export async function capturePackedBottleSnapshot(
     ...(customBottle?.name ? { name: customBottle.name } : {}),
     ...(settings ? { settings: { ...settings } } : {}),
     ...(labelBlob ? { labelBlob } : {}),
+  };
+}
+
+export async function capturePackedBoxSnapshot(
+  bottlePack: BottlePackConfig,
+  customBoxProject: CustomProjectRecord | undefined,
+  hydratedArtwork?: PackagingArtworkState,
+): Promise<PackedBoxSnapshot | undefined> {
+  if (!bottlePack.enabled || bottlePack.itemKind !== 'box') return undefined;
+  const rawParams =
+    customBoxProject?.packagingParams ??
+    createDefaultPackagingParams(
+      bottlePack.boxTemplateId && isPackableRetailBoxTemplate(bottlePack.boxTemplateId)
+        ? bottlePack.boxTemplateId
+        : DEFAULT_PACKABLE_BOX_TEMPLATE_ID,
+    );
+  if (!isPackableRetailBoxTemplate(rawParams.templateId)) return undefined;
+  const packagingArtwork =
+    customBoxProject?.packagingArtwork ??
+    (hydratedArtwork ? await capturePackagingArtworkSnapshot(hydratedArtwork) : undefined);
+  return {
+    ...(customBoxProject?.name ? { name: customBoxProject.name } : {}),
+    packagingParams: {
+      ...rawParams,
+      foldProgress: 1,
+      showDimensions: false,
+      showFaceLabels: false,
+      showCreaseLines: false,
+    },
+    ...(packagingArtwork ? { packagingArtwork } : {}),
   };
 }
 

@@ -226,6 +226,46 @@ export async function packageProjectsForShare(
     return hash;
   };
 
+  const serializeArtworkSnapshot = async (
+    artwork: CustomProjectRecord['packagingArtwork'],
+  ): Promise<SharedPackagingArtworkRefs | undefined> => {
+    if (!artwork) return undefined;
+    const outsideDielineHash = await registerBlob(artwork.outsideDielineBlob, 'artwork');
+    const insideDielineHash = await registerBlob(artwork.insideDielineBlob, 'artwork');
+    const finishMaskHash = await registerBlob(artwork.finishMaskBlob, 'artwork');
+    const panelOverlays: Record<string, SharedPanelOverlayRef> = {};
+    for (const [key, ov] of Object.entries(artwork.panelOverlays)) {
+      const imageHash = await registerBlob(ov.imageBlob, 'artwork');
+      if (!imageHash && !ov.fillColor && !ov.text) continue;
+      panelOverlays[key] = {
+        panelId: ov.panelId,
+        surface: ov.surface,
+        ...(ov.fillColor ? { fillColor: ov.fillColor } : {}),
+        ...(imageHash ? { imageHash } : {}),
+        ...(ov.artworkName ? { artworkName: ov.artworkName } : {}),
+        ...(ov.fitMode ? { fitMode: ov.fitMode } : {}),
+        imageScale: ov.imageScale,
+        imageOffsetX: ov.imageOffsetX,
+        imageOffsetY: ov.imageOffsetY,
+        imageRotationDeg: ov.imageRotationDeg,
+        ...(ov.text ? { text: ov.text } : {}),
+        ...(ov.textColor ? { textColor: ov.textColor } : {}),
+        ...(ov.textSizePct !== undefined ? { textSizePct: ov.textSizePct } : {}),
+      };
+    }
+    if (!outsideDielineHash && !insideDielineHash && !finishMaskHash && Object.keys(panelOverlays).length === 0) {
+      return undefined;
+    }
+    return {
+      mode: artwork.mode,
+      ...(outsideDielineHash ? { outsideDielineHash } : {}),
+      ...(insideDielineHash ? { insideDielineHash } : {}),
+      ...(finishMaskHash ? { finishMaskHash } : {}),
+      ...(artwork.finishMaskName ? { finishMaskName: artwork.finishMaskName } : {}),
+      panelOverlays,
+    };
+  };
+
   const items: SharedProjectItemInput[] = [];
   for (let i = 0; i < records.length; i += 1) {
     const rec = records[i];
@@ -233,42 +273,7 @@ export async function packageProjectsForShare(
     let payload: SharedItemPayload;
 
     if (rec.kind === 'packaging' && rec.packagingParams) {
-      let packagingArtwork: SharedPackagingArtworkRefs | undefined;
-      if (rec.packagingArtwork) {
-        const outsideDielineHash = await registerBlob(rec.packagingArtwork.outsideDielineBlob, 'artwork');
-        const insideDielineHash = await registerBlob(rec.packagingArtwork.insideDielineBlob, 'artwork');
-        const finishMaskHash = await registerBlob(rec.packagingArtwork.finishMaskBlob, 'artwork');
-        const panelOverlays: Record<string, SharedPanelOverlayRef> = {};
-        for (const [key, ov] of Object.entries(rec.packagingArtwork.panelOverlays)) {
-          const imageHash = await registerBlob(ov.imageBlob, 'artwork');
-          if (!imageHash && !ov.fillColor && !ov.text) continue;
-          panelOverlays[key] = {
-            panelId: ov.panelId,
-            surface: ov.surface,
-            ...(ov.fillColor ? { fillColor: ov.fillColor } : {}),
-            ...(imageHash ? { imageHash } : {}),
-            ...(ov.artworkName ? { artworkName: ov.artworkName } : {}),
-            ...(ov.fitMode ? { fitMode: ov.fitMode } : {}),
-            imageScale: ov.imageScale,
-            imageOffsetX: ov.imageOffsetX,
-            imageOffsetY: ov.imageOffsetY,
-            imageRotationDeg: ov.imageRotationDeg,
-            ...(ov.text ? { text: ov.text } : {}),
-            ...(ov.textColor ? { textColor: ov.textColor } : {}),
-            ...(ov.textSizePct !== undefined ? { textSizePct: ov.textSizePct } : {}),
-          };
-        }
-        if (outsideDielineHash || insideDielineHash || finishMaskHash || Object.keys(panelOverlays).length > 0) {
-          packagingArtwork = {
-            mode: rec.packagingArtwork.mode,
-            ...(outsideDielineHash ? { outsideDielineHash } : {}),
-            ...(insideDielineHash ? { insideDielineHash } : {}),
-            ...(finishMaskHash ? { finishMaskHash } : {}),
-            ...(rec.packagingArtwork.finishMaskName ? { finishMaskName: rec.packagingArtwork.finishMaskName } : {}),
-            panelOverlays,
-          };
-        }
-      }
+      const packagingArtwork = await serializeArtworkSnapshot(rec.packagingArtwork);
 
       let packedBottle:
         | {
@@ -278,7 +283,7 @@ export async function packageProjectsForShare(
             labelHash?: string;
           }
         | undefined;
-      if (rec.bottlePack?.enabled) {
+      if (rec.bottlePack?.enabled && rec.bottlePack.itemKind !== 'box') {
         const snapshot = rec.packedBottle;
         const labelHash = await registerBlob(snapshot?.labelBlob, 'artwork');
         packedBottle = {
@@ -289,6 +294,22 @@ export async function packageProjectsForShare(
         };
       }
 
+      let packedBox:
+        | {
+            name?: string;
+            packagingParams: NonNullable<CustomProjectRecord['packagingParams']>;
+            packagingArtwork?: SharedPackagingArtworkRefs;
+          }
+        | undefined;
+      if (rec.bottlePack?.enabled && rec.bottlePack.itemKind === 'box' && rec.packedBox) {
+        const innerArt = await serializeArtworkSnapshot(rec.packedBox.packagingArtwork);
+        packedBox = {
+          ...(rec.packedBox.name ? { name: rec.packedBox.name } : {}),
+          packagingParams: rec.packedBox.packagingParams,
+          ...(innerArt ? { packagingArtwork: innerArt } : {}),
+        };
+      }
+
       payload = {
         kind: 'packaging',
         settings: rec.settings,
@@ -296,6 +317,7 @@ export async function packageProjectsForShare(
         ...(rec.bottlePack ? { bottlePack: rec.bottlePack } : {}),
         ...(packagingArtwork ? { packagingArtwork } : {}),
         ...(packedBottle ? { packedBottle } : {}),
+        ...(packedBox ? { packedBox } : {}),
       };
     } else {
       const labelHash = await registerBlob(rec.artworkBlob, 'artwork');

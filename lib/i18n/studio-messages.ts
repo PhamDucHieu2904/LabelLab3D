@@ -56,6 +56,8 @@ export type StudioMessages = {
     resetFilter: string;
     honeycombDividers: string;
     honeycombCells: (count: number) => string;
+    productInsert: string;
+    productInsertSlots: (count: number) => string;
     catAll: string;
     catGlass: string;
     catCans: string;
@@ -399,21 +401,28 @@ export type StudioMessages = {
     packTitle: string;
     packComboBadge: string;
     packIntro: (shortName: string) => string;
+    packIntroWithBoxes: (shortName: string) => string;
     myProjectsTab: (count: number) => string;
     catalogTab: string;
     customLabelTag: string;
+    boxArtworkTag: string;
     customizeNewBottle: string;
     noCustomProjectsLead: string;
     noCustomProjectsHighlight1: string;
     noCustomProjectsMid: string;
     noCustomProjectsHighlight2: string;
     noCustomProjectsTail: string;
+    noCustomProjectsTailOuter: string;
     goCustomizeBottle: string;
     myCustomProjectsGroup: string;
+    savedRetailBoxesGroup: string;
+    savedBottlesGroup: string;
+    groupRetailBoxes: string;
     groupCans: string;
     groupGlass: string;
     groupPet: string;
     groupPp: string;
+    boxOrientation: string;
     customTag: (name: string) => string;
     activeTag: (name: string) => string;
     labelSyncedTag: string;
@@ -460,6 +469,8 @@ export type StudioMessages = {
     internalDividers: string;
     lidSkirtDepth: string;
     lockTabsPerSide: string;
+    frontRimLockTabs: string;
+    noTabs: string;
     oneTab: string;
     twoTabs: string;
     lockTabWidth: string;
@@ -588,6 +599,8 @@ export const VI_STUDIO_MESSAGES: StudioMessages = {
     resetFilter: "Đặt lại",
     honeycombDividers: "Đóng vách tổ ong",
     honeycombCells: (count) => `${count} ô`,
+    productInsert: "Khay giấy định hình",
+    productInsertSlots: (count) => `${count} khe`,
     catAll: "Tất cả",
     catGlass: "Thủy tinh",
     catCans: "Lon nhôm",
@@ -970,21 +983,29 @@ export const VI_STUDIO_MESSAGES: StudioMessages = {
     packComboBadge: "Combo",
     packIntro: (shortName) =>
       `Đặt trực tiếp sản phẩm 3D (chai, lon, lọ...) kèm nhãn riêng vào bên trong mẫu ${shortName} này và tự động căn kích thước chuẩn mm.`,
+    packIntroWithBoxes: (shortName) =>
+      `Đặt trực tiếp chai/lon hoặc hộp bán lẻ đã lưu (VD: hộp 4 lon ECMA A10) vào bên trong mẫu ${shortName} này và tự động căn kích thước chuẩn mm.`,
     myProjectsTab: (count) => `Dự án của tôi (${count})`,
     catalogTab: "Thư viện",
     customLabelTag: "Nhãn riêng",
+    boxArtworkTag: "Có thiết kế",
     customizeNewBottle: "Tùy chỉnh chai mới ở mục Chai & Lon",
     noCustomProjectsLead: "Chưa có dự án tùy chỉnh nào. Hãy thiết kế chai/lon ở mục ",
     noCustomProjectsHighlight1: "Chai & Lon",
     noCustomProjectsMid: ", bấm ",
     noCustomProjectsHighlight2: "Lưu dự án",
     noCustomProjectsTail: " rồi chọn ngay tại đây!",
+    noCustomProjectsTailOuter: " (hoặc lưu một mẫu hộp bán lẻ như ECMA A10) rồi chọn ngay tại đây!",
     goCustomizeBottle: "Đi tới mục Chai & Lon",
     myCustomProjectsGroup: "★ Dự án của tôi",
+    savedRetailBoxesGroup: "★ Hộp bán lẻ đã lưu",
+    savedBottlesGroup: "Chai & Lon đã lưu",
+    groupRetailBoxes: "Hộp bán lẻ mẫu",
     groupCans: "Lon nhôm",
     groupGlass: "Chai thủy tinh",
     groupPet: "Chai PET",
     groupPp: "Chai PP",
+    boxOrientation: "Hướng đặt hộp",
     customTag: (name) => `Dự án: ${name}`,
     activeTag: (name) => `Đang dùng: ${name}`,
     labelSyncedTag: "Đã đồng bộ nhãn",
@@ -1049,6 +1070,8 @@ export const VI_STUDIO_MESSAGES: StudioMessages = {
     internalDividers: "Vách ngăn chia ô bên trong",
     lidSkirtDepth: "Chiều sâu thành nắp chụp",
     lockTabsPerSide: "Số tai khóa mỗi bên",
+    frontRimLockTabs: "Chốt gài miệng hộp (mặt trước)",
+    noTabs: "Không có",
     oneTab: "1 Tai",
     twoTabs: "2 Tai",
     lockTabWidth: "Chiều rộng tai khóa",
@@ -1175,6 +1198,12 @@ export const VI_STUDIO_MESSAGES: StudioMessages = {
         "Right Inner Rollover": "Thành gập trong phải",
         "Left Inner Rollover Wall": "Thành gập trong trái",
         "Right Inner Rollover Wall": "Thành gập trong phải",
+        "Top Outer Cover Flap": "Nắp phủ ngoài trên",
+        "Bottom Outer Cover Flap": "Nắp phủ ngoài đáy",
+        "Top Stepped Seal Flap": "Nắp dán giật cấp trên",
+        "Bottom Stepped Seal Flap": "Nắp dán giật cấp đáy",
+        "Bottom Snap-Lock Fork Flap": "Nắp đáy cài chữ U",
+        "Bottom Snap-Lock Center Tongue": "Lưỡi khóa đáy 1-2-3",
       };
       return map[englishLabel] ?? englishLabel;
     },
@@ -1258,6 +1287,8 @@ export const EN_STUDIO_MESSAGES: StudioMessages = {
     resetFilter: "Reset",
     honeycombDividers: "Honeycomb cell dividers",
     honeycombCells: (count) => `${count} cells`,
+    productInsert: "Die-cut product insert",
+    productInsertSlots: (count) => `${count} slots`,
     catAll: "All",
     catGlass: "Glass",
     catCans: "Cans",
@@ -1641,21 +1672,29 @@ export const EN_STUDIO_MESSAGES: StudioMessages = {
     packComboBadge: "Combo",
     packIntro: (shortName) =>
       `Place real 3D products (bottles, cans, jars, etc.) with your custom artwork directly inside this ${shortName} and auto-fit exact mm dimensions.`,
+    packIntroWithBoxes: (shortName) =>
+      `Place bottles, cans, or saved retail boxes (e.g. ECMA A10 4-can cartons) directly inside this ${shortName} and auto-fit exact mm dimensions.`,
     myProjectsTab: (count) => `My Projects (${count})`,
     catalogTab: "Catalog",
     customLabelTag: "Custom label",
+    boxArtworkTag: "Custom art",
     customizeNewBottle: "Customize new bottle in Bottles & Cans",
     noCustomProjectsLead: "No custom projects yet. Customize any bottle or can in ",
     noCustomProjectsHighlight1: "Bottles & Cans",
     noCustomProjectsMid: ", click ",
     noCustomProjectsHighlight2: "Save project",
     noCustomProjectsTail: ", and select it right here!",
+    noCustomProjectsTailOuter: " (or save a retail box like ECMA A10), and select it right here!",
     goCustomizeBottle: "Go customize in Bottles & Cans",
     myCustomProjectsGroup: "★ My Custom Projects",
+    savedRetailBoxesGroup: "★ Saved Retail Boxes",
+    savedBottlesGroup: "Saved Bottles & Cans",
+    groupRetailBoxes: "Retail Boxes",
     groupCans: "Aluminum Cans",
     groupGlass: "Glass Bottles",
     groupPet: "PET Bottles",
     groupPp: "PP Bottles",
+    boxOrientation: "Box orientation",
     customTag: (name) => `Custom: ${name}`,
     activeTag: (name) => `Active: ${name}`,
     labelSyncedTag: "Your label synced",
@@ -1705,6 +1744,8 @@ export const EN_STUDIO_MESSAGES: StudioMessages = {
     internalDividers: "Internal cell dividers",
     lidSkirtDepth: "Telescoping lid skirt depth",
     lockTabsPerSide: "Lock tabs per side",
+    frontRimLockTabs: "Front rim lock tabs",
+    noTabs: "None",
     oneTab: "1 Tab",
     twoTabs: "2 Tabs",
     lockTabWidth: "Lock tab width",

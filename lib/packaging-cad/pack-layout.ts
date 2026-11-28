@@ -1,9 +1,14 @@
 import type {
   BottlePackConfig,
   DimensionTripleMm,
+  PackagingParams,
   SolvedDieline,
 } from './types';
-import { getPackagingTemplate } from './templates/registry';
+import {
+  getPackagingTemplate,
+  PACKAGING_TEMPLATES,
+  solvePackagingTemplate,
+} from './templates/registry';
 import { clampNum } from './templates/helpers';
 import { getHoneycombDividerThicknessMm } from './geometry/partition-builder';
 
@@ -32,6 +37,8 @@ export interface BottlePackLayoutResult {
   readonly overflowWidthMm: number;
   readonly overflowHeightMm: number;
   readonly openTopTemplate: boolean;
+  /** True when packed bottles/cans lie down horizontally (e.g. flat FEFCO 0427 gift mailer). */
+  readonly horizontal: boolean;
 }
 
 export interface PackGridPreset {
@@ -97,6 +104,114 @@ export const KNOWN_BEVERAGE_FOOTPRINTS_MM: Readonly<Record<string, BeverageFootp
 });
 
 const OPEN_TOP_TEMPLATES = new Set(['fefco-0421-tray']);
+const HORIZONTAL_PACK_TEMPLATES = new Set(['fefco-0427-mailer']);
+
+/**
+ * Strict 3-tier packaging hierarchy (non-recursive by construction):
+ *  - Tier 1 (Primary):   Bottles & Cans (`itemKind: 'beverage'`)
+ *  - Tier 2 (Secondary): Retail boxes (`RETAIL_BOX_TEMPLATE_IDS`) — pack Tier 1 only
+ *  - Tier 3 (Tertiary):  Outer trays & master cartons (`OUTER_CASE_TEMPLATE_IDS`) — pack Tier 1 OR Tier 2
+ */
+export const RETAIL_BOX_TEMPLATE_IDS: ReadonlySet<string> = new Set([
+  'ecma-a10-seal-end',
+  'ecma-a21-snap-lock',
+  'fefco-0427-mailer',
+  'rigid-lid-base',
+]);
+
+export const OUTER_CASE_TEMPLATE_IDS: ReadonlySet<string> = new Set([
+  'fefco-0421-tray',
+  'fefco-0201-rsc',
+  'fefco-0201e-beer-case',
+]);
+
+export const DEFAULT_PACKABLE_BOX_TEMPLATE_ID = 'ecma-a10-seal-end';
+
+/** True when this outer tray/carton template can pack Tier-2 retail boxes inside it. */
+export function canPackRetailBoxes(templateId: string): boolean {
+  return OUTER_CASE_TEMPLATE_IDS.has(templateId);
+}
+
+/** True when this template is a Tier-2 retail box eligible to be packed inside an outer tray/carton. */
+export function isPackableRetailBoxTemplate(templateId: string): boolean {
+  return RETAIL_BOX_TEMPLATE_IDS.has(templateId);
+}
+
+/** Catalog list of packable Tier-2 retail box templates. */
+export function getPackableRetailBoxTemplates() {
+  return PACKAGING_TEMPLATES.filter((tpl) => RETAIL_BOX_TEMPLATE_IDS.has(tpl.id));
+}
+
+/**
+ * Resolve exact closed outer bounding dimensions (mm) of a Tier-2 retail box so it can be
+ * packed inside a Tier-3 tray or master carton with the same grid & Auto-Fit math as bottles/cans.
+ */
+export function getRetailBoxFootprintMm(params: PackagingParams): BeverageFootprintMm {
+  const solved = solvePackagingTemplate({
+    ...params,
+    foldProgress: 1,
+    showDimensions: false,
+    showFaceLabels: false,
+    showCreaseLines: false,
+  });
+  return {
+    diameterXMm: solved.outerMm.length,
+    diameterZMm: solved.outerMm.width,
+    heightMm: solved.outerMm.height,
+  };
+}
+
+/** Snap rectangular packed-box rotation cleanly to orthogonal 90° steps (-180, -90, 0, 90, 180). */
+export function snapPackedBoxYawDeg(rawDeg: number): number {
+  if (!Number.isFinite(rawDeg)) return 0;
+  const snapped = Math.round(rawDeg / 90) * 90;
+  if (snapped === -180 || snapped === 180) return 180;
+  if (snapped === 0 || Object.is(snapped, -0)) return 0;
+  return snapped;
+}
+
+/** True when an orthogonal box rotation swaps its X (length) and Z (width) spans (±90°). */
+export function isQuarterTurnYawDeg(rawDeg: number): boolean {
+  const snapped = Math.abs(snapPackedBoxYawDeg(rawDeg));
+  return snapped % 180 === 90;
+}
+
+/**
+ * Square flat-sided bottle models that physically rest flat on one of their 4 faces (0°/90°/180°/-90°)
+ * when laid horizontally inside a flat mailer box, instead of balancing awkwardly on a 45° corner edge.
+ */
+const SQUARE_SECTION_MODEL_IDS = new Set([
+  'pet-aloe',
+  'pet-500-full-label',
+  'pet-1000-juice',
+  'pet-1500-short-label',
+  'pet-1500-juice',
+  'pp-1000',
+  'pp-2000',
+]);
+
+/**
+ * Snap horizontal lying roll angle to physically stable flat resting faces for square/rectangular
+ * bottles (90° for square cross-sections, 180° for wide rectangular cross-sections) while allowing
+ * cylindrical cans and round glass/PET bottles to roll freely across 360°.
+ */
+export function snapHorizontalRestingYawRad(
+  modelId: string,
+  itemMm: BeverageFootprintMm,
+  rawYawRad: number,
+): number {
+  if (!Number.isFinite(rawYawRad)) return 0;
+  // Wide rectangular cross-section (e.g. pet-1000-short-juice 86×62 mm) rests stably on its broad face (0° / 180°).
+  if (Math.abs(itemMm.diameterXMm - itemMm.diameterZMm) > 6) {
+    return Math.round(rawYawRad / Math.PI) * Math.PI;
+  }
+  // Square cross-section rests stably on one of its 4 flat faces (0° / ±90° / 180°).
+  if (SQUARE_SECTION_MODEL_IDS.has(modelId)) {
+    const step = Math.PI * 0.5;
+    return Math.round(rawYawRad / step) * step;
+  }
+  return rawYawRad;
+}
 
 export function getBeverageFootprintMm(modelId: string, volumeMl?: number): BeverageFootprintMm {
   const known = KNOWN_BEVERAGE_FOOTPRINTS_MM[modelId];
@@ -119,14 +234,24 @@ export function isOpenTopPackagingTemplate(templateId: string): boolean {
   return OPEN_TOP_TEMPLATES.has(templateId);
 }
 
+/** True for flat/low-profile mailers where packed bottles & cans lie down horizontally. */
+export function isHorizontalPackTemplate(templateId: string): boolean {
+  return HORIZONTAL_PACK_TEMPLATES.has(templateId);
+}
+
 /**
  * Compute ideal inner box dimensions (mm) to fit a `(cols × rows)` grid of bottles/cans
- * inside a given packaging template, accounting for board dividers when applicable.
+ * inside a given packaging template, accounting for board dividers, flat lying orientation,
+ * and die-cut corrugated product insert margins when applicable.
  */
 export function computeAutoFitBoxDimensions(input: {
   templateId: string;
   itemMm: BeverageFootprintMm;
-  config: Pick<BottlePackConfig, 'cols' | 'rows' | 'spacingMm' | 'wallPaddingMm' | 'honeycombDividers'>;
+  config: Pick<
+    BottlePackConfig,
+    'cols' | 'rows' | 'spacingMm' | 'wallPaddingMm' | 'honeycombDividers' | 'productInsert'
+  > &
+    Partial<Pick<BottlePackConfig, 'itemKind' | 'facingYawDeg'>>;
   thicknessMm: number;
   dividerGrid?: boolean;
 }): {
@@ -138,30 +263,58 @@ export function computeAutoFitBoxDimensions(input: {
   const tpl = getPackagingTemplate(input.templateId);
   const cols = Math.max(1, Math.min(6, Math.round(input.config.cols)));
   const rows = Math.max(1, Math.min(4, Math.round(input.config.rows)));
-  const wallPad = Math.max(0.5, input.config.wallPaddingMm);
+  const isBox = input.config.itemKind === 'box' && canPackRetailBoxes(tpl.id);
+  const horizontal = !isBox && isHorizontalPackTemplate(tpl.id);
   const hasHoneycomb =
-    tpl.id === 'fefco-0201-rsc' && Boolean(input.config.honeycombDividers) && (cols > 1 || rows > 1);
+    !isBox &&
+    tpl.id === 'fefco-0201-rsc' &&
+    Boolean(input.config.honeycombDividers) &&
+    (cols > 1 || rows > 1);
+  const hasProductInsert =
+    !isBox && tpl.id === 'fefco-0427-mailer' && Boolean(input.config.productInsert);
   const honeycombDivGap = hasHoneycomb ? getHoneycombDividerThicknessMm(input.thicknessMm) + 2.0 : 0;
+
+  // Die-cut corrugated insert trays need sturdy perimeter walls (~10 mm) and solid bridges (~10 mm) between pockets.
+  const wallPad = hasProductInsert
+    ? Math.max(10, input.config.wallPaddingMm)
+    : Math.max(0.5, input.config.wallPaddingMm);
+  const insertColGap = hasProductInsert ? 10 : 0;
+  const insertRowGap = hasProductInsert ? 12 : 0;
 
   const colGap = Math.max(
     input.config.spacingMm,
-    cols > 1 ? honeycombDivGap : 0,
+    cols > 1 ? Math.max(honeycombDivGap, insertColGap) : 0,
   );
   const rowGap = Math.max(
     input.config.spacingMm,
-    rows > 1 ? honeycombDivGap : 0,
+    rows > 1 ? Math.max(honeycombDivGap, insertRowGap) : 0,
   );
 
-  const rawL = Math.ceil(cols * input.itemMm.diameterXMm + Math.max(0, cols - 1) * colGap + 2 * wallPad);
-  const rawW = Math.ceil(rows * input.itemMm.diameterZMm + Math.max(0, rows - 1) * rowGap + 2 * wallPad);
+  // Swap X/Z spans when a rectangular retail box is rotated ±90°.
+  const swapXZ = isBox && isQuarterTurnYawDeg(input.config.facingYawDeg ?? 0);
+  const baseX = swapXZ ? input.itemMm.diameterZMm : input.itemMm.diameterXMm;
+  const baseZ = swapXZ ? input.itemMm.diameterXMm : input.itemMm.diameterZMm;
+
+  // Horizontal mailer lays bottles/cans flat along Z (caps toward back hinge, labels facing up).
+  const itemSpanX = baseX;
+  const itemSpanZ = horizontal ? input.itemMm.heightMm : baseZ;
+  const itemSpanY = horizontal ? input.itemMm.diameterZMm : input.itemMm.heightMm;
+
+  const rawL = Math.ceil(cols * itemSpanX + Math.max(0, cols - 1) * colGap + 2 * wallPad);
+  const rawW = Math.ceil(rows * itemSpanZ + Math.max(0, rows - 1) * rowGap + 2 * wallPad);
 
   let rawH: number;
   if (tpl.id === 'fefco-0421-tray') {
-    // Showcase tray: ~46% of bottle/can height so labels shine clearly above tray walls.
-    rawH = Math.round(clampNum(input.itemMm.heightMm * 0.46, 46, 88));
+    // Showcase tray: ~46% of bottle/can height (~44% of retail box height) so front artwork shines clearly.
+    rawH = isBox
+      ? Math.round(clampNum(itemSpanY * 0.44, 46, 96))
+      : Math.round(clampNum(itemSpanY * 0.46, 46, 88));
+  } else if (horizontal) {
+    // Low-profile flat mailer clears lying cylinder diameter cleanly beneath the closed lid.
+    rawH = Math.ceil(itemSpanY + (hasProductInsert ? 6 : 5));
   } else {
-    // Enclosed shipping / rigid boxes clear caps cleanly under the lid.
-    rawH = Math.ceil(input.itemMm.heightMm + 5);
+    // Enclosed shipping / rigid boxes clear caps or retail boxes cleanly under the lid.
+    rawH = Math.ceil(itemSpanY + (isBox ? 4 : 5));
   }
 
   const lengthMm = Math.round(clampNum(rawL, tpl.minDimensions.length, tpl.maxDimensions.length));
@@ -174,7 +327,7 @@ export function computeAutoFitBoxDimensions(input: {
 
 /**
  * Compute exact local 3D slot coordinates (mm relative to `solved.contentAnchor.center2D`)
- * and fit diagnostics for packing `(cols × rows)` bottles/cans inside the current box.
+ * and fit diagnostics for packing `(cols × rows)` bottles/cans or Tier-2 retail boxes inside the current box.
  */
 export function computeBottlePackLayout(
   solved: SolvedDieline,
@@ -184,30 +337,51 @@ export function computeBottlePackLayout(
   const cols = Math.max(1, Math.min(6, Math.round(config.cols)));
   const rows = Math.max(1, Math.min(4, Math.round(config.rows)));
   const t = solved.params.thicknessMm;
+  const isBox = config.itemKind === 'box' && canPackRetailBoxes(solved.templateId);
+  const horizontal = !isBox && isHorizontalPackTemplate(solved.templateId);
   const hasHoneycomb =
-    solved.templateId === 'fefco-0201-rsc' && Boolean(config.honeycombDividers) && (cols > 1 || rows > 1);
+    !isBox &&
+    solved.templateId === 'fefco-0201-rsc' &&
+    Boolean(config.honeycombDividers) &&
+    (cols > 1 || rows > 1);
+  const hasProductInsert =
+    !isBox && solved.templateId === 'fefco-0427-mailer' && Boolean(config.productInsert);
   const honeycombDivGap = hasHoneycomb ? getHoneycombDividerThicknessMm(t) + 2.0 : 0;
   const openTopTemplate = isOpenTopPackagingTemplate(solved.templateId);
 
+  const insertColGap = hasProductInsert ? 10 : 0;
+  const insertRowGap = hasProductInsert ? 12 : 0;
+
   const colGap = Math.max(
     config.spacingMm,
-    cols > 1 ? honeycombDivGap : 0,
+    cols > 1 ? Math.max(honeycombDivGap, insertColGap) : 0,
   );
   const rowGap = Math.max(
     config.spacingMm,
-    rows > 1 ? honeycombDivGap : 0,
+    rows > 1 ? Math.max(honeycombDivGap, insertRowGap) : 0,
   );
-  const wallPad = Math.max(0, config.wallPaddingMm);
+  const wallPad = hasProductInsert
+    ? Math.max(10, config.wallPaddingMm)
+    : Math.max(0, config.wallPaddingMm);
 
-  const requiredLength = cols * itemMm.diameterXMm + Math.max(0, cols - 1) * colGap + 2 * wallPad;
-  const requiredWidth = rows * itemMm.diameterZMm + Math.max(0, rows - 1) * rowGap + 2 * wallPad;
-  const requiredHeight = openTopTemplate ? solved.innerMm.height : itemMm.heightMm + 2;
+  const snappedBoxYawDeg = isBox ? snapPackedBoxYawDeg(config.facingYawDeg) : config.facingYawDeg;
+  const swapXZ = isBox && isQuarterTurnYawDeg(snappedBoxYawDeg);
+  const baseX = swapXZ ? itemMm.diameterZMm : itemMm.diameterXMm;
+  const baseZ = swapXZ ? itemMm.diameterXMm : itemMm.diameterZMm;
+
+  const itemSpanX = baseX;
+  const itemSpanZ = horizontal ? itemMm.heightMm : baseZ;
+  const itemSpanY = horizontal ? itemMm.diameterZMm : itemMm.heightMm;
+
+  const requiredLength = cols * itemSpanX + Math.max(0, cols - 1) * colGap + 2 * wallPad;
+  const requiredWidth = rows * itemSpanZ + Math.max(0, rows - 1) * rowGap + 2 * wallPad;
+  const requiredHeight = openTopTemplate ? solved.innerMm.height : itemSpanY + 2;
 
   const overflowLengthMm = Math.max(0, Math.round((requiredLength - solved.innerMm.length) * 10) / 10);
   const overflowWidthMm = Math.max(0, Math.round((requiredWidth - solved.innerMm.width) * 10) / 10);
   const overflowHeightMm = openTopTemplate
     ? 0
-    : Math.max(0, Math.round((itemMm.heightMm - solved.innerMm.height) * 10) / 10);
+    : Math.max(0, Math.round((itemSpanY - solved.innerMm.height) * 10) / 10);
 
   const fitsHorizontal = overflowLengthMm <= 0.8 && overflowWidthMm <= 0.8;
   const fitsHeight = overflowHeightMm <= 0.8;
@@ -218,14 +392,14 @@ export function computeBottlePackLayout(
 
   const pitchX = alignToCells
     ? solved.innerMm.length / cols
-    : itemMm.diameterXMm + colGap;
+    : itemSpanX + colGap;
   const pitchZ = alignToCells
     ? solved.innerMm.width / rows
-    : itemMm.diameterZMm + rowGap;
+    : itemSpanZ + rowGap;
 
   const totalSpanX = (cols - 1) * pitchX;
   const totalSpanZ = (rows - 1) * pitchZ;
-  const baseYawRad = (config.facingYawDeg * Math.PI) / 180;
+  const baseYawRad = (snappedBoxYawDeg * Math.PI) / 180;
 
   const slots: BottleSlotPoseMm[] = [];
   for (let row = 0; row < rows; row++) {
@@ -233,13 +407,18 @@ export function computeBottlePackLayout(
       const xMm = -totalSpanX * 0.5 + col * pitchX;
       // Front row (+Z) has highest row index or symmetric around 0
       const zMm = -totalSpanZ * 0.5 + row * pitchZ;
-      const jitter = config.organicJitter ? deterministicJitterRad(col, row, config.jitterSeed ?? 0) : 0;
+      const jitter =
+        !isBox && config.organicJitter ? deterministicJitterRad(col, row, config.jitterSeed ?? 0) : 0;
+      const rawYawRad = baseYawRad + jitter;
+      const yawRad = horizontal
+        ? snapHorizontalRestingYawRad(config.modelId, itemMm, rawYawRad)
+        : rawYawRad;
       slots.push({
         col,
         row,
         xMm,
         zMm,
-        yawRad: baseYawRad + jitter,
+        yawRad,
       });
     }
   }
@@ -259,5 +438,6 @@ export function computeBottlePackLayout(
     overflowWidthMm,
     overflowHeightMm,
     openTopTemplate,
+    horizontal,
   };
 }

@@ -68,12 +68,17 @@ import {
   savePackagingParams,
 } from "@/lib/packaging-cad/preferences";
 import {
+  canPackRetailBoxes,
   computeAutoFitBoxDimensions,
+  DEFAULT_PACKABLE_BOX_TEMPLATE_ID,
   getBeverageFootprintMm,
+  getRetailBoxFootprintMm,
   isOpenTopPackagingTemplate,
+  isPackableRetailBoxTemplate,
   type BeverageFootprintMm,
 } from "@/lib/packaging-cad/pack-layout";
 import type { BottlePackVisualSource } from "@/lib/packaging-cad/bottle-packer";
+import type { BoxPackVisualSource } from "@/lib/packaging-cad/box-packer";
 import { createPackagingSubject, type PackagingSubjectController } from "@/lib/packaging-cad/adapter";
 import { getPanelUprightSizeMm } from "@/lib/packaging-cad/artwork-composer";
 import {
@@ -150,6 +155,7 @@ import {
 } from "@/lib/labellab/artwork-store";
 import {
   capturePackedBottleSnapshot,
+  capturePackedBoxSnapshot,
   capturePackagingArtworkSnapshot,
   deleteCustomProject,
   deleteProjectGroupRecord,
@@ -162,6 +168,7 @@ import {
   saveCustomProject,
   saveProjectGroup,
   type CustomProjectRecord,
+  type PackedBoxSnapshot,
   type ProjectGroup,
 } from "@/lib/labellab/project-store";
 import {
@@ -322,6 +329,11 @@ export default function LabellabApp() {
   const [beverageArtworkOpenSignal, setBeverageArtworkOpenSignal] = useState(0);
   const [packBottleLabelUrl, setPackBottleLabelUrl] = useState<string | undefined>(undefined);
   const [customProjectLabelUrl, setCustomProjectLabelUrl] = useState<string | undefined>(undefined);
+  const [loadedPackedBoxSnapshot, setLoadedPackedBoxSnapshot] = useState<PackedBoxSnapshot | undefined>(undefined);
+  const [packedBoxHydrated, setPackedBoxHydrated] = useState<{
+    key: string;
+    artwork: PackagingArtworkState;
+  } | null>(null);
   const [artwork, setArtwork] = useState<string>();
   const [artworkEditing, setArtworkEditing] = useState(false);
   const [artworkReset, setArtworkReset] = useState(0);
@@ -462,9 +474,50 @@ export default function LabellabApp() {
     return [...cloudBeverageMeta.records, ...localBev];
   }, [cloudBeverageMeta.records, projects]);
 
+  const cloudRetailBoxMeta = useMemo(() => {
+    const records: CustomProjectRecord[] = [];
+    const itemsById: Record<string, { project: CloudProjectSummary; item: CloudProjectItem }> = {};
+    const thumbUrls: Record<string, string> = {};
+    for (const cp of cloudProjects) {
+      for (const item of cp.items) {
+        if (item.kind !== "packaging" || item.payload.kind !== "packaging") continue;
+        if (!isPackableRetailBoxTemplate(item.payload.packagingParams.templateId)) continue;
+        const updatedMs = Date.parse(item.updatedAt) || 0;
+        records.push({
+          id: item.id,
+          name: item.name,
+          kind: "packaging",
+          date: item.updatedAt,
+          createdAt: updatedMs,
+          updatedAt: updatedMs,
+          groupId: cp.id,
+          groupName: cp.name,
+          sortOrder: item.sortOrder,
+          settings: item.payload.settings,
+          packagingParams: item.payload.packagingParams,
+        });
+        itemsById[item.id] = { project: cp, item };
+        if (item.thumbnailHash) {
+          thumbUrls[item.id] = cloudProjectAssetUrl(cp.id, item.thumbnailHash);
+        }
+      }
+    }
+    return { records, itemsById, thumbUrls };
+  }, [cloudProjects]);
+
+  const retailBoxProjects = useMemo(() => {
+    const localBoxes = projects.filter(
+      (p) =>
+        p.kind === "packaging" &&
+        p.packagingParams &&
+        isPackableRetailBoxTemplate(p.packagingParams.templateId),
+    );
+    return [...cloudRetailBoxMeta.records, ...localBoxes];
+  }, [cloudRetailBoxMeta.records, projects]);
+
   const combinedPackThumbUrls = useMemo(
-    () => ({ ...cloudBeverageMeta.thumbUrls, ...projectThumbUrls }),
-    [cloudBeverageMeta.thumbUrls, projectThumbUrls],
+    () => ({ ...cloudBeverageMeta.thumbUrls, ...cloudRetailBoxMeta.thumbUrls, ...projectThumbUrls }),
+    [cloudBeverageMeta.thumbUrls, cloudRetailBoxMeta.thumbUrls, projectThumbUrls],
   );
 
   const groupedProjects = useMemo(
@@ -515,10 +568,17 @@ export default function LabellabApp() {
   );
   const activeCustomPackProject = useMemo(
     () =>
-      bottlePack.customProjectId
+      bottlePack.itemKind !== "box" && bottlePack.customProjectId
         ? beverageProjects.find((p) => p.id === bottlePack.customProjectId)
         : undefined,
-    [bottlePack.customProjectId, beverageProjects],
+    [bottlePack.itemKind, bottlePack.customProjectId, beverageProjects],
+  );
+  const activeCustomBoxProject = useMemo(
+    () =>
+      bottlePack.itemKind === "box" && bottlePack.boxProjectId
+        ? retailBoxProjects.find((p) => p.id === bottlePack.boxProjectId)
+        : undefined,
+    [bottlePack.itemKind, bottlePack.boxProjectId, retailBoxProjects],
   );
 
   useEffect(() => {
@@ -609,7 +669,7 @@ export default function LabellabApp() {
     : undefined;
 
   const activeBottleVisualSource = useMemo<BottlePackVisualSource | null>(() => {
-    if (!bottlePack.enabled) return null;
+    if (!bottlePack.enabled || bottlePack.itemKind === "box") return null;
     if (activeCustomPackProject) {
       const s = activeCustomPackProject.settings;
       const targetModel = getLabModel(s.modelId);
@@ -668,6 +728,7 @@ export default function LabellabApp() {
     };
   }, [
     bottlePack.enabled,
+    bottlePack.itemKind,
     bottlePack.modelId,
     activeCustomPackProject,
     effectivePackBottleLabelUrl,
@@ -679,6 +740,131 @@ export default function LabellabApp() {
   useEffect(() => {
     activeBottleVisualSourceRef.current = activeBottleVisualSource;
   }, [activeBottleVisualSource]);
+
+  const revokePackagingArtworkUrls = useCallback((state: PackagingArtworkState) => {
+    if (state.outsideDielineUrl?.startsWith("blob:")) URL.revokeObjectURL(state.outsideDielineUrl);
+    if (state.insideDielineUrl?.startsWith("blob:")) URL.revokeObjectURL(state.insideDielineUrl);
+    if (state.finishMaskUrl?.startsWith("blob:")) URL.revokeObjectURL(state.finishMaskUrl);
+    for (const ov of Object.values(state.panelOverlays)) {
+      if (ov.imageUrl?.startsWith("blob:")) URL.revokeObjectURL(ov.imageUrl);
+    }
+  }, []);
+
+  // Hydrate artwork blobs for any selected saved Tier-2 retail box (local, cloud, or opened snapshot).
+  useEffect(() => {
+    if (!bottlePack.enabled || bottlePack.itemKind !== "box" || !canPackRetailBoxes(packagingParams.templateId)) {
+      return;
+    }
+    const localSnapshot = activeCustomBoxProject?.packagingArtwork;
+    const cloudRef = activeCustomBoxProject
+      ? cloudRetailBoxMeta.itemsById[activeCustomBoxProject.id]
+      : undefined;
+    const fallbackSnapshot = !activeCustomBoxProject ? loadedPackedBoxSnapshot?.packagingArtwork : undefined;
+
+    if (localSnapshot) {
+      const hydratedArt = hydratePackagingArtworkSnapshot(localSnapshot);
+      const key = `local:${activeCustomBoxProject!.id}:${activeCustomBoxProject!.updatedAt}`;
+      const frame = requestAnimationFrame(() => setPackedBoxHydrated({ key, artwork: hydratedArt }));
+      return () => {
+        cancelAnimationFrame(frame);
+        revokePackagingArtworkUrls(hydratedArt);
+      };
+    }
+
+    if (cloudRef) {
+      let cancelled = false;
+      let createdArt: PackagingArtworkState | undefined;
+      void hydrateCloudItemToRecord(cloudRef.project, cloudRef.item)
+        .then((rec) => {
+          if (cancelled || !rec.packagingArtwork) return;
+          createdArt = hydratePackagingArtworkSnapshot(rec.packagingArtwork);
+          setPackedBoxHydrated({
+            key: `cloud:${rec.id}:${rec.updatedAt}`,
+            artwork: createdArt,
+          });
+        })
+        .catch(() => {});
+      return () => {
+        cancelled = true;
+        if (createdArt) revokePackagingArtworkUrls(createdArt);
+      };
+    }
+
+    if (fallbackSnapshot) {
+      const hydratedArt = hydratePackagingArtworkSnapshot(fallbackSnapshot);
+      const key = `snapshot:${loadedPackedBoxSnapshot?.name ?? "box"}`;
+      const frame = requestAnimationFrame(() => setPackedBoxHydrated({ key, artwork: hydratedArt }));
+      return () => {
+        cancelAnimationFrame(frame);
+        revokePackagingArtworkUrls(hydratedArt);
+      };
+    }
+
+    const frame = requestAnimationFrame(() => setPackedBoxHydrated(null));
+    return () => cancelAnimationFrame(frame);
+  }, [
+    bottlePack.enabled,
+    bottlePack.itemKind,
+    packagingParams.templateId,
+    activeCustomBoxProject,
+    cloudRetailBoxMeta.itemsById,
+    loadedPackedBoxSnapshot,
+    revokePackagingArtworkUrls,
+  ]);
+
+  const activeBoxVisualSource = useMemo<BoxPackVisualSource | null>(() => {
+    if (
+      !bottlePack.enabled ||
+      bottlePack.itemKind !== "box" ||
+      !canPackRetailBoxes(packagingParams.templateId)
+    ) {
+      return null;
+    }
+    if (activeCustomBoxProject?.packagingParams) {
+      const expectedPrefix = `${activeCustomBoxProject.id}:${activeCustomBoxProject.updatedAt}`;
+      const matchingArt =
+        packedBoxHydrated && packedBoxHydrated.key.endsWith(expectedPrefix)
+          ? packedBoxHydrated
+          : null;
+      return {
+        params: activeCustomBoxProject.packagingParams,
+        ...(matchingArt ? { artwork: matchingArt.artwork, artworkKey: matchingArt.key } : { artworkKey: `noart:${expectedPrefix}` }),
+        customProjectId: activeCustomBoxProject.id,
+        customProjectName: activeCustomBoxProject.name,
+      };
+    }
+    if (loadedPackedBoxSnapshot && isPackableRetailBoxTemplate(loadedPackedBoxSnapshot.packagingParams.templateId)) {
+      const matchingArt =
+        packedBoxHydrated && packedBoxHydrated.key.startsWith("snapshot:")
+          ? packedBoxHydrated
+          : null;
+      return {
+        params: loadedPackedBoxSnapshot.packagingParams,
+        ...(matchingArt ? { artwork: matchingArt.artwork, artworkKey: matchingArt.key } : { artworkKey: "snapshot:plain" }),
+        ...(loadedPackedBoxSnapshot.name ? { customProjectName: loadedPackedBoxSnapshot.name } : {}),
+      };
+    }
+    const tplId =
+      bottlePack.boxTemplateId && isPackableRetailBoxTemplate(bottlePack.boxTemplateId)
+        ? bottlePack.boxTemplateId
+        : DEFAULT_PACKABLE_BOX_TEMPLATE_ID;
+    return {
+      params: createDefaultPackagingParams(tplId),
+      artworkKey: `catalog:${tplId}`,
+    };
+  }, [
+    bottlePack.enabled,
+    bottlePack.itemKind,
+    bottlePack.boxTemplateId,
+    packagingParams.templateId,
+    activeCustomBoxProject,
+    loadedPackedBoxSnapshot,
+    packedBoxHydrated,
+  ]);
+  const activeBoxVisualSourceRef = useRef<BoxPackVisualSource | null>(activeBoxVisualSource);
+  useEffect(() => {
+    activeBoxVisualSourceRef.current = activeBoxVisualSource;
+  }, [activeBoxVisualSource]);
 
   useEffect(() => {
     const initial = loadPreferences();
@@ -704,6 +890,12 @@ export default function LabellabApp() {
 
     if (requestedTemplate && PACKAGING_TEMPLATES.some((t) => t.id === requestedTemplate)) {
       Object.assign(initialPackaging, createDefaultPackagingParams(requestedTemplate));
+      if (initialBottlePack.itemKind === "box" && !canPackRetailBoxes(requestedTemplate)) {
+        initialBottlePack.enabled = false;
+        initialBottlePack.itemKind = "beverage";
+        initialBottlePack.boxProjectId = undefined;
+        initialBottlePack.boxTemplateId = undefined;
+      }
     }
 
     beverageSceneModeRef.current = initial.sceneMode;
@@ -894,7 +1086,11 @@ export default function LabellabApp() {
           }
         },
       });
-      subject.syncBottlePack(bottlePackRef.current, activeBottleVisualSourceRef.current);
+      subject.syncBottlePack(
+        bottlePackRef.current,
+        activeBottleVisualSourceRef.current,
+        activeBoxVisualSourceRef.current,
+      );
       packagingSubjectRef.current = subject;
       setPackagingSubject(subject);
     }
@@ -902,21 +1098,16 @@ export default function LabellabApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, isPackaging]);
 
-  // Keep 3D packed bottles synced cleanly whenever bottle config or studio artwork/colors change.
+  // Keep 3D packed bottles & retail boxes synced cleanly whenever config or studio artwork/colors change.
   useEffect(() => {
     if (!isPackaging || !packagingSubjectRef.current) return;
-    packagingSubjectRef.current.syncBottlePack(bottlePack, activeBottleVisualSource);
+    packagingSubjectRef.current.syncBottlePack(
+      bottlePack,
+      activeBottleVisualSource,
+      activeBoxVisualSource,
+    );
     sceneRef.current?.refreshProceduralBounds(false);
-  }, [isPackaging, packagingSubject, bottlePack, activeBottleVisualSource]);
-
-  const revokePackagingArtworkUrls = useCallback((state: PackagingArtworkState) => {
-    if (state.outsideDielineUrl?.startsWith("blob:")) URL.revokeObjectURL(state.outsideDielineUrl);
-    if (state.insideDielineUrl?.startsWith("blob:")) URL.revokeObjectURL(state.insideDielineUrl);
-    if (state.finishMaskUrl?.startsWith("blob:")) URL.revokeObjectURL(state.finishMaskUrl);
-    for (const ov of Object.values(state.panelOverlays)) {
-      if (ov.imageUrl?.startsWith("blob:")) URL.revokeObjectURL(ov.imageUrl);
-    }
-  }, []);
+  }, [isPackaging, packagingSubject, bottlePack, activeBottleVisualSource, activeBoxVisualSource]);
 
   const refreshCloudState = useCallback(async () => {
     try {
@@ -1158,6 +1349,14 @@ export default function LabellabApp() {
           settings,
         )
       : undefined;
+    const packedBoxSnapshot =
+      isPackaging && canPackRetailBoxes(packagingParams.templateId)
+        ? await capturePackedBoxSnapshot(
+            bottlePackRef.current,
+            activeCustomBoxProject,
+            activeBoxVisualSource?.artwork,
+          )
+        : undefined;
 
     const targetIsExistingLocal = Boolean(
       payload.groupId && groupedProjects.some((g) => g.group.id === payload.groupId),
@@ -1193,6 +1392,7 @@ export default function LabellabApp() {
         ...(isPackaging ? { packagingParams: { ...packagingParams }, bottlePack: { ...bottlePack } } : {}),
         ...(packagingArtworkSnapshot ? { packagingArtwork: packagingArtworkSnapshot } : {}),
         ...(packedBottleSnapshot ? { packedBottle: packedBottleSnapshot } : {}),
+        ...(packedBoxSnapshot ? { packedBox: packedBoxSnapshot } : {}),
       };
 
       try {
@@ -1269,6 +1469,7 @@ export default function LabellabApp() {
       ...(isPackaging ? { packagingParams: { ...packagingParams }, bottlePack: { ...bottlePack } } : {}),
       ...(packagingArtworkSnapshot ? { packagingArtwork: packagingArtworkSnapshot } : {}),
       ...(packedBottleSnapshot ? { packedBottle: packedBottleSnapshot } : {}),
+      ...(packedBoxSnapshot ? { packedBox: packedBoxSnapshot } : {}),
     };
     const saved = await saveCustomProject(record);
     setProjects((prev) => [saved, ...prev.filter((item) => item.id !== saved.id)].slice(0, 120));
@@ -1290,8 +1491,12 @@ export default function LabellabApp() {
       setProjectGroups((prev) => prev.filter((g) => g.id !== gid));
     }
     if (loadedProjectId === project.id) setLoadedProjectId(undefined);
-    if (bottlePack.customProjectId === project.id) {
-      setBottlePack((cur) => ({ ...cur, customProjectId: undefined }));
+    if (bottlePack.customProjectId === project.id || bottlePack.boxProjectId === project.id) {
+      setBottlePack((cur) => ({
+        ...cur,
+        ...(cur.customProjectId === project.id ? { customProjectId: undefined } : {}),
+        ...(cur.boxProjectId === project.id ? { boxProjectId: undefined } : {}),
+      }));
     }
     setToast(st.toasts.deletedName(project.name));
   };
@@ -1306,8 +1511,19 @@ export default function LabellabApp() {
     if (loadedProjectId && victims.some((v) => v.id === loadedProjectId)) {
       setLoadedProjectId(undefined);
     }
-    if (bottlePack.customProjectId && victims.some((v) => v.id === bottlePack.customProjectId)) {
-      setBottlePack((cur) => ({ ...cur, customProjectId: undefined }));
+    if (
+      (bottlePack.customProjectId && victims.some((v) => v.id === bottlePack.customProjectId)) ||
+      (bottlePack.boxProjectId && victims.some((v) => v.id === bottlePack.boxProjectId))
+    ) {
+      setBottlePack((cur) => ({
+        ...cur,
+        ...(cur.customProjectId && victims.some((v) => v.id === cur.customProjectId)
+          ? { customProjectId: undefined }
+          : {}),
+        ...(cur.boxProjectId && victims.some((v) => v.id === cur.boxProjectId)
+          ? { boxProjectId: undefined }
+          : {}),
+      }));
     }
     setToast(st.toasts.deletedProject(groupName));
   };
@@ -1324,6 +1540,7 @@ export default function LabellabApp() {
         setPackagingArtwork(hydratedArt);
         void packagingSubjectRef.current?.syncArtwork(hydratedArt);
       }
+      setLoadedPackedBoxSnapshot(project.packedBox);
       setDomain("packaging");
       setPackagingParams(project.packagingParams);
       if (project.bottlePack) setBottlePack(project.bottlePack);
@@ -1643,16 +1860,40 @@ export default function LabellabApp() {
     }
   };
 
+  const resolvePackFootprintMm = useCallback(
+    (pack: BottlePackConfig, outerTemplateId: string): BeverageFootprintMm => {
+      if (pack.itemKind === "box" && canPackRetailBoxes(outerTemplateId)) {
+        const boxProj = pack.boxProjectId
+          ? retailBoxProjects.find((p) => p.id === pack.boxProjectId)
+          : undefined;
+        const innerParams =
+          boxProj?.packagingParams ??
+          (!pack.boxProjectId && loadedPackedBoxSnapshot
+            ? loadedPackedBoxSnapshot.packagingParams
+            : undefined) ??
+          createDefaultPackagingParams(
+            pack.boxTemplateId && isPackableRetailBoxTemplate(pack.boxTemplateId)
+              ? pack.boxTemplateId
+              : DEFAULT_PACKABLE_BOX_TEMPLATE_ID,
+          );
+        return getRetailBoxFootprintMm(innerParams);
+      }
+      const targetModel = getLabModel(pack.modelId);
+      return (
+        measuredFootprints[targetModel.id] ??
+        getBeverageFootprintMm(targetModel.id, targetModel.asset.volumeMl)
+      );
+    },
+    [measuredFootprints, retailBoxProjects, loadedPackedBoxSnapshot],
+  );
+
   const applyAutoFitForPack = useCallback(
     (
       nextPack: BottlePackConfig,
       targetParams: PackagingParams,
       options?: { openLidIfClosed?: boolean; refitCamera?: boolean },
     ) => {
-      const targetModel = getLabModel(nextPack.modelId);
-      const fp =
-        measuredFootprints[targetModel.id] ??
-        getBeverageFootprintMm(targetModel.id, targetModel.asset.volumeMl);
+      const fp = resolvePackFootprintMm(nextPack, targetParams.templateId);
       const fit = computeAutoFitBoxDimensions({
         templateId: targetParams.templateId,
         itemMm: fp,
@@ -1681,37 +1922,73 @@ export default function LabellabApp() {
       }
       return fit;
     },
-    [measuredFootprints],
+    [resolvePackFootprintMm],
   );
 
   const updateBottlePack = (patch: Partial<BottlePackConfig>) => {
     if (exportBusy) return;
     const enablingNow = patch.enabled === true && !bottlePack.enabled;
 
+    if (
+      patch.boxProjectId !== undefined ||
+      patch.boxTemplateId !== undefined ||
+      patch.itemKind === "beverage"
+    ) {
+      setLoadedPackedBoxSnapshot(undefined);
+    }
+
     const nextPack: BottlePackConfig = {
       ...bottlePack,
       // When first turning Pack Your Bottles ON, default to user's active Beverage Studio model.
-      ...(enablingNow ? { modelId: settings.modelId } : {}),
+      ...(enablingNow && bottlePack.itemKind !== "box" ? { modelId: settings.modelId } : {}),
       ...patch,
     };
+    // Enforce strict 3-tier rule: Tier-2 retail boxes can only pack beverages (never boxes).
+    if (nextPack.itemKind === "box" && !canPackRetailBoxes(packagingParams.templateId)) {
+      nextPack.itemKind = "beverage";
+      nextPack.boxProjectId = undefined;
+      nextPack.boxTemplateId = undefined;
+    }
     setBottlePack(nextPack);
 
     const gridOrModelChanged =
       enablingNow ||
+      patch.itemKind !== undefined ||
       patch.modelId !== undefined ||
       patch.customProjectId !== undefined ||
+      patch.boxProjectId !== undefined ||
+      patch.boxTemplateId !== undefined ||
+      (patch.facingYawDeg !== undefined && nextPack.itemKind === "box") ||
       patch.cols !== undefined ||
       patch.rows !== undefined ||
       patch.spacingMm !== undefined ||
       patch.wallPaddingMm !== undefined ||
-      patch.honeycombDividers !== undefined;
+      patch.honeycombDividers !== undefined ||
+      patch.productInsert !== undefined;
 
     if (nextPack.enabled && nextPack.autoFitOnChange && gridOrModelChanged) {
       applyAutoFitForPack(nextPack, packagingParams, {
         openLidIfClosed: enablingNow,
-        refitCamera: enablingNow || patch.customProjectId !== undefined,
+        refitCamera:
+          enablingNow ||
+          patch.customProjectId !== undefined ||
+          patch.boxProjectId !== undefined ||
+          patch.boxTemplateId !== undefined ||
+          patch.itemKind !== undefined,
       });
-      if (patch.customProjectId) {
+      if (patch.boxProjectId) {
+        const boxProj = retailBoxProjects.find((p) => p.id === patch.boxProjectId);
+        if (boxProj) {
+          setToast(
+            `Packed ${nextPack.cols * nextPack.rows}× "${boxProj.name}" inside ${activePackagingTemplate.shortName}.`,
+          );
+        }
+      } else if (patch.boxTemplateId && nextPack.itemKind === "box") {
+        const bt = getPackagingTemplate(patch.boxTemplateId);
+        setToast(
+          `Packed ${nextPack.cols * nextPack.rows}× ${bt.shortName} inside ${activePackagingTemplate.shortName}.`,
+        );
+      } else if (patch.customProjectId) {
         const proj = beverageProjects.find((p) => p.id === patch.customProjectId);
         if (proj) {
           setToast(
@@ -1735,8 +2012,9 @@ export default function LabellabApp() {
       openLidIfClosed: false,
       refitCamera: true,
     });
+    const itemUnit = bottlePack.itemKind === "box" ? "boxes" : "bottles";
     setToast(
-      `Auto-fitted inner box to ${fit.lengthMm}×${fit.widthMm}×${fit.heightMm} mm for ${bottlePack.cols * bottlePack.rows}× bottles.`,
+      `Auto-fitted inner box to ${fit.lengthMm}×${fit.widthMm}×${fit.heightMm} mm for ${bottlePack.cols * bottlePack.rows}× ${itemUnit}.`,
     );
   };
 
@@ -1757,16 +2035,31 @@ export default function LabellabApp() {
     if (exportBusy) return;
     setPackagingFoldPlaying(false);
     packagingSubjectRef.current?.setFoldPlaying(false);
+    // Switching to a different box template starts a new unsaved item so clicking "Save project"
+    // adds this tray/carton alongside the saved retail box instead of overwriting it!
+    if (tpl.id !== packagingParams.templateId) {
+      setLoadedProjectId(undefined);
+      setLoadedCloudItemId(undefined);
+    }
+    // Strict non-recursive tier guard: switching to a Tier-2 retail box exits box-packing mode cleanly.
+    let effectivePack = bottlePack;
+    if (bottlePack.itemKind === "box" && !canPackRetailBoxes(tpl.id)) {
+      effectivePack = {
+        ...bottlePack,
+        enabled: false,
+        itemKind: "beverage",
+        boxProjectId: undefined,
+        boxTemplateId: undefined,
+      };
+      setBottlePack(effectivePack);
+    }
     let next = createDefaultPackagingParams(tpl.id);
-    if (bottlePack.enabled && bottlePack.autoFitOnChange) {
-      const targetModel = getLabModel(bottlePack.modelId);
-      const fp =
-        measuredFootprints[targetModel.id] ??
-        getBeverageFootprintMm(targetModel.id, targetModel.asset.volumeMl);
+    if (effectivePack.enabled && effectivePack.autoFitOnChange) {
+      const fp = resolvePackFootprintMm(effectivePack, tpl.id);
       const fit = computeAutoFitBoxDimensions({
         templateId: tpl.id,
         itemMm: fp,
-        config: bottlePack,
+        config: effectivePack,
         thicknessMm: next.thicknessMm,
         dividerGrid: next.dividerGrid,
       });
@@ -2876,6 +3169,9 @@ export default function LabellabApp() {
                       activeBeverageModelId={settings.modelId}
                       hasActiveBeverageArtwork={Boolean(artwork)}
                       savedBottleProjects={beverageProjects}
+                      savedRetailBoxProjects={retailBoxProjects}
+                      loadedPackedBoxName={loadedPackedBoxSnapshot?.name}
+                      loadedPackedBoxParams={loadedPackedBoxSnapshot?.packagingParams}
                       projectThumbnails={combinedPackThumbUrls}
                       hasPackLabelOverride={Boolean(bottlePack.packLabelArtworkId)}
                       hasCustomFinishMask={Boolean(packagingArtwork.finishMaskUrl)}

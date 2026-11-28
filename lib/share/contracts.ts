@@ -64,6 +64,12 @@ export interface SharedPackedBottlePayload {
   labelHash?: string;
 }
 
+export interface SharedPackedBoxPayload {
+  name?: string;
+  packagingParams: PackagingParams;
+  packagingArtwork?: SharedPackagingArtworkRefs;
+}
+
 export interface SharedBeverageItemPayload {
   kind: 'beverage';
   settings: ScenePreferences;
@@ -77,6 +83,7 @@ export interface SharedPackagingItemPayload {
   bottlePack?: BottlePackConfig;
   packagingArtwork?: SharedPackagingArtworkRefs;
   packedBottle?: SharedPackedBottlePayload;
+  packedBox?: SharedPackedBoxPayload;
 }
 
 export type SharedItemPayload = SharedBeverageItemPayload | SharedPackagingItemPayload;
@@ -161,15 +168,17 @@ export function collectPayloadAssetHashes(
       add(item.payload.labelHash);
     } else {
       add(item.payload.packedBottle?.labelHash);
-      const art = item.payload.packagingArtwork;
-      if (art) {
+      const collectArtworkHashes = (art?: SharedPackagingArtworkRefs) => {
+        if (!art) return;
         add(art.outsideDielineHash);
         add(art.insideDielineHash);
         add(art.finishMaskHash);
         for (const ov of Object.values(art.panelOverlays)) {
           add(ov.imageHash);
         }
-      }
+      };
+      collectArtworkHashes(item.payload.packagingArtwork);
+      collectArtworkHashes(item.payload.packedBox?.packagingArtwork);
     }
   }
   return [...hashes];

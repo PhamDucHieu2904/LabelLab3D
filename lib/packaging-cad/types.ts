@@ -134,6 +134,8 @@ export interface PackagingParams {
 
   // Structural options (richer than Pacdora)
   lockTabCount: 1 | 2;
+  /** Optional 0 / 1 / 2 / 3 front rim positive-lock tabs (e.g. ECMA A21 Snap-Lock Carton). */
+  frontLockTabCount: 0 | 1 | 2 | 3;
   lockTabWidthMm: number;
   dustFlapTaperDeg: number;
   flapGapMm: number;
@@ -220,11 +222,19 @@ export interface ContentAnchorSpec {
   floorOffsetMm: number;
 }
 
+export type PackItemKind = 'beverage' | 'box';
+
 export interface BottlePackConfig {
   enabled: boolean;
+  /** Product kind packed inside the box/tray: 'beverage' (default bottle/can) or 'box' (saved/catalog retail box). */
+  itemKind?: PackItemKind;
   modelId: string;
   /** Optional saved Custom Bottle/Can Project id from Bottles & Cans. */
   customProjectId?: string;
+  /** Optional saved Retail Box Project id (e.g. ECMA A10) when `itemKind === 'box'`. */
+  boxProjectId?: string;
+  /** Default/catalog retail box template id when `itemKind === 'box'` (e.g. 'ecma-a10-seal-end'). */
+  boxTemplateId?: string;
   /** Optional tray-level bottle label artwork override stored in IndexedDB. */
   packLabelArtworkId?: string;
   cols: number;
@@ -236,6 +246,8 @@ export interface BottlePackConfig {
   jitterSeed?: number;
   /** Optional interlocking corrugated honeycomb cell dividers inside FEFCO 0201 Top-Open Carton. */
   honeycombDividers?: boolean;
+  /** Optional die-cut corrugated product insert tray ("Khay giấy định hình") inside flat FEFCO 0427 Mailer Box. */
+  productInsert?: boolean;
   autoFitOnChange: boolean;
 }
 
@@ -333,6 +345,7 @@ export interface PackagingSizePreset {
 
 export interface PackagingFeatureSupport {
   readonly lockTabs: boolean;
+  readonly frontRimLockTabs?: boolean;
   readonly dustFlapTaper: boolean;
   readonly flapGap: boolean;
   readonly tuckStyle: boolean;

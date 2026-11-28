@@ -581,8 +581,9 @@ export function createLabelPaperBackingMaterial(): THREE.MeshStandardMaterial {
     depthWrite: true,
     depthTest: true,
     polygonOffset: true,
-    polygonOffsetFactor: 1,
-    polygonOffsetUnits: 1,
+    // Keep factor = 0 so grazing edge-on triangles on lying bottles never get slope-scaled depth shifts.
+    polygonOffsetFactor: 0,
+    polygonOffsetUnits: 2,
   });
   mat.name = 'PackedPaperLabelBack';
   mat.onBeforeCompile = (shader) => {
@@ -1294,16 +1295,35 @@ export function createBottlePacker(callbacks?: {
     const layout = computeBottlePackLayout(solved, footprintMm, config);
     const dummy = new THREE.Matrix4();
     const rotY = new THREE.Matrix4();
+    const rotLay = new THREE.Matrix4().makeRotationX(-Math.PI * 0.5);
     const trans = new THREE.Matrix4();
     const count = layout.slots.length;
+    const layHalfLenM = footprintMm.heightMm * 0.5 * MM_TO_METRE;
 
     for (const entry of activeInstanced) {
       entry.mesh.count = count;
       for (let i = 0; i < count; i++) {
         const slot = layout.slots[i];
-        trans.makeTranslation(slot.xMm * MM_TO_METRE, 0, slot.zMm * MM_TO_METRE);
         rotY.makeRotationY(frontYaw + slot.yawRad);
-        dummy.copy(trans).multiply(rotY).multiply(entry.partLocalMatrix);
+        if (layout.horizontal) {
+          // Lay bottle/can flat along Z (caps toward back hinge -Z, base toward front +Z,
+          // front label facing straight UP +Y toward open lid, resting flush on y = 0).
+          const totalYaw = frontYaw + slot.yawRad;
+          const layHalfHeightM =
+            (Math.abs(Math.cos(totalYaw)) * footprintMm.diameterZMm +
+              Math.abs(Math.sin(totalYaw)) * footprintMm.diameterXMm) *
+            0.5 *
+            MM_TO_METRE;
+          trans.makeTranslation(
+            slot.xMm * MM_TO_METRE,
+            layHalfHeightM,
+            slot.zMm * MM_TO_METRE + layHalfLenM,
+          );
+          dummy.copy(trans).multiply(rotLay).multiply(rotY).multiply(entry.partLocalMatrix);
+        } else {
+          trans.makeTranslation(slot.xMm * MM_TO_METRE, 0, slot.zMm * MM_TO_METRE);
+          dummy.copy(trans).multiply(rotY).multiply(entry.partLocalMatrix);
+        }
         entry.mesh.setMatrixAt(i, dummy);
       }
       entry.mesh.instanceMatrix.needsUpdate = true;
@@ -1453,8 +1473,9 @@ export function createBottlePacker(callbacks?: {
               specularIntensity: canLabelCoupled.specularIntensity,
               envMapIntensity: 1.35,
               polygonOffset: true,
-              polygonOffsetFactor: -1,
-              polygonOffsetUnits: -1,
+              // Zero slope-scale factor prevents edge-on label faces on lying bottles from punching through box walls.
+              polygonOffsetFactor: 0,
+              polygonOffsetUnits: -2,
             })
           : new THREE.MeshStandardMaterial({
               color: labelTexture ? '#ffffff' : (safeHex(slotSpec?.color) ?? '#f8f7f3'),
@@ -1468,7 +1489,7 @@ export function createBottlePacker(callbacks?: {
               depthTest: true,
               side: THREE.FrontSide,
               polygonOffset: true,
-              polygonOffsetFactor: -2,
+              polygonOffsetFactor: 0,
               polygonOffsetUnits: -2,
             });
         attachPackedLabelHoverShader(
@@ -1984,8 +2005,8 @@ export function createBottlePacker(callbacks?: {
       if (!layout.slots.length) return box;
 
       const rx = fp.diameterXMm * 0.5 * MM_TO_METRE;
-      const rz = fp.diameterZMm * 0.5 * MM_TO_METRE;
-      const h = fp.heightMm * MM_TO_METRE;
+      const rz = (layout.horizontal ? fp.heightMm : fp.diameterZMm) * 0.5 * MM_TO_METRE;
+      const h = (layout.horizontal ? fp.diameterZMm : fp.heightMm) * MM_TO_METRE;
       const corner = new THREE.Vector3();
 
       for (const slot of layout.slots) {

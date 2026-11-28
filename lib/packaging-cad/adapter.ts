@@ -22,11 +22,18 @@ import {
   type BottlePackVisualSource,
 } from './bottle-packer';
 import {
+  createBoxPacker,
+  type BoxPackVisualSource,
+} from './box-packer';
+import {
+  canPackRetailBoxes,
+  computeBottlePackLayout,
   getBeverageFootprintMm,
   type BeverageFootprintMm,
 } from './pack-layout';
 import {
   buildHoneycombPartitionGeometry,
+  buildMailerInsertTrayGeometry,
   getHoneycombDividerThicknessMm,
 } from './geometry/partition-builder';
 
@@ -34,8 +41,12 @@ export interface PackagingSubjectController extends ProceduralSubject {
   getSolved(): SolvedDieline;
   /** Rebuild geometry & materials when structural/dimension/material params change. */
   syncParams(params: PackagingParams, options?: { interactive?: boolean }): SolvedDieline;
-  /** Sync "Pack Your Bottles" combo contents mounted inside the current box/tray. */
-  syncBottlePack(config: BottlePackConfig, visualSource: BottlePackVisualSource | null): void;
+  /** Sync "Pack Your Products" combo contents (bottles/cans OR Tier-2 retail boxes) inside the current box/tray. */
+  syncBottlePack(
+    config: BottlePackConfig,
+    visualSource: BottlePackVisualSource | null,
+    boxVisualSource?: BoxPackVisualSource | null,
+  ): void;
   /** Ultra-fast folding update (zero geometry rebuild, 60-120 FPS). */
   setFoldProgress(progress: number): void;
   /** Toggle smooth ping-pong open/close fold playback animation. */
@@ -58,6 +69,7 @@ function geometrySignature(p: PackagingParams): string {
     p.thicknessMm,
     p.fluteDirection,
     p.lockTabCount,
+    p.frontLockTabCount,
     p.lockTabWidthMm,
     p.dustFlapTaperDeg,
     p.flapGapMm,
@@ -104,6 +116,7 @@ export function createPackagingSubject(
   let currentArtwork = initialArtwork;
   let currentBottleConfig: BottlePackConfig | null = null;
   let currentBottleVisual: BottlePackVisualSource | null = null;
+  let currentBoxVisual: BoxPackVisualSource | null = null;
   let solved = solvePackagingTemplate(currentParams);
   let lastGeoSig = geometrySignature(solved.params);
   let currentHighlight: PackagingPartGroup | null = null;
@@ -140,13 +153,20 @@ export function createPackagingSubject(
   const syncHoneycombPartition = () => {
     if (disposed) return;
     const cfg = currentBottleConfig;
-    const shouldShow =
+    const packingBoxes = Boolean(cfg?.enabled) && cfg?.itemKind === 'box' && canPackRetailBoxes(solved.templateId);
+    const showHoneycomb =
+      !packingBoxes &&
       solved.templateId === 'fefco-0201-rsc' &&
       Boolean(cfg?.enabled) &&
       Boolean(cfg?.honeycombDividers) &&
       (Math.round(cfg?.cols ?? 1) > 1 || Math.round(cfg?.rows ?? 1) > 1);
+    const showMailerInsert =
+      !packingBoxes &&
+      solved.templateId === 'fefco-0427-mailer' &&
+      Boolean(cfg?.enabled) &&
+      Boolean(cfg?.productInsert);
 
-    if (!shouldShow || !cfg) {
+    if ((!showHoneycomb && !showMailerInsert) || !cfg) {
       disposeHoneycombMesh();
       return;
     }
@@ -156,8 +176,54 @@ export function createPackagingSubject(
     const measuredFp =
       bottlePacker.getMeasuredFootprintMm() ??
       getBeverageFootprintMm(cfg.modelId, currentBottleVisual?.model.asset.volumeMl);
+
+    if (showMailerInsert) {
+      const layout = computeBottlePackLayout(solved, measuredFp, cfg);
+      const sig = JSON.stringify([
+        'mailer-insert',
+        solved.innerMm.length,
+        solved.innerMm.width,
+        solved.innerMm.height,
+        solved.params.thicknessMm,
+        cols,
+        rows,
+        cfg.spacingMm,
+        cfg.wallPaddingMm,
+        Math.round(measuredFp.diameterXMm * 10),
+        Math.round(measuredFp.diameterZMm * 10),
+        Math.round(measuredFp.heightMm * 10),
+      ]);
+      if (sig === lastHoneycombSig && honeycombMesh) {
+        if (honeycombMesh.parent !== bottlePacker.group) {
+          bottlePacker.group.add(honeycombMesh);
+        }
+        return;
+      }
+
+      disposeHoneycombMesh();
+      const geo = buildMailerInsertTrayGeometry({
+        innerL: solved.innerMm.length,
+        innerW: solved.innerMm.width,
+        innerH: solved.innerMm.height,
+        slots: layout.slots,
+        itemMm: measuredFp,
+        boardThicknessMm: solved.params.thicknessMm,
+      });
+      if (!geo) return;
+
+      const mesh = new THREE.Mesh(geo, [materials.partition, materials.edge]);
+      mesh.name = 'mailer-product-insert';
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      bottlePacker.group.add(mesh);
+      honeycombMesh = mesh;
+      lastHoneycombSig = sig;
+      return;
+    }
+
     const divT = getHoneycombDividerThicknessMm(solved.params.thicknessMm);
     const sig = JSON.stringify([
+      'honeycomb',
       solved.innerMm.length,
       solved.innerMm.width,
       solved.innerMm.height,
@@ -208,6 +274,15 @@ export function createPackagingSubject(
     },
   });
 
+  const boxPacker = createBoxPacker({
+    onNeedsRender: () => {
+      if (disposed) return;
+      cachedBounds = computeCombinedBounds();
+      callbacks?.onBoundsChanged?.();
+      callbacks?.onNeedsRender?.();
+    },
+  });
+
   const attachBottlePackToRig = () => {
     const anchor = solved.contentAnchor;
     const frame = rig.panelFrames.get(anchor.panelId);
@@ -224,6 +299,24 @@ export function createPackagingSubject(
     bottlePacker.group.position.set(ax, ay, az);
     hostGroup.add(bottlePacker.group);
     bottlePacker.setFoldProgress(currentParams.foldProgress);
+    boxPacker.group.position.set(ax, ay, az);
+    hostGroup.add(boxPacker.group);
+    boxPacker.setFoldProgress(currentParams.foldProgress);
+  };
+
+  const syncInteriorPackers = () => {
+    if (!currentBottleConfig) return;
+    const packingBoxes =
+      currentBottleConfig.enabled &&
+      currentBottleConfig.itemKind === 'box' &&
+      canPackRetailBoxes(solved.templateId);
+    if (packingBoxes) {
+      bottlePacker.sync(solved, { ...currentBottleConfig, enabled: false }, null);
+      boxPacker.sync(solved, currentBottleConfig, currentBoxVisual);
+    } else {
+      boxPacker.sync(solved, { ...currentBottleConfig, enabled: false }, null);
+      bottlePacker.sync(solved, currentBottleConfig, currentBottleVisual);
+    }
   };
 
   const computeCombinedBounds = (): THREE.Box3 => {
@@ -231,6 +324,10 @@ export function createPackagingSubject(
     const bottleBounds = bottlePacker.measureBounds();
     if (!bottleBounds.isEmpty()) {
       combined.union(bottleBounds);
+    }
+    const boxBounds = boxPacker.measureBounds();
+    if (!boxBounds.isEmpty()) {
+      combined.union(boxBounds);
     }
     return combined;
   };
@@ -313,6 +410,7 @@ export function createPackagingSubject(
       if (geoChanged) {
         lastGeoSig = nextSig;
         bottlePacker.group.removeFromParent();
+        boxPacker.group.removeFromParent();
         rig.root.removeFromParent();
         rig.dispose();
         rig = buildPackagingRig(solved, materials, {
@@ -328,14 +426,13 @@ export function createPackagingSubject(
         }
         attachBottlePackToRig();
         materials.syncDieline(solved);
-        if (currentBottleConfig) {
-          bottlePacker.sync(solved, currentBottleConfig, currentBottleVisual);
-        }
+        syncInteriorPackers();
         syncHoneycombPartition();
       } else {
         rig.setFoldProgress(solved.params.foldProgress);
         rig.setCreaseLinesVisible(solved.params.showCreaseLines);
         bottlePacker.setFoldProgress(solved.params.foldProgress);
+        boxPacker.setFoldProgress(solved.params.foldProgress);
       }
 
       materials.sync(solved.params, solved.material);
@@ -357,12 +454,13 @@ export function createPackagingSubject(
       cachedBounds = centerRigAndMeasure();
       return solved;
     },
-    syncBottlePack(config, visualSource) {
+    syncBottlePack(config, visualSource, boxVisualSource = null) {
       if (disposed) return;
       currentBottleConfig = { ...config };
       currentBottleVisual = visualSource;
+      currentBoxVisual = boxVisualSource;
       attachBottlePackToRig();
-      bottlePacker.sync(solved, currentBottleConfig, visualSource);
+      syncInteriorPackers();
       syncHoneycombPartition();
       cachedBounds = centerRigAndMeasure();
     },
@@ -372,6 +470,7 @@ export function createPackagingSubject(
       currentParams = { ...currentParams, foldProgress: clamped };
       rig.setFoldProgress(clamped);
       bottlePacker.setFoldProgress(clamped);
+      boxPacker.setFoldProgress(clamped);
       materials.updateFoldProgress(clamped);
       cachedBounds = centerRigAndMeasure();
     },
@@ -545,6 +644,7 @@ export function createPackagingSubject(
       currentParams = { ...currentParams, foldProgress: next };
       rig.setFoldProgress(next);
       bottlePacker.setFoldProgress(next);
+      boxPacker.setFoldProgress(next);
       materials.updateFoldProgress(next);
       cachedBounds = centerRigAndMeasure();
       foldCallback?.(next);
@@ -557,6 +657,8 @@ export function createPackagingSubject(
       disposeHoneycombMesh();
       bottlePacker.group.removeFromParent();
       bottlePacker.dispose();
+      boxPacker.group.removeFromParent();
+      boxPacker.dispose();
       rig.root.removeFromParent();
       rig.dispose();
       dimensionsOverlay.group.removeFromParent();

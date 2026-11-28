@@ -7,12 +7,18 @@ import type {
 } from '../types';
 import { getBoardMaterialPreset } from '../materials/paper-presets';
 import { FEFCO_0421_TRAY_TEMPLATE } from './fefco-0421-tray';
+import { FEFCO_0427_MAILER_TEMPLATE } from './fefco-0427-mailer';
+import { ECMA_A10_SEAL_END_TEMPLATE } from './ecma-a10-seal-end';
+import { ECMA_A21_SNAP_LOCK_TEMPLATE } from './ecma-a21-snap-lock';
 import { FEFCO_0201_RSC_TEMPLATE } from './fefco-0201-rsc';
 import { FEFCO_0201E_BEER_CASE_TEMPLATE } from './fefco-0201e-beer-case';
 import { RIGID_LID_BASE_TEMPLATE } from './rigid-lid-base';
 
 export const PACKAGING_TEMPLATES: readonly PackagingTemplateDefinition[] = Object.freeze([
   FEFCO_0421_TRAY_TEMPLATE,
+  FEFCO_0427_MAILER_TEMPLATE,
+  ECMA_A10_SEAL_END_TEMPLATE,
+  ECMA_A21_SNAP_LOCK_TEMPLATE,
   FEFCO_0201E_BEER_CASE_TEMPLATE,
   FEFCO_0201_RSC_TEMPLATE,
   RIGID_LID_BASE_TEMPLATE,
@@ -53,10 +59,11 @@ export function createDefaultPackagingParams(
 
     materialId: mat.id,
     thicknessMm: mat.thicknessMm,
-    // FEFCO 0421 display trays, FEFCO 0201E side-open beer cases & FEFCO 0201 top-open RSC cartons
-    // run flutes vertically on wall panels ('along-W') for real stacking crush strength and exposed flute waves along cut rims.
+    // Corrugated trays, mailers, side-open beer cases & top-open RSC cartons run flutes
+    // along wall height ('along-W') for real stacking crush strength and exposed flute waves along cut rims.
     fluteDirection:
       tpl.id === 'fefco-0421-tray' ||
+      tpl.id === 'fefco-0427-mailer' ||
       tpl.id === 'fefco-0201e-beer-case' ||
       tpl.id === 'fefco-0201-rsc'
         ? 'along-W'
@@ -74,13 +81,14 @@ export function createDefaultPackagingParams(
     finishThreshold: 0.45,
     finishInvertMask: false,
 
-    lockTabCount: 2,
-    lockTabWidthMm: 34,
-    dustFlapTaperDeg: 6,
+    lockTabCount: tpl.id === 'fefco-0427-mailer' ? 1 : 2,
+    frontLockTabCount: tpl.id === 'ecma-a21-snap-lock' ? 1 : 0,
+    lockTabWidthMm: tpl.id === 'fefco-0427-mailer' ? 46 : tpl.id === 'ecma-a21-snap-lock' ? 22 : 34,
+    dustFlapTaperDeg: tpl.id === 'fefco-0427-mailer' ? 3 : tpl.id === 'ecma-a21-snap-lock' ? 12 : 6,
     flapGapMm: 2,
     tuckStyle: 'reverse',
     tuckFlapLengthMm: 18,
-    thumbNotch: true,
+    thumbNotch: tpl.id === 'fefco-0427-mailer' ? false : true,
     thumbNotchRadiusMm: 10,
     handHoles: false,
     handHoleWidthMm: 78,

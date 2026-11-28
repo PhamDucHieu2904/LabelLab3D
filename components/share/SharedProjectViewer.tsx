@@ -43,6 +43,13 @@ import {
 } from "@/lib/mockup/quality-tier";
 import { createPackagingSubject, type PackagingSubjectController } from "@/lib/packaging-cad/adapter";
 import type { BottlePackVisualSource } from "@/lib/packaging-cad/bottle-packer";
+import type { BoxPackVisualSource } from "@/lib/packaging-cad/box-packer";
+import {
+  canPackRetailBoxes,
+  DEFAULT_PACKABLE_BOX_TEMPLATE_ID,
+  isPackableRetailBoxTemplate,
+} from "@/lib/packaging-cad/pack-layout";
+import { createDefaultPackagingParams } from "@/lib/packaging-cad/templates/registry";
 import type { PackagingArtworkState, PanelDesignOverlay } from "@/lib/packaging-cad/types";
 import {
   collectPayloadAssetHashes,
@@ -286,44 +293,47 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
     }
 
     const payload = activeItem.payload;
-    const panelOverlays: Record<string, PanelDesignOverlay> = {};
-    if (payload.packagingArtwork?.panelOverlays) {
-      for (const [key, ov] of Object.entries(payload.packagingArtwork.panelOverlays)) {
-        const imageUrl = ov.imageHash ? assetUrls[ov.imageHash] : undefined;
-        panelOverlays[key] = {
-          panelId: ov.panelId,
-          surface: ov.surface,
-          ...(ov.fillColor ? { fillColor: ov.fillColor } : {}),
-          ...(imageUrl ? { imageUrl } : {}),
-          ...(ov.artworkName ? { artworkName: ov.artworkName } : {}),
-          ...(ov.fitMode ? { fitMode: ov.fitMode } : {}),
-          imageScale: ov.imageScale,
-          imageOffsetX: ov.imageOffsetX,
-          imageOffsetY: ov.imageOffsetY,
-          imageRotationDeg: ov.imageRotationDeg,
-          ...(ov.text ? { text: ov.text } : {}),
-          ...(ov.textColor ? { textColor: ov.textColor } : {}),
-          ...(ov.textSizePct !== undefined ? { textSizePct: ov.textSizePct } : {}),
-        };
+    const hydrateSharedArtwork = (
+      artRefs: typeof payload.packagingArtwork,
+    ): PackagingArtworkState => {
+      const overlays: Record<string, PanelDesignOverlay> = {};
+      if (artRefs?.panelOverlays) {
+        for (const [key, ov] of Object.entries(artRefs.panelOverlays)) {
+          const imageUrl = ov.imageHash ? assetUrls[ov.imageHash] : undefined;
+          overlays[key] = {
+            panelId: ov.panelId,
+            surface: ov.surface,
+            ...(ov.fillColor ? { fillColor: ov.fillColor } : {}),
+            ...(imageUrl ? { imageUrl } : {}),
+            ...(ov.artworkName ? { artworkName: ov.artworkName } : {}),
+            ...(ov.fitMode ? { fitMode: ov.fitMode } : {}),
+            imageScale: ov.imageScale,
+            imageOffsetX: ov.imageOffsetX,
+            imageOffsetY: ov.imageOffsetY,
+            imageRotationDeg: ov.imageRotationDeg,
+            ...(ov.text ? { text: ov.text } : {}),
+            ...(ov.textColor ? { textColor: ov.textColor } : {}),
+            ...(ov.textSizePct !== undefined ? { textSizePct: ov.textSizePct } : {}),
+          };
+        }
       }
-    }
-
-    const hydratedArtwork: PackagingArtworkState = {
-      mode: payload.packagingArtwork?.mode ?? "panel",
-      ...(payload.packagingArtwork?.outsideDielineHash && assetUrls[payload.packagingArtwork.outsideDielineHash]
-        ? { outsideDielineUrl: assetUrls[payload.packagingArtwork.outsideDielineHash] }
-        : {}),
-      ...(payload.packagingArtwork?.insideDielineHash && assetUrls[payload.packagingArtwork.insideDielineHash]
-        ? { insideDielineUrl: assetUrls[payload.packagingArtwork.insideDielineHash] }
-        : {}),
-      ...(payload.packagingArtwork?.finishMaskHash && assetUrls[payload.packagingArtwork.finishMaskHash]
-        ? { finishMaskUrl: assetUrls[payload.packagingArtwork.finishMaskHash] }
-        : {}),
-      ...(payload.packagingArtwork?.finishMaskName
-        ? { finishMaskName: payload.packagingArtwork.finishMaskName }
-        : {}),
-      panelOverlays,
+      return {
+        mode: artRefs?.mode ?? "panel",
+        ...(artRefs?.outsideDielineHash && assetUrls[artRefs.outsideDielineHash]
+          ? { outsideDielineUrl: assetUrls[artRefs.outsideDielineHash] }
+          : {}),
+        ...(artRefs?.insideDielineHash && assetUrls[artRefs.insideDielineHash]
+          ? { insideDielineUrl: assetUrls[artRefs.insideDielineHash] }
+          : {}),
+        ...(artRefs?.finishMaskHash && assetUrls[artRefs.finishMaskHash]
+          ? { finishMaskUrl: assetUrls[artRefs.finishMaskHash] }
+          : {}),
+        ...(artRefs?.finishMaskName ? { finishMaskName: artRefs.finishMaskName } : {}),
+        panelOverlays: overlays,
+      };
     };
+
+    const hydratedArtwork = hydrateSharedArtwork(payload.packagingArtwork);
 
     const subject = createPackagingSubject(payload.packagingParams, hydratedArtwork, {
       onNeedsRender: () => sceneRef.current?.requestFrame(),
@@ -331,39 +341,64 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
     });
 
     if (payload.bottlePack?.enabled) {
-      const packed = payload.packedBottle;
-      const targetModel = getLabModel(packed?.modelId ?? payload.bottlePack.modelId);
-      const s = packed?.settings;
-      const visualSource: BottlePackVisualSource = {
-        model: targetModel,
-        ...(packed?.name ? { customProjectName: packed.name } : {}),
-        ...(packed?.labelHash && assetUrls[packed.labelHash]
-          ? { customLabelUrl: assetUrls[packed.labelHash] }
-          : {}),
-        ...(s
-          ? {
-              labelOffset: s.labelOffset,
-              labelRoughness: s.roughness,
-              labelMetalness: s.metalness,
-              liquidColor: s.liquidColor,
-              liquidCustomized: s.liquidCustomized,
-              liquidClarity: s.liquidClarity,
-              liquidDensity: s.liquidDensity,
-              liquidTurbidity: s.liquidTurbidity,
-              liquidBrightness: s.liquidBrightness,
-              liquidScattering: s.liquidScattering,
-              liquidRoughness: s.liquidRoughness,
-              liquidIor: s.liquidIor,
-              capColor: s.capColor,
-              capMetalness: s.capMetalness,
-              capRoughness: s.capRoughness,
-              bodyColor: s.bodyColor,
-              bodyMetalness: s.bodyMetalness,
-              bodyRoughness: s.bodyRoughness,
-            }
-          : {}),
-      };
-      subject.syncBottlePack(payload.bottlePack, visualSource);
+      if (
+        payload.bottlePack.itemKind === "box" &&
+        canPackRetailBoxes(payload.packagingParams.templateId)
+      ) {
+        const packedBox = payload.packedBox;
+        const innerParams =
+          packedBox && isPackableRetailBoxTemplate(packedBox.packagingParams.templateId)
+            ? packedBox.packagingParams
+            : createDefaultPackagingParams(
+                payload.bottlePack.boxTemplateId &&
+                  isPackableRetailBoxTemplate(payload.bottlePack.boxTemplateId)
+                  ? payload.bottlePack.boxTemplateId
+                  : DEFAULT_PACKABLE_BOX_TEMPLATE_ID,
+              );
+        const boxVisual: BoxPackVisualSource = {
+          params: innerParams,
+          ...(packedBox?.name ? { customProjectName: packedBox.name } : {}),
+          ...(packedBox?.packagingArtwork
+            ? { artwork: hydrateSharedArtwork(packedBox.packagingArtwork) }
+            : {}),
+          artworkKey: `shared-box:${activeItem.id}`,
+        };
+        subject.syncBottlePack(payload.bottlePack, null, boxVisual);
+      } else {
+        const packed = payload.packedBottle;
+        const targetModel = getLabModel(packed?.modelId ?? payload.bottlePack.modelId);
+        const s = packed?.settings;
+        const visualSource: BottlePackVisualSource = {
+          model: targetModel,
+          ...(packed?.name ? { customProjectName: packed.name } : {}),
+          ...(packed?.labelHash && assetUrls[packed.labelHash]
+            ? { customLabelUrl: assetUrls[packed.labelHash] }
+            : {}),
+          ...(s
+            ? {
+                labelOffset: s.labelOffset,
+                labelRoughness: s.roughness,
+                labelMetalness: s.metalness,
+                liquidColor: s.liquidColor,
+                liquidCustomized: s.liquidCustomized,
+                liquidClarity: s.liquidClarity,
+                liquidDensity: s.liquidDensity,
+                liquidTurbidity: s.liquidTurbidity,
+                liquidBrightness: s.liquidBrightness,
+                liquidScattering: s.liquidScattering,
+                liquidRoughness: s.liquidRoughness,
+                liquidIor: s.liquidIor,
+                capColor: s.capColor,
+                capMetalness: s.capMetalness,
+                capRoughness: s.capRoughness,
+                bodyColor: s.bodyColor,
+                bodyMetalness: s.bodyMetalness,
+                bodyRoughness: s.bodyRoughness,
+              }
+            : {}),
+        };
+        subject.syncBottlePack(payload.bottlePack, visualSource);
+      }
     }
 
     packagingSubjectRef.current = subject;

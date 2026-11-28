@@ -247,9 +247,10 @@ export async function hydrateCloudItemToRecord(
   const thumbnailBlob = item.thumbnailHash ? blobMap.get(item.thumbnailHash) : undefined;
 
   if (item.payload.kind === 'packaging') {
-    const rawArt = item.payload.packagingArtwork;
-    let packagingArtwork: PackagingArtworkSnapshot | undefined;
-    if (rawArt) {
+    const hydrateSharedArtwork = (
+      rawArt: typeof item.payload.packagingArtwork,
+    ): PackagingArtworkSnapshot | undefined => {
+      if (!rawArt) return undefined;
       const panelOverlays: Record<string, PackagingPanelOverlaySnapshot> = {};
       for (const [key, ov] of Object.entries(rawArt.panelOverlays)) {
         panelOverlays[key] = {
@@ -268,7 +269,7 @@ export async function hydrateCloudItemToRecord(
           ...(ov.textSizePct !== undefined ? { textSizePct: ov.textSizePct } : {}),
         };
       }
-      packagingArtwork = {
+      return {
         mode: rawArt.mode,
         ...(rawArt.outsideDielineHash && blobMap.get(rawArt.outsideDielineHash)
           ? { outsideDielineBlob: blobMap.get(rawArt.outsideDielineHash) }
@@ -282,7 +283,9 @@ export async function hydrateCloudItemToRecord(
         ...(rawArt.finishMaskName ? { finishMaskName: rawArt.finishMaskName } : {}),
         panelOverlays,
       };
-    }
+    };
+
+    const packagingArtwork = hydrateSharedArtwork(item.payload.packagingArtwork);
 
     const rawPacked = item.payload.packedBottle;
     const packedBottle = rawPacked
@@ -292,6 +295,17 @@ export async function hydrateCloudItemToRecord(
           ...(rawPacked.settings ? { settings: rawPacked.settings } : {}),
           ...(rawPacked.labelHash && blobMap.get(rawPacked.labelHash)
             ? { labelBlob: blobMap.get(rawPacked.labelHash) }
+            : {}),
+        }
+      : undefined;
+
+    const rawPackedBox = item.payload.packedBox;
+    const packedBox = rawPackedBox
+      ? {
+          ...(rawPackedBox.name ? { name: rawPackedBox.name } : {}),
+          packagingParams: rawPackedBox.packagingParams,
+          ...(hydrateSharedArtwork(rawPackedBox.packagingArtwork)
+            ? { packagingArtwork: hydrateSharedArtwork(rawPackedBox.packagingArtwork) }
             : {}),
         }
       : undefined;
@@ -312,6 +326,7 @@ export async function hydrateCloudItemToRecord(
       ...(item.payload.bottlePack ? { bottlePack: item.payload.bottlePack } : {}),
       ...(packagingArtwork ? { packagingArtwork } : {}),
       ...(packedBottle ? { packedBottle } : {}),
+      ...(packedBox ? { packedBox } : {}),
     };
   }
 

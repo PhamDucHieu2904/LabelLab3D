@@ -19,6 +19,9 @@ interface ThumbnailPose {
 /** Curated commercial 3/4 angles so each box silhouette & opening style reads at a glance. */
 const TEMPLATE_THUMBNAIL_POSES: Readonly<Record<string, ThumbnailPose>> = {
   'fefco-0421-tray': { yawDeg: 34, pitchDeg: 33, foldProgress: 1.0, fill: 0.88 },
+  'fefco-0427-mailer': { yawDeg: -34, pitchDeg: 25, foldProgress: 0.69, fill: 0.87 },
+  'ecma-a10-seal-end': { yawDeg: 34, pitchDeg: 26, foldProgress: 0.9, fill: 0.87 },
+  'ecma-a21-snap-lock': { yawDeg: 32, pitchDeg: 24, foldProgress: 0.84, fill: 0.87 },
   'fefco-0201e-beer-case': { yawDeg: 40, pitchDeg: 25, foldProgress: 0.91, fill: 0.88 },
   'fefco-0201-rsc': { yawDeg: 36, pitchDeg: 29, foldProgress: 0.89, fill: 0.87 },
   'rigid-lid-base': { yawDeg: 36, pitchDeg: 27, foldProgress: 0.78, fill: 0.86 },

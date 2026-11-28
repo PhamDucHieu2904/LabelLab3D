@@ -12,6 +12,10 @@ import {
   DEFAULT_PACKAGING_TEMPLATE_ID,
   PACKAGING_TEMPLATES,
 } from './templates/registry';
+import {
+  DEFAULT_PACKABLE_BOX_TEMPLATE_ID,
+  isPackableRetailBoxTemplate,
+} from './pack-layout';
 
 export const PACKAGING_PREFERENCES_KEY = 'labellab.packaging.preferences.v1';
 export const PACKAGING_BOTTLE_PACK_KEY = 'labellab.packaging.bottle-pack.v1';
@@ -88,8 +92,15 @@ export function parsePackagingParams(raw: unknown): PackagingParams {
       finishThreshold: bounded(own('finishThreshold'), defaults.finishThreshold, 0.1, 0.9),
       finishInvertMask: bool(own('finishInvertMask'), defaults.finishInvertMask),
 
-      lockTabCount: own('lockTabCount') === 1 ? 1 : 2,
-      lockTabWidthMm: bounded(own('lockTabWidthMm'), defaults.lockTabWidthMm, 10, 180),
+      lockTabCount: own('lockTabCount') === 1 ? 1 : own('lockTabCount') === 2 ? 2 : defaults.lockTabCount,
+      frontLockTabCount:
+        own('frontLockTabCount') === 0 ||
+        own('frontLockTabCount') === 1 ||
+        own('frontLockTabCount') === 2 ||
+        own('frontLockTabCount') === 3
+          ? (own('frontLockTabCount') as 0 | 1 | 2 | 3)
+          : defaults.frontLockTabCount,
+      lockTabWidthMm: bounded(own('lockTabWidthMm'), defaults.lockTabWidthMm, 8, 180),
       dustFlapTaperDeg: bounded(own('dustFlapTaperDeg'), defaults.dustFlapTaperDeg, 0, 22),
       flapGapMm: bounded(own('flapGapMm'), defaults.flapGapMm, 0, 40),
       tuckStyle: own('tuckStyle') === 'straight' ? 'straight' : 'reverse',
@@ -203,6 +214,21 @@ export function parseBottlePackConfig(
         ? rawPackLabelArtworkId
         : undefined;
 
+    const rawItemKind = own('itemKind');
+    const itemKind = rawItemKind === 'box' ? 'box' : undefined;
+    const rawBoxProjectId = own('boxProjectId');
+    const boxProjectId =
+      typeof rawBoxProjectId === 'string' && /^[a-z0-9_-]{1,100}$/i.test(rawBoxProjectId)
+        ? rawBoxProjectId
+        : undefined;
+    const rawBoxTemplateId = own('boxTemplateId');
+    const boxTemplateId =
+      typeof rawBoxTemplateId === 'string' && isPackableRetailBoxTemplate(rawBoxTemplateId)
+        ? rawBoxTemplateId
+        : itemKind === 'box'
+          ? DEFAULT_PACKABLE_BOX_TEMPLATE_ID
+          : undefined;
+
     const rawJitterSeed = own('jitterSeed');
     const jitterSeed =
       typeof rawJitterSeed === 'number' && Number.isFinite(rawJitterSeed)
@@ -211,8 +237,11 @@ export function parseBottlePackConfig(
 
     return {
       enabled: bool(own('enabled'), fallback.enabled),
+      ...(itemKind ? { itemKind } : {}),
       modelId,
       ...(customProjectId ? { customProjectId } : {}),
+      ...(boxProjectId ? { boxProjectId } : {}),
+      ...(boxTemplateId ? { boxTemplateId } : {}),
       ...(packLabelArtworkId ? { packLabelArtworkId } : {}),
       cols: Math.round(bounded(own('cols'), fallback.cols, 1, 6)),
       rows: Math.round(bounded(own('rows'), fallback.rows, 1, 4)),
@@ -222,6 +251,7 @@ export function parseBottlePackConfig(
       organicJitter: bool(own('organicJitter'), fallback.organicJitter),
       ...(jitterSeed !== undefined ? { jitterSeed } : {}),
       ...(bool(own('honeycombDividers'), false) ? { honeycombDividers: true } : {}),
+      ...(bool(own('productInsert'), false) ? { productInsert: true } : {}),
       autoFitOnChange: bool(own('autoFitOnChange'), fallback.autoFitOnChange),
     };
   } catch {
