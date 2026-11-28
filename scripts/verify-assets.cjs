@@ -46,7 +46,7 @@ if (!fs.existsSync(path.join(root, `public/models/bottles/${id}-poster.webp`))) 
 const glass290PosterHashes = ['basil', 'chia', 'milk'].map(kind => crypto.createHash('sha256').update(fs.readFileSync(path.join(root, `public/models/bottles/glass-290-${kind}-poster.webp`))).digest('hex'));
 if (new Set(glass290PosterHashes).size !== 3) throw new Error('Glass290 posters must be unique renders');
 if (strawberry.liquidColor.toLowerCase() !== '#f14e78') throw new Error('Strawberry liquid color mismatch');
-for (const id of ['pet-320-full-nata', 'pet-1000-juice', 'pet-1500-juice', 'pet-325-juice', 'pet-1000-short-juice', 'pp-2000', 'pp-1250', 'pp-1000', 'pp-1000-2', 'pp-500', 'pp-500-2', 'glass-290-chia', 'glass-290-milk', 'glass-290-pullcap-basil', 'glass-290-pullcap-chia', 'glass-290-pullcap-milk']) {
+for (const id of ['pet-320-full-nata', 'pet-500-full-label', 'pet-1000-juice', 'pet-1500-juice', 'pet-325-juice', 'pet-1000-short-juice', 'pp-2000', 'pp-1250', 'pp-1000', 'pp-1000-2', 'pp-500', 'pp-500-2', 'glass-290-chia', 'glass-290-milk', 'glass-290-pullcap-basil', 'glass-290-pullcap-chia', 'glass-290-pullcap-milk']) {
   const manifest=JSON.parse(fs.readFileSync(path.join(root,`public/models/bottles/${id}.manifest.json`)));
   const bytes=fs.readFileSync(path.join(root,'public',manifest.src));
   if(bytes.length!==manifest.bytes||crypto.createHash('sha256').update(bytes).digest('hex')!==manifest.sha256) throw new Error(`${id} Draco asset mismatch`);

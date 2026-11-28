@@ -43,13 +43,14 @@ const POSTER_TARGETS = [
   },
   { id: 'can-500', out: 'models/cans/posters/can-500.webp' },
 
-  // PET Bottles (9)
+  // PET Bottles (10)
   { id: 'pet-nata-watermelon', out: 'models/bottles/pet-320-nata-poster.webp', runtimeMediaId: 'poster-pet-320-nata' },
   { id: 'pet-320-full-nata', out: 'models/bottles/pet-320-full-nata-poster.webp' },
   { id: 'pet-325-juice', out: 'models/bottles/pet-325-juice-poster.webp' },
   { id: 'pet-330-energy', out: 'models/bottles/pet-330-energy-poster.webp' },
   { id: 'pet-350-juice', out: 'models/bottles/pet-350-juice-poster.webp' },
   { id: 'pet-aloe', out: 'models/bottles/pet-500-aloe-poster.webp', runtimeMediaId: 'poster-pet-500-aloe' },
+  { id: 'pet-500-full-label', out: 'models/bottles/pet-500-full-label-poster.webp' },
   { id: 'pet-1000-juice', out: 'models/bottles/pet-1000-juice-poster.webp' },
   { id: 'pet-1000-short-juice', out: 'models/bottles/pet-1000-short-juice-poster.webp' },
   { id: 'pet-1500-juice', out: 'models/bottles/pet-1500-juice-poster.webp' },

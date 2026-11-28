@@ -19,6 +19,7 @@ export const ARTWORK_DIELINES: Readonly<Partial<Record<string, ArtworkDieline>>>
   'pet-320-full-nata': { width: 206, height: 125, unit: 'mm' },
   'pet-nata-watermelon': { width: 195, height: 50, unit: 'mm' },
   'pet-aloe': { width: 220, height: 77, unit: 'mm' },
+  'pet-500-full-label': { width: 220, height: 153, unit: 'mm' },
   'pet-1000-juice': { width: 268, height: 217, unit: 'mm' },
   'pet-1000-short-juice': { width: 296, height: 190, unit: 'mm' },
   'pet-1500-juice': { width: 296, height: 257, unit: 'mm' },
@@ -51,7 +52,6 @@ export const ARTWORK_DIELINES: Readonly<Partial<Record<string, ArtworkDieline>>>
 
 /** Dielines recorded for models that are not in the catalog yet. */
 export const PENDING_ARTWORK_DIELINES: Readonly<Partial<Record<string, ArtworkDieline>>> = {
-  'pet-500-full-label': { width: 220, height: 153, unit: 'mm' },
   'pet-1500-short-label': { width: 296, height: 97, unit: 'mm' },
 };
 

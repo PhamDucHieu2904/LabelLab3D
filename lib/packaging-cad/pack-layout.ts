@@ -77,6 +77,7 @@ export const KNOWN_BEVERAGE_FOOTPRINTS_MM: Readonly<Record<string, BeverageFootp
   'glass-485-milk': { diameterXMm: 71.0, diameterZMm: 71.0, heightMm: 210.0 },
 
   'pet-aloe': { diameterXMm: 58.6, diameterZMm: 58.6, heightMm: 208.8 },
+  'pet-500-full-label': { diameterXMm: 58.6, diameterZMm: 58.6, heightMm: 208.8 },
   'pet-nata-watermelon': { diameterXMm: 58.5, diameterZMm: 58.5, heightMm: 158.0 },
   'pet-320-full-nata': { diameterXMm: 58.5, diameterZMm: 58.5, heightMm: 158.0 },
   'pet-325-juice': { diameterXMm: 60.0, diameterZMm: 60.0, heightMm: 165.0 },

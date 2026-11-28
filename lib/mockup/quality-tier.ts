@@ -94,6 +94,7 @@ const HEAVY_ASSET_IDS = new Set([
   'glass-290-pullcap-milk',
   'glass-485-milk',
   'pet-500-short-label',
+  'pet-500-full-label',
   'registry-pet-500-aloe',
   'pet-aloe',
   'pet-320-full-nata',

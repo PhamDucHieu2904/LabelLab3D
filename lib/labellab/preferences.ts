@@ -159,6 +159,7 @@ const modelIds = [
   "basil-strawberry",
   "can-mango",
   "pet-aloe",
+  "pet-500-full-label",
   "pet-nata-watermelon",
   "pet-320-full-nata",
   "pet-1000-juice",
@@ -220,11 +221,12 @@ export function parsePreferences(value: unknown): ScenePreferences {
     const glass290 = screwcap290 && !pullcap;
     const juicePet = selectedModelId === "pet-350-juice" || selectedModelId === "pet-1000-juice";
     const newNata = selectedModelId === "pet-320-full-nata";
+    const fullAloe = selectedModelId === "pet-500-full-label";
     const nativeCapMetalness = batch?.capMetalness ?? (pet ? 0 : 1);
     const nativeCapRoughness = batch?.capRoughness ?? (pullcap ? .5527864098548889 : coffeeGlass ? .28 : pet ? 0.29 : can ? 0.22 : defaults.capRoughness);
     const nativeBodyMetalness = can ? 1 : 0;
     const nativeBodyRoughness = batch?.bodyRoughness ?? (pet ? 0.075 : can ? 0.22 : defaults.bodyRoughness);
-    const nativeLiquidType = batch?.liquidType ?? (selectedModelId === "pet-aloe" ? "aloe"
+    const nativeLiquidType = batch?.liquidType ?? (selectedModelId === "pet-aloe" || fullAloe ? "aloe"
       : selectedModelId === "pet-nata-watermelon" || newNata ? "nata-de-coco"
       : selectedModelId === "pet-330-energy" ? "energy"
       : glass290Chia ? "chia"
@@ -246,8 +248,8 @@ export function parsePreferences(value: unknown): ScenePreferences {
       motion:
         motion === "showcase" || motion === "off" ? motion : defaults.motion,
       background: color(own("background"), defaults.background),
-      liquidColor: color(own("liquidColor"), batch?.liquidColor ?? (glass290Chia || pullcapBasil ? "#f14e78" : glass290Milk ? "#fff5e4" : coffeeGlass ? "#B88C69" : selectedModelId === "pet-330-energy" ? "#FFD600" : juicePet ? "#E8B64F" : newNata ? "#ff4430" : defaults.liquidColor)),
-      capColor: color(own("capColor"), batch?.capColor ?? (shortCoffeeGlass ? "#000000" : screwcap290 || coffeeGlass || pullcap ? "#c0c0c0" : juicePet || newNata || selectedModelId === "pet-330-energy" ? "#ffffff" : defaults.capColor)),
+      liquidColor: color(own("liquidColor"), batch?.liquidColor ?? (glass290Chia || pullcapBasil ? "#f14e78" : glass290Milk ? "#fff5e4" : coffeeGlass ? "#B88C69" : selectedModelId === "pet-330-energy" ? "#FFD600" : juicePet ? "#E8B64F" : newNata ? "#ff4430" : fullAloe ? "#ffb52e" : defaults.liquidColor)),
+      capColor: color(own("capColor"), batch?.capColor ?? (shortCoffeeGlass ? "#000000" : screwcap290 || coffeeGlass || pullcap ? "#c0c0c0" : juicePet || newNata || fullAloe || selectedModelId === "pet-330-energy" ? "#ffffff" : defaults.capColor)),
       bodyColor: color(own("bodyColor"), defaults.bodyColor),
       capMetalness: bounded(own("capMetalness"), glass290 ? 1 : nativeCapMetalness, 0, 1),
       capRoughness: bounded(own("capRoughness"), glass290 ? .388 : nativeCapRoughness, 0, 1),
@@ -264,7 +266,7 @@ export function parsePreferences(value: unknown): ScenePreferences {
       liquidRoughness: bounded(own("liquidRoughness"), liquidDefaults.liquidRoughness, 0, 1),
       liquidIor: bounded(own("liquidIor"), liquidDefaults.liquidIor, 1, 1.6),
       labelOffset: bounded(own("labelOffset"), defaults.labelOffset, -100, 100),
-      roughness: bounded(own("roughness"), batch?.roughness ?? (can ? 0.15 : defaults.roughness), 0, 1),
+      roughness: bounded(own("roughness"), batch?.roughness ?? (can || fullAloe ? 0.15 : defaults.roughness), 0, 1),
       metalness: bounded(own("metalness"), can ? 0 : defaults.metalness, 0, 1),
       frame:
         frame === "square" || frame === "portrait" || frame === "landscape" || frame === "story"

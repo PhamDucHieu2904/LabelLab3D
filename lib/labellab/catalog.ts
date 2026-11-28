@@ -17,6 +17,7 @@ import glass485MilkManifest from "../../public/models/bottles/glass-485-milk.man
 import pet330Manifest from "../../public/models/bottles/pet-330-energy.manifest.json";
 import pet350Manifest from "../../public/models/bottles/pet-350-juice.manifest.json";
 import pet320FullManifest from "../../public/models/bottles/pet-320-full-nata.manifest.json";
+import pet500FullManifest from "../../public/models/bottles/pet-500-full-label.manifest.json";
 import pet1000Manifest from "../../public/models/bottles/pet-1000-juice.manifest.json";
 import { BATCH_MODELS, BATCH_MATERIAL_DEFAULTS } from './bottle-batch';
 
@@ -221,14 +222,14 @@ const pet350JuiceModel: LabModel = {
 const pet1000JuiceModel: LabModel = {
   ...pet350JuiceModel,
   id: "pet-1000-juice",
-  name: "PET - 1 L",
+  name: "PET - 1 L 1",
   volume: "1 L",
   description: "1 L (1000 mL) PET bottle · Juice · ready for artwork.",
   poster: withPosterVer("/models/bottles/pet-1000-juice-poster.webp"),
   asset: {
     ...pet350JuiceModel.asset,
     id: "pet-1000-juice",
-    name: "PET - 1 L",
+    name: "PET - 1 L 1",
     volumeMl: 1000,
     src: `${pet1000Manifest.src}?v=${pet1000Manifest.sha256.slice(0, 12)}`,
     poster: withPosterVer("/models/bottles/pet-1000-juice-poster.webp"),
@@ -240,14 +241,14 @@ const pet1000JuiceModel: LabModel = {
 
 const pet320FullNataModel: LabModel = {
   id: "pet-320-full-nata",
-  name: "PET - 320 mL · Full label",
+  name: "PET - 320 mL 2",
   description: "320 mL PET bottle · full label · Nata de coco · ready for artwork.",
   category: "pet",
   volume: "320 mL",
   poster: withPosterVer("/models/bottles/pet-320-full-nata-poster.webp"),
   asset: {
     id: "pet-320-full-nata",
-    name: "PET - 320 mL · Full label",
+    name: "PET - 320 mL 2",
     volumeMl: 320,
     packaging: "pet",
     src: `${pet320FullManifest.src}?v=${pet320FullManifest.sha256.slice(0, 12)}`,
@@ -554,9 +555,41 @@ const pet500AloeModel = fromPublished("aloe-pet500-mango-3d", {
   category: "pet",
 });
 
+const pet500FullAloeModel: LabModel = {
+  id: "pet-500-full-label",
+  name: "PET - 500 mL · Full label",
+  description: "500 mL PET bottle · full label · Aloe vera · blank label, ready for artwork.",
+  category: "pet",
+  volume: "500 mL",
+  poster: withPosterVer("/models/bottles/pet-500-full-label-poster.webp"),
+  asset: {
+    id: "pet-500-full-label",
+    name: "PET - 500 mL · Full label",
+    volumeMl: 500,
+    packaging: "pet",
+    src: `${pet500FullManifest.src}?v=${pet500FullManifest.sha256.slice(0, 12)}`,
+    poster: withPosterVer("/models/bottles/pet-500-full-label-poster.webp"),
+    materialSlots: pet500FullManifest.materialSlots,
+    textureSamplers: { label: { wrapS: "repeat", wrapT: "clamp" } },
+    orientation: [0, 0, 0],
+  },
+  appearance: {
+    id: "pet-500-full:aloe-blank",
+    requiredSlots: ["body", "cap", "label", "liquid", "inclusions"],
+    slots: {
+      body: { color: "#ffffff", metalness: 0 },
+      cap: { color: "#ffffff", metalness: 0, roughness: 0.29 },
+      label: { color: "#ffffff", metalness: 0, roughness: 0.15, clearcoat: 0.2 },
+      liquid: { color: "#ffb52e" },
+      inclusions: { color: "#ffffff", metalness: 0, roughness: 0.18 },
+    },
+  },
+  frontYaw: 0,
+};
+
 const pet320NataModel = fromPublished("cojo-pet320-watermelon-3d", {
   id: "pet-nata-watermelon",
-  name: "PET - 320 mL · Nata de coco",
+  name: "PET - 320 mL 1",
   description: "320 mL PET bottle · Nata de coco · blank label, ready for artwork.",
   category: "pet",
 });
@@ -591,6 +624,7 @@ export const LAB_MODELS: LabModel[] = [
   pet330EnergyModel,
   pet350JuiceModel,
   pet500AloeModel,
+  pet500FullAloeModel,
   pet1000JuiceModel,
   findBatch("pet-1000-short-juice"),
   findBatch("pet-1500-juice"),
@@ -744,8 +778,8 @@ export const LAB_MODEL_FAMILIES: LabModelFamily[] = [
     volume: "320 mL",
     poster: pet320NataModel.poster,
     variants: [
-      { id: "nata", label: "Nata de coco", order: 0, modelId: pet320NataModel.id, available: true },
-      { id: "full-label", label: "Full label", order: 1, modelId: pet320FullNataModel.id, available: true },
+      { id: "nata", label: "320 mL 1", order: 0, modelId: pet320NataModel.id, available: true },
+      { id: "full-label", label: "320 mL 2", order: 1, modelId: pet320FullNataModel.id, available: true },
     ],
   },
   {
@@ -778,23 +812,32 @@ export const LAB_MODEL_FAMILIES: LabModelFamily[] = [
   {
     id: "pet-500-short-label",
     name: "PET - 500 mL",
-    description: "500 mL PET bottle · short label · Aloe vera",
+    description: "500 mL PET bottle · Aloe vera · short & full label",
     category: "pet",
     volume: "500 mL",
     poster: pet500AloeModel.poster,
-    variants: [{ id: "aloe", label: "Aloe", order: 0, modelId: pet500AloeModel.id, available: true }],
+    variants: [
+      { id: "aloe", label: "Aloe", order: 0, modelId: pet500AloeModel.id, available: true },
+      { id: "full-label", label: "Full label", order: 1, modelId: pet500FullAloeModel.id, available: true },
+    ],
   },
   {
     id: "pet-1000-juice",
-    name: "PET - 1 L",
+    name: "PET - 1 L 1",
     description: "1000 mL · 1 litre PET bottle · Juice",
     category: "pet",
     volume: "1 L",
     poster: pet1000JuiceModel.poster,
-    variants: [
-      { id: "juice", label: "Full label", order: 0, modelId: pet1000JuiceModel.id, available: true },
-      { id: "short-label", label: "Short label", order: 1, modelId: "pet-1000-short-juice", available: true },
-    ],
+    variants: [{ id: "juice", label: "Juice", order: 0, modelId: pet1000JuiceModel.id, available: true }],
+  },
+  {
+    id: "pet-1000-short-juice",
+    name: "PET - 1 L 2",
+    description: "1000 mL · 1 litre PET bottle · Juice",
+    category: "pet",
+    volume: "1 L",
+    poster: findBatch("pet-1000-short-juice").poster,
+    variants: [{ id: "juice", label: "Juice", order: 0, modelId: "pet-1000-short-juice", available: true }],
   },
   {
     id: "pet-1500-juice",
@@ -809,27 +852,39 @@ export const LAB_MODEL_FAMILIES: LabModelFamily[] = [
   // --- PP BOTTLES ---
   {
     id: "pp-500",
-    name: "PP - 500 mL",
-    description: "500 mL PP bottle · two supplied variants",
+    name: "PP - 500 mL 1",
+    description: "500 mL PP bottle · Opaque white",
     category: "pp",
     volume: "500 mL",
     poster: findBatch("pp-500").poster,
-    variants: [
-      { id: "standard", label: "Standard", order: 0, modelId: "pp-500", available: true },
-      { id: "variant-2", label: "Variant 2", order: 1, modelId: "pp-500-2", available: true },
-    ],
+    variants: [{ id: "standard", label: "Standard", order: 0, modelId: "pp-500", available: true }],
+  },
+  {
+    id: "pp-500-2",
+    name: "PP - 500 mL 2",
+    description: "500 mL PP bottle · Opaque white",
+    category: "pp",
+    volume: "500 mL",
+    poster: findBatch("pp-500-2").poster,
+    variants: [{ id: "standard", label: "Standard", order: 0, modelId: "pp-500-2", available: true }],
   },
   {
     id: "pp-1000",
-    name: "PP - 1 L",
-    description: "1 L PP bottle · two supplied variants",
+    name: "PP - 1 L 1",
+    description: "1 L PP bottle · Opaque white",
     category: "pp",
     volume: "1 L",
     poster: findBatch("pp-1000").poster,
-    variants: [
-      { id: "standard", label: "Standard", order: 0, modelId: "pp-1000", available: true },
-      { id: "variant-2", label: "Variant 2", order: 1, modelId: "pp-1000-2", available: true },
-    ],
+    variants: [{ id: "standard", label: "Standard", order: 0, modelId: "pp-1000", available: true }],
+  },
+  {
+    id: "pp-1000-2",
+    name: "PP - 1 L 2",
+    description: "1 L PP bottle · Opaque white",
+    category: "pp",
+    volume: "1 L",
+    poster: findBatch("pp-1000-2").poster,
+    variants: [{ id: "standard", label: "Standard", order: 0, modelId: "pp-1000-2", available: true }],
   },
   {
     id: "pp-1250",
@@ -908,7 +963,7 @@ export function getModelMaterialDefaults(id?: string | null): MaterialPreference
       ? "milk"
       : model.id === "basil-strawberry" || model.id === "glass-290-pullcap-basil"
         ? "basil-seed"
-        : model.id === "pet-aloe"
+        : model.id === "pet-aloe" || model.id === "pet-500-full-label"
           ? "aloe"
           : model.id === "pet-nata-watermelon" || model.id === "pet-320-full-nata"
             ? "nata-de-coco"

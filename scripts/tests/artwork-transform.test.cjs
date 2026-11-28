@@ -11,7 +11,7 @@ test('all handles return finite minimum-sized transforms',()=>{for(const h of ['
 test('known rectangular model dielines use supplied millimetre dimensions',()=>{
  const cases={
   'can-180':[170,107], 'can-250-short':[216,90], 'can-250-slim':[177,131], 'can-320':[192,143], 'can-mango':[216,114], 'can-500':[216,166],
-  'pet-320-full-nata':[206,125], 'pet-nata-watermelon':[195,50], 'pet-aloe':[220,77],
+  'pet-320-full-nata':[206,125], 'pet-nata-watermelon':[195,50], 'pet-aloe':[220,77], 'pet-500-full-label':[220,153],
   'pet-1000-juice':[268,217], 'pet-1000-short-juice':[296,190], 'pet-1500-juice':[296,257],
   'glass-300-milk':[193,84], 'pet-325-juice':[192,158], 'pet-330-energy':[183,77], 'pet-350-juice':[206,132],
   'glass-280-latte':[211,156], 'glass-280-short-latte':[211,143],
@@ -27,7 +27,7 @@ test('known rectangular model dielines use supplied millimetre dimensions',()=>{
 });
 
 test('pending models and unknown dimensions remain provisional',()=>{
- for(const id of ['unknown','pet-500-full-label','pet-1500-short-label','pp-500-2']) {
+ for(const id of ['unknown','pet-1500-short-label','pp-500-2']) {
   assert.deepEqual(t.getArtworkDieline(id),{width:3,height:2},id);
  }
 });
@@ -41,7 +41,6 @@ test('special bottle families share the supplied dieline guide across liquid var
 
 test('pending model dimensions are recorded without activating provisional model ids',()=>{
  assert.deepEqual(t.PENDING_ARTWORK_DIELINES,{
-  'pet-500-full-label':{width:220,height:153,unit:'mm'},
   'pet-1500-short-label':{width:296,height:97,unit:'mm'},
  });
 });

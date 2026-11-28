@@ -28,7 +28,7 @@ export function authoredMockupCameraFocus(bounds: THREE.Box3, modelSrc: string):
   const focus = bounds.getCenter(new THREE.Vector3());
   // Export manifests use exportScale = 0.1; source Z is height.
   if (/glass-290-basil/.test(modelSrc)) focus.y += (1 - 0.9023135900497437) * 0.1;
-  else if (/pet-500-short-label/.test(modelSrc)) focus.y += (1 - 1.0481757521629333) * 0.1;
+  else if (/pet-500-(?:short|full)-label/.test(modelSrc)) focus.y += (1 - 1.0481757521629333) * 0.1;
   else focus.y = bounds.min.y + 0.1;
   return focus;
 }

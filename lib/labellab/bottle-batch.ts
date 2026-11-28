@@ -12,12 +12,12 @@ import pp500Variant2 from '../../public/models/bottles/pp-500-2.manifest.json';
 
 const definitions = [
   { manifest: pet325, name: 'PET - 325 mL', volume: '325 mL', packaging: 'pet' },
-  { manifest: pet1000Short, name: 'PET - 1 L · Short label', volume: '1 L', packaging: 'pet' },
+  { manifest: pet1000Short, name: 'PET - 1 L 2', volume: '1 L', packaging: 'pet' },
   { manifest: pet1500, name: 'PET - 1.5 L', volume: '1.5 L', packaging: 'pet' },
-  { manifest: pp500, name: 'PP - 500 mL', volume: '500 mL', packaging: 'pp' },
-  { manifest: pp500Variant2, name: 'PP - 500 mL · Variant 2', volume: '500 mL', packaging: 'pp' },
-  { manifest: pp1000, name: 'PP - 1 L', volume: '1 L', packaging: 'pp' },
-  { manifest: pp1000Variant2, name: 'PP - 1 L · Variant 2', volume: '1 L', packaging: 'pp' },
+  { manifest: pp500, name: 'PP - 500 mL 1', volume: '500 mL', packaging: 'pp' },
+  { manifest: pp500Variant2, name: 'PP - 500 mL 2', volume: '500 mL', packaging: 'pp' },
+  { manifest: pp1000, name: 'PP - 1 L 1', volume: '1 L', packaging: 'pp' },
+  { manifest: pp1000Variant2, name: 'PP - 1 L 2', volume: '1 L', packaging: 'pp' },
   { manifest: pp1250, name: 'PP - 1.25 L', volume: '1.25 L', packaging: 'pp' },
   { manifest: pp2000, name: 'PP - 2 L', volume: '2 L', packaging: 'pp' },
 ] as const;

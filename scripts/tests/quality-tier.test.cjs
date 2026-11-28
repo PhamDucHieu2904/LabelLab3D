@@ -56,6 +56,7 @@ test('classifySceneWeight separates light boxes/cans from medium PET and heavy o
   assert.equal(classifySceneWeight({ id: 'glass-290-basil-web', packaging: 'glass' }, false), 'heavy');
   assert.equal(classifySceneWeight({ id: 'glass-300-milk', packaging: 'glass' }, false), 'heavy');
   assert.equal(classifySceneWeight({ id: 'pet-500-short-label', packaging: 'pet' }, false), 'heavy');
+  assert.equal(classifySceneWeight({ id: 'pet-500-full-label', packaging: 'pet' }, false), 'heavy');
 });
 
 test('4x3 quality matrix keeps boxes/cans sharp with 4x MSAA on Medium/High/Ultra and uses Idle Sharpness on heavy glass', () => {

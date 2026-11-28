@@ -123,7 +123,7 @@ test('320 ml bottle keeps existing Nata media and persistent selection alongside
   assert.equal(family.id, 'pet-320-nata');
   assert.equal(family.variants.length, 2);
   assert.deepEqual(getOrderedFamilyVariants(family).map(v=>[v.label,v.order,v.modelId]), [
-    ['Nata de coco',0,'pet-nata-watermelon'],['Full label',1,'pet-320-full-nata'],
+    ['320 mL 1',0,'pet-nata-watermelon'],['320 mL 2',1,'pet-320-full-nata'],
   ]);
   assert.equal(getDefaultFamilyVariant(family).modelId, 'pet-nata-watermelon');
   assert.equal(LAB_MODELS.find(item => item.id === 'pet-320-full-nata').asset.cameraFraming, undefined,
@@ -148,7 +148,7 @@ test('model library families do not duplicate a model card for each variant', ()
   );
   assert.deepEqual([...new Set(modelIds)].sort(), LAB_MODELS.map(model => model.id).sort());
   assert.equal(new Set(modelIds).size, modelIds.length, 'each active child belongs to one packaging family');
-  assert.equal(LAB_MODEL_FAMILIES.length, 22);
+  assert.equal(LAB_MODEL_FAMILIES.length, 25);
   const glass280 = getLabModelFamily('glass-280-latte');
   assert.equal(getLabModelFamily('glass-280-short-latte'), glass280, 'both label types share one card');
   assert.deepEqual(getOrderedFamilyVariants(glass280).map(({ label, order, modelId }) => ({ label, order, modelId })), [
@@ -189,7 +189,7 @@ test('searches match variant names while preserving one packaging card and categ
     assert.deepEqual(filterLabModelFamilies(query, 'glass').map(item => item.id), ['glass-280-latte']);
   }
   assert.equal(filterLabModelFamilies('Chia', 'can').length, 0);
-  assert.deepEqual(filterLabModelFamilies('', 'pet').map(item => item.id), ['pet-320-nata', 'pet-325-juice', 'pet-330-energy', 'pet-350-juice', 'pet-500-short-label', 'pet-1000-juice', 'pet-1500-juice']);
+  assert.deepEqual(filterLabModelFamilies('', 'pet').map(item => item.id), ['pet-320-nata', 'pet-325-juice', 'pet-330-energy', 'pet-350-juice', 'pet-500-short-label', 'pet-1000-juice', 'pet-1000-short-juice', 'pet-1500-juice']);
   assert.equal(getLabModelFamily(undefined), undefined);
   assert.equal(getLabModelFamily('not-a-web-model'), undefined);
 });
@@ -214,7 +214,7 @@ test('all models use blank labels, unified category-volume names, grouped order,
   }
 });
 
-for (const [id,volume,type,color] of [['pet-320-full-nata',320,'nata-de-coco','#ff4430'],['pet-1000-juice',1000,'fruit-juice','#E8B64F']]) {
+for (const [id,volume,type,color] of [['pet-320-full-nata',320,'nata-de-coco','#ff4430'],['pet-500-full-label',500,'aloe','#ffb52e'],['pet-1000-juice',1000,'fruit-juice','#E8B64F']]) {
   test(`${id}: semantic parts, material defaults and saved projects use the new Draco model`, () => {
     const {parsePreferences}=loadSource(path.join(root,'lib/labellab/preferences'));
     const {getModelMaterialDefaults}=loadSource(path.join(root,'lib/labellab/catalog'));
@@ -223,7 +223,7 @@ for (const [id,volume,type,color] of [['pet-320-full-nata',320,'nata-de-coco','#
     assert.equal(model.asset.volumeMl,volume);
     assert.equal(model.category,'pet');
     assert.equal(model.asset.cameraFraming, id === 'pet-1000-juice' ? 'bounds' : undefined,
-      'full-label 320 uses the shared index-0 framing path');
+      'full-label index 1 uses the shared index-0 framing path');
     assert.equal(parsePreferences({modelId:id}).modelId,id);
     const defaults=getModelMaterialDefaults(id), restored=parsePreferences({modelId:id});
     assert.equal(defaults.liquidType,type); assert.equal(defaults.liquidColor.toLowerCase(),color.toLowerCase());
@@ -232,7 +232,7 @@ for (const [id,volume,type,color] of [['pet-320-full-nata',320,'nata-de-coco','#
     assert.equal(restored.capColor,defaults.capColor); assert.equal(restored.liquidCustomized,defaults.liquidCustomized);
     const bytes=fs.readFileSync(path.join(root,'public',model.asset.src.split('?')[0]));
     const d=JSON.parse(bytes.subarray(20,20+bytes.readUInt32LE(12)));
-    for(const role of ['body','cap','label','liquid',...(volume===320?['inclusions']:[])]) {
+    for(const role of ['body','cap','label','liquid',...(volume===320||volume===500?['inclusions']:[])]) {
       assert.ok(model.asset.materialSlots[role].length>0);
       for(const name of model.asset.materialSlots[role]) assert.ok(d.materials.some(m=>m.name===name));
     }
@@ -241,7 +241,14 @@ for (const [id,volume,type,color] of [['pet-320-full-nata',320,'nata-de-coco','#
     assert.ok(model.asset.src.includes('?v='),'new GLBs are versioned');
     assert.ok(fs.existsSync(path.join(root,'public',model.poster.split('?')[0])),'own real poster exists');
     if(volume===1000) assert.equal(getDefaultFamilyVariant(getLabModelFamily(id)).modelId,id);
-    else assert.equal(getLabModelFamily(id),getLabModelFamily('pet-nata-watermelon'));
+    else if(volume===500) {
+      const family=getLabModelFamily(id);
+      assert.equal(family,getLabModelFamily('pet-aloe'));
+      assert.deepEqual(getOrderedFamilyVariants(family).map(v=>[v.label,v.order,v.modelId]),[
+        ['Aloe',0,'pet-aloe'],['Full label',1,'pet-500-full-label'],
+      ]);
+      assert.equal(getDefaultFamilyVariant(family).modelId,'pet-aloe');
+    } else assert.equal(getLabModelFamily(id),getLabModelFamily('pet-nata-watermelon'));
   });
 }
 
@@ -377,19 +384,27 @@ for(const [id,volume,category,liquid] of [['pet-1500-juice',1500,'pet',true],['p
   const edited=parsePreferences({...restored,bodyRoughness:.62,capColor:'#2768c7',liquidColor:'#123456'});assert.equal(pickMaterialPreferences(edited).bodyRoughness,.62);assert.equal(edited.capColor,'#2768c7');
   assert.equal(m.appearance.slots.label.baseColorMap,undefined);assert.ok(fs.existsSync(path.join(root,'public',m.poster.split('?')[0])),'own poster exists');
   if(id==='pet-1000-short-juice'){
-   const f=getLabModelFamily(id);assert.equal(f,getLabModelFamily('pet-1000-juice'));
-   assert.deepEqual(getOrderedFamilyVariants(f).map(v=>[v.label,v.order,v.modelId]),[['Full label',0,'pet-1000-juice'],['Short label',1,id]]);
+   const f=getLabModelFamily(id);assert.notEqual(f,getLabModelFamily('pet-1000-juice'));
+   assert.equal(f.id,'pet-1000-short-juice');assert.equal(f.name,'PET - 1 L 2');
+   assert.equal(getLabModelFamily('pet-1000-juice').name,'PET - 1 L 1');
+   assert.deepEqual(getOrderedFamilyVariants(f).map(v=>[v.label,v.order,v.modelId]),[['Juice',0,id]]);
   }
   if(category==='pp')assert.ok(filterLabModelFamilies('', 'pp').some(f=>f.variants.some(v=>v.modelId===id)));
-  if(id.startsWith('pp-500') || id.startsWith('pp-1000-2')) {
-   const family=getLabModelFamily(id); assert.equal(family.id,id.startsWith('pp-500')?'pp-500':'pp-1000');
-   assert.equal(family.variants.find(v=>v.modelId===id).label,id.endsWith('-2')?'Variant 2':'Standard');
+  if(id === 'pp-500' || id === 'pp-500-2') {
+   const family=getLabModelFamily(id); assert.equal(family.id,id);
+   assert.equal(family.name,id==='pp-500-2'?'PP - 500 mL 2':'PP - 500 mL 1');
+   assert.equal(family.variants.find(v=>v.modelId===id).label,'Standard');
+  }
+  if(id === 'pp-1000' || id === 'pp-1000-2') {
+   const family=getLabModelFamily(id); assert.equal(family.id,id);
+   assert.equal(family.name,id==='pp-1000-2'?'PP - 1 L 2':'PP - 1 L 1');
+   assert.equal(family.variants.find(v=>v.modelId===id).label,'Standard');
   }
  });
 }
 test('PET ring materials are exposed through an independent semantic slot', () => {
   const namedRings = [
-    ['pet-aloe', 'Ring'], ['pet-nata-watermelon', 'pet-ring'],
+    ['pet-aloe', 'Ring'], ['pet-500-full-label', 'Ring'], ['pet-nata-watermelon', 'pet-ring'],
     ['pet-320-full-nata', 'Ring'], ['pet-350-juice', 'Ring'],
     ['pet-330-energy', 'Ring'], ['pet-1000-juice', 'Ring'],
     ['pet-1500-juice', 'Ring'], ['pet-325-juice', 'Ring'],

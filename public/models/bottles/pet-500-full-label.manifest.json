@@ -1,0 +1,100 @@
+{
+  "id": "pet-500-full-label",
+  "src": "/models/bottles/pet-500-full-label.glb",
+  "sourceName": "500 ml Bottle Model Long Label_web.glb",
+  "sourceBytes": 11431644,
+  "sourceSha256": "78814e475f6dd0b0735da632f55fd50e1c2e4dd8d1cede6de278e3730df1ead5",
+  "bytes": 1029788,
+  "sha256": "b8f06e3005a228e53c4b838db1f74f74de06bb5b27ab94bd5fbda4f8bf81e39b",
+  "binarySha256": "0ed5e4ef0fb41b3bc454578a933cd5bd646aecdf568d088790fd91fb2886e7a3",
+  "sourceToMetres": 0.1,
+  "units": "metres",
+  "volumeMl": 500,
+  "packaging": "pet",
+  "defaultLiquid": "aloe",
+  "materialSlots": {
+    "inclusions": [
+      "Aloe Pulp - Clear"
+    ],
+    "body": [
+      "Body Bottle - Rough_NormalMap",
+      "Body Bottle - z Glossy"
+    ],
+    "ring": [
+      "Ring"
+    ],
+    "cap": [
+      "PlasticCap"
+    ],
+    "label": [
+      "Label"
+    ],
+    "liquid": [
+      "Aloe Vera Water"
+    ]
+  },
+  "compression": {
+    "extension": "KHR_draco_mesh_compression",
+    "encoder": "draco3dgltf 1.5.7",
+    "method": "edgebreaker",
+    "precisionBits": {
+      "POSITION": 18,
+      "NORMAL": 14,
+      "TEXCOORD_0": 16
+    },
+    "lossless": false,
+    "simplification": false,
+    "uncompressedBytes": 8149848,
+    "savedPercent": 87.36,
+    "triangles": 272560,
+    "topologyPreserved": true,
+    "maxPositionErrorMeters": 5.369672255229586e-7,
+    "maxNormalAngleDegrees": 0.030321284073641507,
+    "maxUvError": 0.00000768899917602539,
+    "maxUvErrorAt4096px": 0.031494140625,
+    "sceneSha256": "69e1eb03fd0fb13bc83df816856a6631756af9d0d7016d8aa3c88d700295e815",
+    "decodedPositionHashes": [
+      "ee204eb6b3649545046cd17e52255b6bb4d99c377f8a0d0353425d408917189f",
+      "317926b0b84641be415877e4c1c51787134eb1d9bf756a7234a9790ebcdc0260",
+      "960111a91bc68615858374c16b8bd7c4e54b48f539fabb975a21688f0b1129f0",
+      "fa558cd9a315086c5abb6e2b60f3ef5708505336311f4e7cb4a70175c5c9fcec",
+      "229c8b826a012de3f0463a567ee4327afd66fa763501a15dccead8bee60c17a7",
+      "0d9d8d697e534aff31ca9d6e1e5d6d5ed6e01ddcb52e8f37b374f39a970416e1",
+      "f38972def4e5312b5d1fa22cac9f51ee29ca36036dec3c77397bb7138dbde963"
+    ],
+    "decodedAttributeHashes": [
+      {
+        "POSITION": "ee204eb6b3649545046cd17e52255b6bb4d99c377f8a0d0353425d408917189f",
+        "NORMAL": "e44a948a21ee66ab73d6edc2bd1fb2f2fdfd906ec672e0955a14781ec1c8cbb7"
+      },
+      {
+        "POSITION": "317926b0b84641be415877e4c1c51787134eb1d9bf756a7234a9790ebcdc0260",
+        "NORMAL": "4f20441c8f8283d1af35d41efb38f4a400d0a5c6bc8ed9ba7d155a17363ea2de",
+        "TEXCOORD_0": "505264e77fee225175da02999aaab5116a68e124e7ddef204a56263aa6f9953f"
+      },
+      {
+        "POSITION": "960111a91bc68615858374c16b8bd7c4e54b48f539fabb975a21688f0b1129f0",
+        "NORMAL": "dbda54f160f4d7083edf863c3a71204872a22d317934239546ab61854e910bbf",
+        "TEXCOORD_0": "d086dbd29297b3109c03cdd60f858390bbfccf3efb73922d9288eacba12fb4e5"
+      },
+      {
+        "POSITION": "fa558cd9a315086c5abb6e2b60f3ef5708505336311f4e7cb4a70175c5c9fcec",
+        "NORMAL": "222c1d47145d3a6a1ce4ce91c24fb019144066b68adc36da40cbeb604483c58e",
+        "TEXCOORD_0": "11168aff7569cb5ba8f0b8c489c3081aae2f839219af5bf1b6d973e649f1ac4a"
+      },
+      {
+        "POSITION": "229c8b826a012de3f0463a567ee4327afd66fa763501a15dccead8bee60c17a7",
+        "NORMAL": "bfe2a7a2a92818d28d66428648c5985cac98694f92dc64f744e2542a139bea09",
+        "TEXCOORD_0": "63aca889b583108df04ea0f8f71849f1a0ea36c1b49e6378b898aaabcb1a3db6"
+      },
+      {
+        "POSITION": "0d9d8d697e534aff31ca9d6e1e5d6d5ed6e01ddcb52e8f37b374f39a970416e1",
+        "NORMAL": "b322753de08438252ff28dbb1e45ce52a1425311d2c47df3e99aa23a40fba0e3"
+      },
+      {
+        "POSITION": "f38972def4e5312b5d1fa22cac9f51ee29ca36036dec3c77397bb7138dbde963",
+        "NORMAL": "88f8e8fd52d4e9f3ae5bae843bf04084cf424279d5eb0e75ae16302259e12807"
+      }
+    ]
+  }
+}

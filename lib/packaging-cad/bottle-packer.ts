@@ -182,7 +182,7 @@ export function resolveBottleOpticalProfile(
     if (id.includes('chia')) return 'chia-glass';
     return 'basil-glass';
   }
-  if (id === 'pet-aloe' || id.includes('aloe')) return 'aloe';
+  if (id === 'pet-aloe' || id === 'pet-500-full-label' || id.includes('aloe')) return 'aloe';
   if (id.includes('nata')) return 'nata';
   if (id.includes('energy')) return 'energy';
   return 'juice';
