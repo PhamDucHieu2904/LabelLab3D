@@ -9,7 +9,8 @@ export const LAUNCH_PROMO_END_ISO = "2026-12-04T16:59:59.999Z";
 
 export const LAUNCH_PROMO_START_DATE = "2026-11-27";
 export const LAUNCH_PROMO_END_DATE = "2026-12-04";
-export const LAUNCH_PROMO_MAX_CLAIMS_PER_IP = 5;
+/** Disabled (`null`) so shared office/campus/CGNAT networks are never blocked; enforced per verified account & canonical email. */
+export const LAUNCH_PROMO_MAX_CLAIMS_PER_IP: number | null = null;
 
 export type LaunchPromoReason =
   | "ELIGIBLE"

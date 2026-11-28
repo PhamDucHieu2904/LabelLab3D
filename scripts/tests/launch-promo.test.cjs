@@ -239,23 +239,22 @@ test('launch promo grants +100 coins once per account, blocks parallel race burs
     /PROMO_EXPIRED/,
   );
 
-  // 7. IP farming cap: max 5 distinct accounts per IP, 6th from same IP blocked with PROMO_IP_LIMIT
+  // 7. Shared office/campus/CGNAT networks: 6+ distinct verified accounts on the same IP all succeed
   for (let i = 1; i <= 6; i += 1) {
     db.insertUser({
       id: `usr_ip_${i}`,
-      email: `farm${i}@example.com`,
+      email: `colleague${i}@company.vn`,
       createdAt: new Date(insideWindow).toISOString(),
     });
   }
-  await promo.claimLaunchPromo(env, 'usr_ip_1', { nowMs: insideWindow, ip: '198.51.100.77' });
-  await promo.claimLaunchPromo(env, 'usr_ip_2', { nowMs: insideWindow, ip: '198.51.100.77' });
-  await promo.claimLaunchPromo(env, 'usr_ip_3', { nowMs: insideWindow, ip: '198.51.100.77' });
-  await promo.claimLaunchPromo(env, 'usr_ip_4', { nowMs: insideWindow, ip: '198.51.100.77' });
-  await promo.claimLaunchPromo(env, 'usr_ip_5', { nowMs: insideWindow, ip: '198.51.100.77' });
-  await assert.rejects(
-    () => promo.claimLaunchPromo(env, 'usr_ip_6', { nowMs: insideWindow, ip: '198.51.100.77' }),
-    /PROMO_IP_LIMIT/,
-  );
+  for (let i = 1; i <= 6; i += 1) {
+    const claimed = await promo.claimLaunchPromo(env, `usr_ip_${i}`, {
+      nowMs: insideWindow,
+      ip: '198.51.100.77',
+    });
+    assert.equal(claimed.coins, 100);
+    assert.equal(claimed.balance, 100);
+  }
 });
 
 test('launch promo announcement is pinned first inside active window and auto-hides after Dec 4, 2026', () => {

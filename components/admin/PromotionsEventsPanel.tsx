@@ -51,7 +51,7 @@ type LaunchPromoMeta = {
   coins: number;
   startDate: string;
   endDate: string;
-  maxClaimsPerIp: number;
+  maxClaimsPerIp: number | null;
 };
 
 type PromotionsTab = "multiplier" | "gift" | "checkin";
@@ -122,7 +122,7 @@ export default function PromotionsEventsPanel() {
     coins: 100,
     startDate: "2026-11-27",
     endDate: "2026-12-04",
-    maxClaimsPerIp: 5,
+    maxClaimsPerIp: null,
   });
 
   // Mass gift form state
@@ -355,7 +355,9 @@ export default function PromotionsEventsPanel() {
             <span>Sự kiện ra mắt +{launchPromo.coins} Coin</span>
             <Sparkles size={17} aria-hidden="true" />
           </div>
-          <div className={s.statValue}>{launchPromo.maxClaimsPerIp} acc / IP</div>
+          <div className={s.statValue}>
+            {launchPromo.maxClaimsPerIp ? `${launchPromo.maxClaimsPerIp} acc / IP` : "1 lần / email"}
+          </div>
           <span className={s.subtle}>
             {launchPromo.startDate} → {launchPromo.endDate} · Banner ở Nội dung → Thông báo
           </span>

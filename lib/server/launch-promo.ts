@@ -248,7 +248,12 @@ export async function claimLaunchPromo(
     }
   }
 
-  if (ipHash && !preExisting) {
+  if (
+    ipHash &&
+    !preExisting &&
+    typeof LAUNCH_PROMO_MAX_CLAIMS_PER_IP === "number" &&
+    LAUNCH_PROMO_MAX_CLAIMS_PER_IP > 0
+  ) {
     const ipRow = await db
       .prepare("SELECT COUNT(*) AS cnt FROM promo_claims WHERE promo_id = ? AND ip_hash = ? AND user_id <> ?")
       .bind(LAUNCH_PROMO_ID, ipHash, user.id)

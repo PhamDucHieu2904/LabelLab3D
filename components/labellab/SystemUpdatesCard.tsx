@@ -80,9 +80,9 @@ export default function SystemUpdatesCard({
       (activeItem.id === LAUNCH_PROMO_ANNOUNCEMENT_ID || activeItem.url === "/#launch-promo"),
   );
 
-  const loadPromoStatus = useCallback(async () => {
+  const loadPromoStatus = useCallback(async (preserveError = false) => {
     setPromoLoading(true);
-    setPromoError("");
+    if (!preserveError) setPromoError("");
     try {
       const response = await fetch("/api/account/promo/launch", {
         credentials: "same-origin",
@@ -215,7 +215,7 @@ export default function SystemUpdatesCard({
 
       if (!response.ok || !payload?.ok) {
         setPromoError(mapPromoError(payload?.error));
-        void loadPromoStatus();
+        void loadPromoStatus(true);
         return;
       }
 
