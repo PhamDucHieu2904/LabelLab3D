@@ -7,6 +7,7 @@ export type SceneWeight = 'light' | 'medium' | 'heavy';
 export const QUALITY_TIERS: readonly QualityTier[] = Object.freeze(['low', 'medium', 'high', 'ultra']);
 export const QUALITY_PREFERENCES: readonly QualityPreference[] = Object.freeze(['auto', 'low', 'medium', 'high', 'ultra']);
 export const QUALITY_STORAGE_KEY = 'labellab.graphics.quality.v1';
+export const WEBGL_SAFE_MODE_KEY = 'labellab.webgl.safeMode.v1';
 
 export interface QualityTierMeta {
   readonly id: QualityPreference;
@@ -68,6 +69,14 @@ export interface RenderQualityBudget {
   readonly idleMsaa: number;
   readonly maxFps: number;
   readonly opticalBounces: number;
+  /** Three.js WebGLRenderer.transmissionResolutionScale (0.5 on Low saves 75% fillrate & VRAM). */
+  readonly transmissionScale: number;
+  /** Resolution scale for the glass rear-paper capture pass (0.5 on Low). */
+  readonly paperBackingScale: number;
+  /** Bypass heavy BVH neck/ring raytracing GLSL shaders on Low tier and use calibrated native transmission. */
+  readonly simplifiedOptics: boolean;
+  /** Maximum texture anisotropy (1 on Low, 2 on Medium, 4 on High/Ultra). */
+  readonly maxAnisotropy: number;
   /** Milliseconds after interaction stops before painting the crisp idle frame (0 = already max sharpness). */
   readonly idleRefineMs: number;
 }
@@ -128,7 +137,7 @@ export function detectHardwareTier(probe: HardwareProbe): QualityTier {
 
   // 1. Software renderers or severely constrained WebGL environments -> always Low.
   if (
-    /swiftshader|llvmpipe|software|microsoft basic render|warp|subzero/i.test(name) ||
+    /swiftshader|llvmpipe|lavapipe|virgl|software|microsoft basic render|warp|subzero/i.test(name) ||
     probe.maxTextureSize < 4096 ||
     !probe.supportsHalfFloat
   ) {
@@ -162,26 +171,47 @@ export function detectHardwareTier(probe: HardwareProbe): QualityTier {
     /apple\s*m[1-9]\b/i.test(name);
   if (isHighGpu && !probe.isMobile) return 'high';
 
-  // 4. Low tier: older integrated GPUs (Intel HD 2000-630, UHD 600-630), entry mobile chips, low RAM/CPU.
-  const isLegacyLowGpu =
-    /intel.*(hd\s*graphics|uhd\s*graphics\s*6\d\d|gma)/i.test(name) ||
+  // 4. Low tier: legacy/entry integrated & discrete GPUs that can hit Windows D3D11 TDR on heavy BVH shaders,
+  // older Intel HD / UHD (except UHD 7xx), legacy Radeon R2-R7/HD/Vega 3, entry GeForce GT/M/MX1xx/Quadro K/NVS,
+  // entry mobile chips, or severely constrained office hardware.
+  const isIntelLegacyOrBareUhd =
+    /intel.*(\bhd\s*graphics|\bgma\b)/i.test(name) ||
+    (/intel.*\buhd\s*graphics\b/i.test(name) && !/\buhd\s*graphics\s*7\d\d\b/i.test(name));
+  const isLegacyAmd = /radeon.*(\br[2-7]\b|\bhd\s*[2-8]\d{3}\b|\bvega\s*[23]\b)/i.test(name);
+  const isLegacyNvidia =
+    /geforce\s*(gt\s*[1-7]\d{2}\b|g\s*\d{3}\b|[1-9][0-4]0m\b|210\b|310\b|410\b|mx1[13]0\b)/i.test(name) ||
+    /quadro\s*(k[46]20|nvs|fx|[246]00\b)/i.test(name);
+  const isLegacyMobileGpu =
     /adreno.*(3\d\d|4\d\d|5\d\d)/i.test(name) ||
     /mali-(4\d\d|t\d\d\d|g3\d|g5[12])/i.test(name) ||
     /powervr/i.test(name);
-  if (isLegacyLowGpu) return 'low';
+  if (isIntelLegacyOrBareUhd || isLegacyAmd || isLegacyNvidia || isLegacyMobileGpu) return 'low';
   if (probe.isMobile && ((probe.deviceMemoryGb !== undefined && probe.deviceMemoryGb <= 4) || probe.hardwareConcurrency <= 4)) {
     return 'low';
   }
+  // Stripped/hidden renderer string on low-resource hardware -> stay safe in Low tier.
+  if (!name.trim() && (probe.maxTextureSize <= 4096 || probe.hardwareConcurrency <= 4)) {
+    return 'low';
+  }
 
-  // 5. Medium tier: modern iGPUs (Intel Iris Xe/Plus, UHD 730-770, Radeon Vega/660M/680M), GTX 1050/MX, modern mobile.
+  // 5. Medium tier: modern iGPUs (Intel Iris Xe/Plus, UHD 730-770, Radeon Vega/660M/680M), GTX 1050/MX250+, modern mobile.
   const isMediumGpu =
-    /iris|uhd\s*graphics\s*7\d\d|radeon\(tm\)\s*graphics|vega|6[68]0m|gtx\s*(9[56]0|1050)|mx\d{3}|geforce\s*gt/i.test(name) ||
+    /iris|uhd\s*graphics\s*7\d\d|radeon\(tm\)\s*graphics|vega|6[68]0m|gtx\s*(9[56]0|1050)|mx[2-5]\d{2}|geforce\s*gt\s*1030/i.test(name) ||
     /adreno.*(6\d\d|7\d\d|8\d\d)|mali-(g6|g7|g8)|immortalis|apple\s*gpu/i.test(name);
-  if (isMediumGpu) return 'medium';
+  if (isMediumGpu) {
+    // Low-RAM / low-core office machines sharing an integrated GPU still benefit from Low-tier stability.
+    if (!probe.isMobile && probe.hardwareConcurrency <= 4 && probe.deviceMemoryGb !== undefined && probe.deviceMemoryGb <= 4) {
+      return 'low';
+    }
+    return 'medium';
+  }
 
   // 6. Unknown discrete-like desktop GPU vs generic fallback.
   if (!probe.isMobile && /nvidia|geforce|radeon|quadro/i.test(name)) return 'high';
-  return probe.isMobile ? 'medium' : 'medium';
+  if (!probe.isMobile && probe.hardwareConcurrency <= 4 && probe.deviceMemoryGb !== undefined && probe.deviceMemoryGb <= 4) {
+    return 'low';
+  }
+  return 'medium';
 }
 
 function clampMsaa(requested: number, maxSamples: number): number {
@@ -194,6 +224,8 @@ function clampMsaa(requested: number, maxSamples: number): number {
  * Key principle: Lightweight CAD cartons/trays & cans stay razor-sharp (Full DPR + 4x MSAA)
  * even on Medium laptops, while heavy optical glass bottles scale interactively and refine
  * automatically to crisp 4x MSAA as soon as the user releases the mouse ("Idle Sharpness").
+ * Low tier disables heavy BVH raytracing shaders, halves transmission/backing capture buffers,
+ * and disables MSAA on bottles so legacy iGPUs & software WebGL stay smooth without TDR crashes.
  */
 export function resolveQualityBudget(
   tier: QualityTier,
@@ -214,6 +246,10 @@ export function resolveQualityBudget(
       idleMsaa: msaa4,
       maxFps: 60,
       opticalBounces: weight === 'heavy' ? 8 : 6,
+      transmissionScale: 1,
+      paperBackingScale: 1,
+      simplifiedOptics: false,
+      maxAnisotropy: 4,
       idleRefineMs: 0,
     };
   }
@@ -224,7 +260,10 @@ export function resolveQualityBudget(
         tier, weight, maxDpr: 2,
         interactiveScale: 1, idleScale: 1,
         interactiveMsaa: msaa4, idleMsaa: msaa4,
-        maxFps: 60, opticalBounces: 6, idleRefineMs: 0,
+        maxFps: 60, opticalBounces: 6,
+        transmissionScale: 1, paperBackingScale: 1,
+        simplifiedOptics: false, maxAnisotropy: 4,
+        idleRefineMs: 0,
       };
     }
     if (weight === 'medium') {
@@ -232,7 +271,10 @@ export function resolveQualityBudget(
         tier, weight, maxDpr: 1.75,
         interactiveScale: 1, idleScale: 1,
         interactiveMsaa: msaa4, idleMsaa: msaa4,
-        maxFps: 60, opticalBounces: 6, idleRefineMs: 0,
+        maxFps: 60, opticalBounces: 6,
+        transmissionScale: 1, paperBackingScale: 1,
+        simplifiedOptics: false, maxAnisotropy: 4,
+        idleRefineMs: 0,
       };
     }
     // Heavy glass bottles on High (GTX 1650 class): smooth interactive drag, razor-sharp 4x MSAA on release!
@@ -240,7 +282,10 @@ export function resolveQualityBudget(
       tier, weight, maxDpr: 1.5,
       interactiveScale: 0.82, idleScale: 1,
       interactiveMsaa: 0, idleMsaa: msaa4,
-      maxFps: 60, opticalBounces: 6, idleRefineMs: 160,
+      maxFps: 60, opticalBounces: 6,
+      transmissionScale: 1, paperBackingScale: 1,
+      simplifiedOptics: false, maxAnisotropy: 4,
+      idleRefineMs: 160,
     };
   }
 
@@ -250,7 +295,10 @@ export function resolveQualityBudget(
         tier, weight, maxDpr: 1.6,
         interactiveScale: 1, idleScale: 1,
         interactiveMsaa: msaa4, idleMsaa: msaa4,
-        maxFps: 60, opticalBounces: 4, idleRefineMs: 0,
+        maxFps: 60, opticalBounces: 4,
+        transmissionScale: 1, paperBackingScale: 1,
+        simplifiedOptics: false, maxAnisotropy: 2,
+        idleRefineMs: 0,
       };
     }
     if (weight === 'medium') {
@@ -258,40 +306,56 @@ export function resolveQualityBudget(
         tier, weight, maxDpr: 1.4,
         interactiveScale: 0.9, idleScale: 1,
         interactiveMsaa: msaa2, idleMsaa: msaa4,
-        maxFps: 45, opticalBounces: 4, idleRefineMs: 160,
+        maxFps: 45, opticalBounces: 4,
+        transmissionScale: 0.85, paperBackingScale: 1,
+        simplifiedOptics: false, maxAnisotropy: 2,
+        idleRefineMs: 160,
       };
     }
     return {
       tier, weight, maxDpr: 1.25,
       interactiveScale: 0.72, idleScale: 1,
       interactiveMsaa: 0, idleMsaa: msaa4,
-      maxFps: 30, opticalBounces: 4, idleRefineMs: 190,
+      maxFps: 30, opticalBounces: 4,
+      transmissionScale: 0.75, paperBackingScale: 0.75,
+      simplifiedOptics: false, maxAnisotropy: 2,
+      idleRefineMs: 190,
     };
   }
 
-  // 'low' tier (legacy iGPU, weak mobile, or software WebGL): preserve lightweight interactive budget,
-  // but still sharpen boxes/cans cleanly when standing still!
+  // 'low' tier (legacy iGPU, weak mobile, or software WebGL):
+  // Disable heavy BVH shaders (simplifiedOptics), halve transmission & paper-backing buffers,
+  // avoid MSAA FBO blits on bottles, and keep boxes/cans crisp when standing still.
   if (weight === 'light') {
     return {
       tier, weight, maxDpr: 1.25,
       interactiveScale: 0.85, idleScale: 1,
       interactiveMsaa: 0, idleMsaa: msaa2,
-      maxFps: 30, opticalBounces: 3, idleRefineMs: 200,
+      maxFps: 30, opticalBounces: 2,
+      transmissionScale: 0.5, paperBackingScale: 0.5,
+      simplifiedOptics: true, maxAnisotropy: 1,
+      idleRefineMs: 200,
     };
   }
   if (weight === 'medium') {
     return {
       tier, weight, maxDpr: 1,
-      interactiveScale: 0.75, idleScale: 1,
-      interactiveMsaa: 0, idleMsaa: msaa2,
-      maxFps: 30, opticalBounces: 3, idleRefineMs: 220,
+      interactiveScale: 0.72, idleScale: 0.92,
+      interactiveMsaa: 0, idleMsaa: 0,
+      maxFps: 30, opticalBounces: 2,
+      transmissionScale: 0.5, paperBackingScale: 0.5,
+      simplifiedOptics: true, maxAnisotropy: 1,
+      idleRefineMs: 220,
     };
   }
   return {
     tier, weight, maxDpr: 1,
-    interactiveScale: 0.58, idleScale: 0.9,
-    interactiveMsaa: 0, idleMsaa: msaa2,
-    maxFps: 24, opticalBounces: 3, idleRefineMs: 260,
+    interactiveScale: 0.55, idleScale: 0.85,
+    interactiveMsaa: 0, idleMsaa: 0,
+    maxFps: 24, opticalBounces: 2,
+    transmissionScale: 0.5, paperBackingScale: 0.5,
+    simplifiedOptics: true, maxAnisotropy: 1,
+    idleRefineMs: 260,
   };
 }
 
@@ -321,6 +385,32 @@ export function saveQualityPreference(value: QualityPreference, storage?: Pick<S
     const target = storage ?? (typeof window !== 'undefined' ? window.localStorage : undefined);
     if (!target) return false;
     target.setItem(QUALITY_STORAGE_KEY, parseQualityPreference(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Session-scoped crash guard set after a WebGL context loss or initialization failure.
+ * Keeps subsequent page navigations (e.g. Homepage -> Shared Link) in Safe Low Mode
+ * so a heavy shader never triggers repeated GPU driver resets in the same session.
+ */
+export function loadWebglSafeMode(storage?: Pick<Storage, 'getItem'>): boolean {
+  try {
+    const target = storage ?? (typeof window !== 'undefined' ? window.sessionStorage : undefined);
+    return target?.getItem(WEBGL_SAFE_MODE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function markWebglSafeMode(enabled: boolean, storage?: Pick<Storage, 'setItem' | 'removeItem'>): boolean {
+  try {
+    const target = storage ?? (typeof window !== 'undefined' ? window.sessionStorage : undefined);
+    if (!target) return false;
+    if (enabled) target.setItem(WEBGL_SAFE_MODE_KEY, '1');
+    else target.removeItem(WEBGL_SAFE_MODE_KEY);
     return true;
   } catch {
     return false;

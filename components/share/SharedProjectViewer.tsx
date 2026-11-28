@@ -35,7 +35,12 @@ import { getLabModel } from "@/lib/labellab/catalog";
 import { createLocalArtwork, releaseLocalArtwork } from "@/lib/labellab/local-artwork";
 import { DEFAULT_PREFERENCES, type ScenePreferences } from "@/lib/labellab/preferences";
 import type { MockupCameraPreset, MockupStatus } from "@/lib/mockup/contracts";
-import { QUALITY_PREFERENCE_OPTIONS, type QualityPreference } from "@/lib/mockup/quality-tier";
+import {
+  loadQualityPreference,
+  QUALITY_PREFERENCE_OPTIONS,
+  saveQualityPreference,
+  type QualityPreference,
+} from "@/lib/mockup/quality-tier";
 import { createPackagingSubject, type PackagingSubjectController } from "@/lib/packaging-cad/adapter";
 import type { BottlePackVisualSource } from "@/lib/packaging-cad/bottle-packer";
 import type { PackagingArtworkState, PanelDesignOverlay } from "@/lib/packaging-cad/types";
@@ -98,6 +103,13 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
     return "pink";
   });
   const [quality, setQuality] = useState<QualityPreference>("auto");
+  useEffect(() => {
+    const saved = loadQualityPreference();
+    if (saved !== "auto") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setQuality(saved);
+    }
+  }, []);
   const [autoSpin, setAutoSpin] = useState<boolean>(() =>
     Boolean(initialItem && initialItem.payload.kind === "beverage" && initialItem.payload.settings.motion !== "off"),
   );
@@ -602,7 +614,11 @@ export default function SharedProjectViewer({ token, initialData }: Props) {
               className={styles.qualitySelect}
               aria-label="3D rendering quality"
               value={quality}
-              onChange={(e) => setQuality(e.target.value as QualityPreference)}
+              onChange={(e) => {
+                const next = e.target.value as QualityPreference;
+                setQuality(next);
+                saveQualityPreference(next);
+              }}
             >
               {QUALITY_PREFERENCE_OPTIONS.map((opt) => (
                 <option key={opt.id} value={opt.id}>

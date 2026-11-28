@@ -134,9 +134,17 @@ export function renderPaperBackingCapture(
   const activeCubeFace = renderer.getActiveCubeFace();
   const activeMipmapLevel = renderer.getActiveMipmapLevel();
   const drawingBuffer = renderer.getDrawingBufferSize(new THREE.Vector2());
-  const width = target?.width ?? drawingBuffer.x;
-  const height = target?.height ?? drawingBuffer.y;
-  const state = stateFor(renderer, Math.max(1, width), Math.max(1, height));
+  const baseWidth = target?.width ?? drawingBuffer.x;
+  const baseHeight = target?.height ?? drawingBuffer.y;
+  const rawScale = scene instanceof THREE.Scene
+    ? (scene.userData as { paperBackingScale?: number } | undefined)?.paperBackingScale
+    : undefined;
+  const scale = typeof rawScale === 'number' && Number.isFinite(rawScale)
+    ? THREE.MathUtils.clamp(rawScale, 0.25, 1)
+    : 1;
+  const width = Math.max(1, Math.round(baseWidth * scale));
+  const height = Math.max(1, Math.round(baseHeight * scale));
+  const state = stateFor(renderer, width, height);
   const clearColor = renderer.getClearColor(new THREE.Color());
   const clearAlpha = renderer.getClearAlpha();
   const background = scene instanceof THREE.Scene ? scene.background : null;

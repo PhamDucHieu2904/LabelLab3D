@@ -26,6 +26,10 @@ export interface AppearanceLoadOptions {
   acquireUrl?: (url: string) => { url: string; release(): void };
   /** A prepared appearance clone can configure ordering on its visible pooled root. */
   renderOrderRoot?: THREE.Object3D;
+  /** Bypass heavy BVH neck/ring raytracing on low-tier / constrained GPUs. */
+  simplifiedOptics?: boolean;
+  /** Maximum texture anisotropy (default 4; reduced to 1 on low-tier GPUs). */
+  maxAnisotropy?: number;
 }
 
 function applySampler(texture: THREE.Texture, sampler?: TextureSampler) {
@@ -87,8 +91,11 @@ export function createAppearanceHandle(root: THREE.Object3D, asset: ProductAsset
   prepareBottleLayers(root, asset);
   configureBottleRenderOrder(root, asset);
   if (options.renderOrderRoot) configureBottleRenderOrder(options.renderOrderRoot, asset);
-  const bottle = createBottleMaterialContext(root, asset);
-  const ringOptics = asset.packaging === 'pet' ? createPetRingMaterialContext(root, asset) : undefined;
+  const bottle = createBottleMaterialContext(root, asset, { simplifiedOptics: options.simplifiedOptics });
+  const ringOptics = asset.packaging === 'pet' && !options.simplifiedOptics
+    ? createPetRingMaterialContext(root, asset)
+    : undefined;
+  const maxAnisotropy = Math.max(1, Math.min(4, Math.round(options.maxAnisotropy ?? 4)));
   const bindings: MaterialBinding[] = [];
   const ownedMaterials = new Set<THREE.Material>();
   const ownedTextures = new Set<THREE.Texture>();
@@ -157,7 +164,10 @@ export function createAppearanceHandle(root: THREE.Object3D, asset: ProductAsset
       const overrides = appearance?.slots ?? {};
       const labelSlot = appearance?.label?.slot ?? 'label';
       const printTexture = appearance?.label ? createPrintTexture(appearance.label, asset.volumeMl) : null;
-      if (printTexture) applySampler(printTexture, asset.textureSamplers?.[labelSlot]);
+      if (printTexture) {
+        printTexture.anisotropy = maxAnisotropy;
+        applySampler(printTexture, asset.textureSamplers?.[labelSlot]);
+      }
       const nextTextures = new Set<THREE.Texture>();
       if (printTexture) nextTextures.add(printTexture);
       const textureLoader = new THREE.TextureLoader();
@@ -169,7 +179,7 @@ export function createAppearanceHandle(root: THREE.Object3D, asset: ProductAsset
           requested.set(key, textureLoader.loadAsync(lease?.url ?? publicUrl(url)).then((texture) => {
           texture.flipY = false;
           texture.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-          texture.anisotropy = 4;
+          texture.anisotropy = maxAnisotropy;
           applySampler(texture, sampler);
           nextTextures.add(texture);
           return texture;

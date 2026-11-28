@@ -47,6 +47,8 @@ import { renderPaperBackingCapture, disposePaperBackingCapture } from '../viewer
 import {
   classifySceneWeight,
   detectHardwareTier,
+  loadWebglSafeMode,
+  markWebglSafeMode,
   parseQualityPreference,
   resolveQualityBudget,
   stepTierDown,
@@ -63,6 +65,7 @@ import type { InteractivePickTarget, MockupAnimation, MockupBackdropPainter, Moc
 type LoadedModel = {
   root: THREE.Group; content: THREE.Group; asset: ProductAsset; key: string;
   bounds: THREE.Box3; radius: number; pool: PooledAppearanceHandle;
+  simplifiedOptics: boolean;
   recent: (ProductAppearance | undefined)[];
   committedAppearance?: ProductAppearance;
   detachedTextures: Set<THREE.Texture>;
@@ -86,7 +89,7 @@ function readRendererString(renderer: THREE.WebGLRenderer): string {
 function detectGpuTier(renderer: THREE.WebGLRenderer): GpuTier {
   try {
     const name = readRendererString(renderer);
-    if (/swiftshader|llvmpipe|software|microsoft basic render|warp|subzero/i.test(name)) return 'software';
+    if (/swiftshader|llvmpipe|lavapipe|virgl|software|microsoft basic render|warp|subzero/i.test(name)) return 'software';
     if (/nvidia|geforce|rtx|gtx|quadro|radeon\s+rx|radeon\s+pro|arc\(tm\)|intel.*arc/i.test(name)) return 'discrete';
     if (/intel|uhd|iris|hd graphics|radeon\(tm\)\s*graphics|vega|mali|adreno|powervr/i.test(name)) return 'integrated';
     // Apple Silicon and unknown modern GPUs default to discrete-like live budget unless slow frames trigger fallback.
@@ -96,28 +99,37 @@ function detectGpuTier(renderer: THREE.WebGLRenderer): GpuTier {
   }
 }
 
-function createMockupRenderer(): THREE.WebGLRenderer {
-  // Three logs a console.error before throwing when Chromium has disabled the
-  // GPU adapter. In Next dev mode that console line opens the full-screen
-  // error inspector even though SceneCanvas catches the constructor failure
-  // and already has a recoverable inline state. Suppress only this known
-  // renderer diagnostic; all other console errors remain untouched.
+function createMockupRenderer(preferSafeOrder = false): THREE.WebGLRenderer {
+  // Three logs a console.error before throwing when Chromium has disabled or
+  // restricted a GPU adapter. Suppress intermediate fallback noise while trying
+  // safer WebGL attributes, and only surface an error if every attempt fails.
   const previousError = console.error;
   console.error = (...args: unknown[]) => {
     const first = args[0];
-    if (typeof first === 'string' && first.startsWith('THREE.WebGLRenderer: A WebGL context could not be created.')) return;
+    if (
+      typeof first === 'string' &&
+      (first.startsWith('THREE.WebGLRenderer: A WebGL context could not be created.') ||
+        first.startsWith('THREE.WebGLRenderer: Error creating WebGL context.'))
+    ) {
+      return;
+    }
     previousError(...args);
   };
   try {
-    // Prefer the discrete GPU on dual-GPU laptops (e.g. GTX 1650 + Intel iGPU)
-    // so WebGL does not stall on the integrated adapter, while automatically
-    // falling back if Chromium has restricted high-performance contexts.
+    // Prefer discrete GPU on normal dual-GPU laptops, but after a WebGL context
+    // loss (Safe Mode) try low-power / default first to avoid re-triggering a
+    // crashed GPU path. Stencil buffer is never used and omitting it also trims
+    // Three's internal transmissionRenderTarget memory on constrained GPUs.
+    const order: readonly WebGLPowerPreference[] = preferSafeOrder
+      ? ['low-power', 'default', 'high-performance']
+      : ['high-performance', 'default', 'low-power'];
     let lastError: unknown;
-    for (const powerPreference of ['high-performance', 'default', 'low-power'] as const) {
+    for (const powerPreference of order) {
       try {
         return new THREE.WebGLRenderer({
           alpha: true,
           antialias: false,
+          stencil: false,
           premultipliedAlpha: false,
           powerPreference,
           failIfMajorPerformanceCaveat: false,
@@ -126,6 +138,20 @@ function createMockupRenderer(): THREE.WebGLRenderer {
         lastError = error;
       }
     }
+    // Last-resort minimal context configuration for drivers that reject explicit
+    // powerPreference or premultipliedAlpha flags.
+    try {
+      return new THREE.WebGLRenderer({
+        alpha: true,
+        antialias: false,
+        depth: true,
+        stencil: false,
+        failIfMajorPerformanceCaveat: false,
+      });
+    } catch (error) {
+      lastError = error;
+    }
+    previousError('THREE.WebGLRenderer: Failed to create WebGL context across all fallback profiles.', lastError);
     throw lastError;
   } finally {
     console.error = previousError;
@@ -153,28 +179,28 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   let settings = DEFAULT_VIEWER_PRESENTATION;
   const mobile = window.matchMedia('(max-width: 760px)').matches;
   const capacity = mobile ? 3 : 5;
-  // Prefer the browser's currently available adapter.  Requesting
-  // `high-performance` can permanently disable context creation in Chromium
-  // after another tab has exhausted the discrete GPU context budget; the
-  // studio only needs a small transparent canvas and works reliably on the
-  // low-power adapter as well.
-  const renderer = createMockupRenderer();
+  let safeMode = loadWebglSafeMode();
+  const renderer = createMockupRenderer(safeMode);
   const gpuTier = detectGpuTier(renderer);
-  const linearType = renderer.extensions.has('EXT_color_buffer_float') ? THREE.HalfFloatType : THREE.UnsignedByteType;
+  const effectiveMaxSamples = gpuTier === 'software' ? 0 : renderer.capabilities.maxSamples;
+  const linearType = gpuTier !== 'software' && renderer.extensions.has('EXT_color_buffer_float')
+    ? THREE.HalfFloatType
+    : THREE.UnsignedByteType;
   const detectedTier: QualityTier = detectHardwareTier({
     rendererName: readRendererString(renderer),
     maxTextureSize: renderer.capabilities.maxTextureSize,
-    maxSamples: renderer.capabilities.maxSamples,
+    maxSamples: effectiveMaxSamples,
     hardwareConcurrency: typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 4) : 4,
     deviceMemoryGb: typeof navigator !== 'undefined' ? (navigator as Navigator & { deviceMemory?: number }).deviceMemory : undefined,
     isMobile: mobile,
     supportsHalfFloat: linearType === THREE.HalfFloatType,
   });
   let qualityPreference: QualityPreference = parseQualityPreference(options.qualityPreference);
-  let autoCalibratedTier: QualityTier = detectedTier;
+  let autoCalibratedTier: QualityTier = safeMode ? 'low' : detectedTier;
   host.dataset.mockupQuality = linearType === THREE.HalfFloatType ? 'standard' : 'compatible';
   host.dataset.gpuTier = gpuTier;
   host.dataset.detectedQualityTier = detectedTier;
+  host.dataset.webglSafeMode = String(safeMode);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NeutralToneMapping;
   renderer.toneMappingExposure = settings.exposure;
@@ -190,7 +216,11 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   Object.assign(canvas.style, { width: '100%', height: '100%', display: 'block', cursor: 'grab' });
   host.appendChild(canvas);
   const scene = new THREE.Scene();
-  scene.userData.opticalMaxBounces = resolveQualityBudget(detectedTier, 'medium', renderer.capabilities.maxSamples).opticalBounces;
+  const initialTier: QualityTier = qualityPreference === 'auto' ? autoCalibratedTier : qualityPreference;
+  const initialBudget = resolveQualityBudget(initialTier, 'medium', effectiveMaxSamples);
+  scene.userData.opticalMaxBounces = initialBudget.opticalBounces;
+  scene.userData.paperBackingScale = initialBudget.paperBackingScale;
+  renderer.transmissionResolutionScale = initialBudget.transmissionScale;
   const studioGround = createStudioGround(scene);
   let sceneMode: 'website' | 'studio' = 'website';
   let websiteBackground: MockupBackground = { type: 'white' };
@@ -687,19 +717,24 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   };
   const createLinearTarget = (width: number, height: number, samples = 0) => new THREE.WebGLRenderTarget(width, height, {
     type: linearType, format: THREE.RGBAFormat, depthBuffer: true,
-    samples: Math.min(Math.max(0, samples), renderer.capabilities.maxSamples),
+    samples: Math.min(Math.max(0, samples), effectiveMaxSamples),
   });
   const effectiveQualityTier = (): QualityTier =>
-    qualityPreference === 'auto' ? autoCalibratedTier : qualityPreference;
+    qualityPreference === 'auto' ? (safeMode ? 'low' : autoCalibratedTier) : qualityPreference;
+  const isSimplifiedOptics = (): boolean => safeMode || effectiveQualityTier() === 'low';
   const currentSceneWeight = () => classifySceneWeight(active?.asset, Boolean(procedural && !active));
   const currentQualityBudget = () =>
-    resolveQualityBudget(effectiveQualityTier(), currentSceneWeight(), renderer.capabilities.maxSamples);
+    resolveQualityBudget(effectiveQualityTier(), currentSceneWeight(), effectiveMaxSamples);
   const reportQuality = () => {
     const budget = currentQualityBudget();
     scene.userData.opticalMaxBounces = budget.opticalBounces;
+    scene.userData.paperBackingScale = budget.paperBackingScale;
+    renderer.transmissionResolutionScale = budget.transmissionScale;
     host.dataset.qualityPreference = qualityPreference;
     host.dataset.qualityTier = budget.tier;
     host.dataset.sceneWeight = budget.weight;
+    host.dataset.simplifiedOptics = String(isSimplifiedOptics());
+    host.dataset.webglSafeMode = String(safeMode);
     options.onQualityChange?.({
       preference: qualityPreference,
       detectedTier,
@@ -1366,7 +1401,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   const recycle = (model: LoadedModel | null) => {
     if (!model) return;
     model.root.removeFromParent(); model.pool.dispose(); model.recent = [];
-    if (mobile || disposed) { discarded.add(model); model.bubbles?.dispose(); disposeProduct(model.root); disposeMockupDetachedTextures(model.detachedTextures); return; }
+    if (mobile || disposed || isSimplifiedOptics()) { discarded.add(model); model.bubbles?.dispose(); disposeProduct(model.root); disposeMockupDetachedTextures(model.detachedTextures); return; }
     discard(cached); cached = model;
   };
   const warmup = async (root: THREE.Object3D, isCurrent: () => boolean) => {
@@ -1399,11 +1434,20 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       }
     }
   };
-  const createPool = (content: THREE.Group, asset: ProductAsset) => createPooledAppearanceHandle(content, asset, {
-    editable: true,
-    capacity, acquireUrl: prefetch.acquireUrl, warmup,
-    onChange(ready, pending) { host.dataset.labelPoolReady = String(ready); host.dataset.labelPoolPending = String(pending); },
-  });
+  const createPool = (content: THREE.Group, asset: ProductAsset) => {
+    const simplified = isSimplifiedOptics();
+    const lowMemory = mobile || simplified;
+    return createPooledAppearanceHandle(content, asset, {
+      editable: true,
+      capacity: lowMemory ? 2 : capacity,
+      maxTextureBytes: lowMemory ? 32 * 1024 * 1024 : undefined,
+      simplifiedOptics: simplified,
+      maxAnisotropy: currentQualityBudget().maxAnisotropy,
+      acquireUrl: prefetch.acquireUrl,
+      warmup,
+      onChange(ready, pending) { host.dataset.labelPoolReady = String(ready); host.dataset.labelPoolPending = String(pending); },
+    });
+  };
   const disposePresetPmremCache = () => {
     for (const target of presetPmremCache.values()) target.dispose();
     presetPmremCache.clear();
@@ -1417,7 +1461,11 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       const preset = getStudioEnvironmentPreset(environmentPresetId);
       let target = presetPmremCache.get(preset.id);
       if (!target) {
-        if (preset.source === 'exr' && preset.exrSrc) {
+        // Software renderers or GPUs without float render-target support bypass the 32-bit EXR
+        // decode/upload and build the instant lightweight studio-bright procedural environment.
+        const useLightweightStudioEnv =
+          preset.source === 'exr' && (gpuTier === 'software' || linearType !== THREE.HalfFloatType);
+        if (preset.source === 'exr' && preset.exrSrc && !useLightweightStudioEnv) {
           let sourceTexture: THREE.DataTexture | null = null;
           let ownsTexture = false;
           try {
@@ -1450,7 +1498,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
             if (ownsTexture) sourceTexture.dispose();
           }
         } else {
-          const sourceTexture = buildEnvironmentPresetTexture(preset.id);
+          const sourceTexture = buildEnvironmentPresetTexture(useLightweightStudioEnv ? 'studio-bright' : preset.id);
           try {
             target = pmrem.fromEquirectangular(sourceTexture);
             presetPmremCache.set(preset.id, target);
@@ -1706,9 +1754,19 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       let failure: MockupStatus['error'] = 'model';
       try {
         const key = modelKey(asset);
-        if (active?.key === key) candidate = active;
-        else if (cached?.key === key) {
-          candidate = cached; cached = null; candidate.pool = createPool(candidate.content, asset); candidates.add(candidate);
+        const wantSimplified = isSimplifiedOptics();
+        if (active?.key === key) {
+          candidate = active;
+          if (candidate.simplifiedOptics !== wantSimplified) {
+            candidate.pool.dispose();
+            candidate.pool = createPool(candidate.content, asset);
+            candidate.simplifiedOptics = wantSimplified;
+          }
+        } else if (cached?.key === key) {
+          candidate = cached; cached = null;
+          candidate.pool = createPool(candidate.content, asset);
+          candidate.simplifiedOptics = wantSimplified;
+          candidates.add(candidate);
         } else {
           // Keep one outgoing model and one replacement, never a third idle GLB.
           discard(cached); cached = null;
@@ -1751,7 +1809,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
           const root = new THREE.Group(); root.add(content);
           const detachedTextures = neutralizeMockupLabelArtwork(content, asset);
           candidate = { root, content, bounds, radius: bounds.getBoundingSphere(new THREE.Sphere()).radius,
-            asset, key, pool: createPool(content, asset), recent: [], detachedTextures };
+            asset, key, pool: createPool(content, asset), simplifiedOptics: wantSimplified, recent: [], detachedTextures };
           candidate.bubbles = createEnergyDrinkBubbles(content, asset);
           if (candidate.bubbles) root.add(candidate.bubbles.mesh);
           candidates.add(candidate);
@@ -1803,7 +1861,7 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         readyRevision = thisRevision; host.dataset.labelSwitchMs = String(Math.round(performance.now() - started));
         host.dataset.productId = asset.id; emit('ready'); requestRender();
         prefetch.configure(candidate.recent.map(value => ({ asset, appearance: value })));
-        prefetch.setEnabled(isVisible());
+        prefetch.setEnabled(isVisible() && !isSimplifiedOptics());
       } catch (error) {
         if (candidate && candidate !== active) discard(candidate);
         if (candidate && candidate === active && current()) void candidate.pool.apply(candidate.committedAppearance).catch(() => {});
@@ -2130,20 +2188,32 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
   controls.addEventListener('start', onControlsStart); controls.addEventListener('end', onControlsEnd); controls.addEventListener('change', onControlsChange);
   const syncVisibility = () => {
     if (!isVisible()) { cancelIdleRefine(); cancelPointers(); hitRegion.clear(); if (raf) cancelAnimationFrame(raf); raf = 0; prefetch.setEnabled(false); }
-    else { lastTime = performance.now(); prefetch.setEnabled(readyRevision === revision); requestRender(); }
+    else { lastTime = performance.now(); prefetch.setEnabled(readyRevision === revision && !isSimplifiedOptics()); requestRender(); }
   };
   const lostContext = (event: Event) => {
     event.preventDefault(); cancelIdleRefine(); contextLost = true; readyRevision = -1; request?.abort(); exportAbort?.abort();
-    controls.enabled = false; syncVisibility(); emit('error', 'webgl', 'WebGL context lost');
+    safeMode = true;
+    markWebglSafeMode(true);
+    autoCalibratedTier = 'low';
+    reportQuality();
+    controls.enabled = false; syncVisibility();
+    emit('error', 'webgl', 'WebGL context lost. Switching to Safe Low mode — click Try again or reload.');
   };
   const restoredContext = () => {
     if (disposed) return;
     contextLost = false; controls.enabled = true;
+    safeMode = true;
+    markWebglSafeMode(true);
+    autoCalibratedTier = 'low';
+    reportQuality();
     disposePresetPmremCache();
     environmentTarget?.dispose(); environmentTarget = null;
     environmentReady = loadEnvironment();
     const next = queuedSelection ?? desired; queuedSelection = null;
-    if (next) select(next.asset, next.appearance, next.frontYaw);
+    if (next) {
+      desiredKey = '';
+      select(next.asset, next.appearance, next.frontYaw);
+    }
     syncVisibility();
   };
   canvas.addEventListener('webglcontextlost', lostContext); canvas.addEventListener('webglcontextrestored', restoredContext);
@@ -2301,10 +2371,24 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       const normalized = parseQualityPreference(next);
       if (normalized === qualityPreference) return;
       qualityPreference = normalized;
-      if (normalized === 'auto') autoCalibratedTier = detectedTier;
+      if (normalized === 'high' || normalized === 'ultra') {
+        safeMode = false;
+        markWebglSafeMode(false);
+      } else if (normalized === 'auto') {
+        autoCalibratedTier = safeMode ? 'low' : detectedTier;
+      }
       resetAdaptiveBudget();
       resize();
       if (procedural && !active) syncProceduralStudioLighting();
+      if (
+        active &&
+        (active.asset.packaging === 'glass' || active.asset.packaging === 'pet') &&
+        active.simplifiedOptics !== isSimplifiedOptics()
+      ) {
+        desiredKey = '';
+        select(active.asset, active.committedAppearance, active.root.rotation.y);
+        return;
+      }
       requestRender();
     },
     setEnvironment(next) {
@@ -2419,6 +2503,8 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       const previousClearColor = renderer.getClearColor(new THREE.Color()); const previousClearAlpha = renderer.getClearAlpha();
       const previousControls = controls.enabled;
       const previousOpticalBounces = scene.userData.opticalMaxBounces;
+      const previousPaperBackingScale = scene.userData.paperBackingScale;
+      const previousTransmissionScale = renderer.transmissionResolutionScale;
       let linear: THREE.WebGLRenderTarget | null = null;
       let output: THREE.WebGLRenderTarget | null = null;
       let refraction: ReturnType<typeof createExportRefractionSession> | null = null;
@@ -2429,7 +2515,9 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
       const tileCanvas = document.createElement('canvas');
       const abortExport = () => exportAbort?.abort();
       return captureGate.run(async () => {
-        scene.userData.opticalMaxBounces = 8;
+        scene.userData.opticalMaxBounces = isSimplifiedOptics() ? 4 : 8;
+        scene.userData.paperBackingScale = 1;
+        renderer.transmissionResolutionScale = 1;
         exportAbort = new AbortController(); const signal = exportAbort.signal;
         captureOptions.signal?.addEventListener('abort', abortExport, { once: true });
         if (captureOptions.signal?.aborted) exportAbort.abort();
@@ -2440,7 +2528,8 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         if (raf) cancelAnimationFrame(raf); raf = 0; controls.enabled = false; emit('exporting');
         paintThumbnail(performance.now(), true);
         const gl = renderer.getContext();
-        const maxTileSize = Math.min(1536, renderer.capabilities.maxTextureSize, gl.getParameter(gl.MAX_RENDERBUFFER_SIZE));
+        const tierTileCap = isSimplifiedOptics() || gpuTier === 'software' ? 1024 : 1536;
+        const maxTileSize = Math.min(tierTileCap, renderer.capabilities.maxTextureSize, gl.getParameter(gl.MAX_RENDERBUFFER_SIZE));
         const size = mockupCaptureSize(captureOptions.longEdge, exportAspect);
         host.dataset.captureSize = `${size.width}x${size.height}`;
         if (signal.aborted) throw mockupAbortError();
@@ -2618,6 +2707,8 @@ export function createMockupRuntime(host: HTMLDivElement, options: MockupRuntime
         return blob;
       }, () => {
         scene.userData.opticalMaxBounces = previousOpticalBounces;
+        scene.userData.paperBackingScale = previousPaperBackingScale;
+        renderer.transmissionResolutionScale = previousTransmissionScale;
         captureOptions.signal?.removeEventListener('abort', abortExport); exportAbort = null;
         refraction?.dispose(); refractionAtlas?.dispose();
         refractionCulling.forEach(({ mesh, enabled }) => { mesh.frustumCulled = enabled; });

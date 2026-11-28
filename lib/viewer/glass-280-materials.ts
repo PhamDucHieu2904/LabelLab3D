@@ -37,8 +37,13 @@ export function prepareGlass280Layers(root: THREE.Object3D, asset: ProductAsset)
   });
 }
 
+export interface Glass280MaterialOptions {
+  /** Bypass heavy BVH neck raytracing on low-tier / constrained GPUs and use native calibrated transmission. */
+  simplifiedOptics?: boolean;
+}
+
 /** Solid lids and full-alpha print surround a glass shell with metric thickness. */
-export function createGlass280MaterialContext(root: THREE.Object3D, asset: ProductAsset) {
+export function createGlass280MaterialContext(root: THREE.Object3D, asset: ProductAsset, options: Glass280MaterialOptions = {}) {
   let liquid: THREE.MeshStandardMaterial | undefined;
   root.traverse(node => {
     if (!(node instanceof THREE.Mesh)) return;
@@ -47,7 +52,7 @@ export function createGlass280MaterialContext(root: THREE.Object3D, asset: Produ
     }
   });
   if (!liquid) return;
-  const shortNeckOptics = asset.id === 'glass-280-short-latte'
+  const shortNeckOptics = !options.simplifiedOptics && asset.id === 'glass-280-short-latte'
     ? createGlassNeckMaterialContext(root, (mesh, material) => {
         const role = glass280MaterialRole(asset, mesh, material);
         if (role === 'body' && (material.name === 'Neck' || mesh.name === 'Neck')) return 1;

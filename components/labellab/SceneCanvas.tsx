@@ -21,7 +21,12 @@ import type {
   MockupBackdropPainter,
   ProceduralSubject,
 } from "@/lib/mockup/contracts";
-import type { QualityPreference, QualityRuntimeReport } from "@/lib/mockup/quality-tier";
+import {
+  loadQualityPreference,
+  markWebglSafeMode,
+  type QualityPreference,
+  type QualityRuntimeReport,
+} from "@/lib/mockup/quality-tier";
 import type { ScenePreferences } from "@/lib/labellab/preferences";
 import { createMaterialOverrides } from "@/lib/labellab/material-overrides";
 import { paintRenderBackdrop, prepareRenderBackdrop, snapshotRenderBackdrop } from "@/lib/labellab/render-backdrop";
@@ -75,7 +80,7 @@ function applyMotion(
 }
 
 const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
-  { model, proceduralSubject = null, subjectName, qualityPreference = "auto", onQualityChange, settings, artwork, artworkEditing = false, deferSelection = false, onStatus, renderCanvasRef, interaction = "studio", displayScale = 1, paintBackground, onHoverTarget, onPickTarget },
+  { model, proceduralSubject = null, subjectName, qualityPreference, onQualityChange, settings, artwork, artworkEditing = false, deferSelection = false, onStatus, renderCanvasRef, interaction = "studio", displayScale = 1, paintBackground, onHoverTarget, onPickTarget },
   ref,
 ) {
   const outerRef = useRef<HTMLDivElement>(null);
@@ -151,7 +156,7 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
             displayScale,
             environmentPreset: propsRef.current.settings.environment,
             spotLight: propsRef.current.settings.spotLight,
-            qualityPreference: propsRef.current.qualityPreference,
+            qualityPreference: propsRef.current.qualityPreference ?? loadQualityPreference(),
             onQualityChange: (report) => {
               if (alive) propsRef.current.onQualityChange?.(report);
             },
@@ -193,8 +198,9 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
           runtimeRef.current = owned;
           setReadyVersion((v) => v + 1);
         } catch {
+          markWebglSafeMode(true);
           setError(
-            "Unable to initialize WebGL. Enable hardware acceleration or try again.",
+            "Unable to initialize WebGL. Enable hardware acceleration in browser settings, restart your browser, or try again.",
           );
           setStatus("error");
         }
@@ -247,7 +253,9 @@ const SceneCanvas = forwardRef<SceneCanvasHandle, Props>(function SceneCanvas(
   }, [model, proceduralSubject, settings, readyVersion]);
 
   useEffect(() => {
-    runtimeRef.current?.setQualityPreference(qualityPreference);
+    if (qualityPreference !== undefined) {
+      runtimeRef.current?.setQualityPreference(qualityPreference);
+    }
   }, [qualityPreference, readyVersion]);
 
   useEffect(() => {

@@ -189,11 +189,16 @@ vec3 nataTowardCamera() {
 }
 `;
 
+export interface BottleMaterialContextOptions {
+  /** Skip heavy BVH raytracing shaders on low-tier / safe-mode GPUs. */
+  simplifiedOptics?: boolean;
+}
+
 /** Colored scattering plus Three's opaque color pyramid gives actual rough refraction. */
-export function createBottleMaterialContext(root: THREE.Object3D, asset: ProductAsset) {
-  const glass280 = createGlass280MaterialContext(root, asset);
+export function createBottleMaterialContext(root: THREE.Object3D, asset: ProductAsset, options: BottleMaterialContextOptions = {}) {
+  const glass280 = createGlass280MaterialContext(root, asset, options);
   if (glass280) return glass280;
-  const webBasil = createBasilWebBottleMaterialContext(root, asset);
+  const webBasil = createBasilWebBottleMaterialContext(root, asset, options);
   if (webBasil) return webBasil;
   const basil = createBasilBottleMaterialContext(root, asset);
   if (basil) return basil;

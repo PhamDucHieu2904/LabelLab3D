@@ -199,10 +199,15 @@ function configureRenderLayer(mesh: THREE.Mesh, onlyBeauty: boolean) {
   };
 }
 
+export interface BasilWebMaterialOptions {
+  /** Bypass heavy BVH neck raytracing on low-tier / constrained GPUs and use native calibrated transmission. */
+  simplifiedOptics?: boolean;
+}
+
 /** Geometry supplies molded base refraction. A single native opaque capture
  * contains the back water and seed/gel response, with no BVH/data textures,
  * per-seed transmission, DOM backdrop capture, or alternate environment. */
-export function createBasilWebBottleMaterialContext(root: THREE.Object3D, asset: ProductAsset) {
+export function createBasilWebBottleMaterialContext(root: THREE.Object3D, asset: ProductAsset, options: BasilWebMaterialOptions = {}) {
   let water: THREE.Mesh | undefined;
   root.traverse(node => {
     if (node instanceof THREE.Mesh && (Array.isArray(node.material) ? node.material : [node.material]).some(material => basilWebMaterialRole(asset, node, material) === 'liquid')) water = node;
@@ -212,11 +217,13 @@ export function createBasilWebBottleMaterialContext(root: THREE.Object3D, asset:
   const rootInverse = root.matrixWorld.clone().invert();
   const toMetric = (mesh: THREE.Mesh) => new THREE.Matrix4().multiplyMatrices(rootInverse, mesh.matrixWorld);
   let tracedNeck = false;
-  root.traverse(node => {
-    if (node instanceof THREE.Mesh && (Array.isArray(node.material) ? node.material : [node.material]).some(material =>
-      (Number.isFinite(material.userData.basilWebNeckWallMetres) && material.userData.basilWebNeckWallMetres > 0) ||
-      isProfiledGlassNeck(asset, node, material))) tracedNeck = true;
-  });
+  if (!options.simplifiedOptics) {
+    root.traverse(node => {
+      if (node instanceof THREE.Mesh && (Array.isArray(node.material) ? node.material : [node.material]).some(material =>
+        (Number.isFinite(material.userData.basilWebNeckWallMetres) && material.userData.basilWebNeckWallMetres > 0) ||
+        isProfiledGlassNeck(asset, node, material))) tracedNeck = true;
+    });
+  }
   const neckOptics = tracedNeck ? createGlassNeckMaterialContext(root, (mesh, material) => {
     if ((Number.isFinite(material.userData.basilWebNeckWallMetres) && material.userData.basilWebNeckWallMetres > 0) ||
       isProfiledGlassNeck(asset, mesh, material)) return 1;

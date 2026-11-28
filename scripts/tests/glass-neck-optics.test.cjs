@@ -45,3 +45,45 @@ test('Neck optics binds actual shell, current cap finish, label UV and scene bac
   material.dispose(); currentCap.dispose(); label.map.dispose(); label.dispose();
 });
 
+test('Low-tier simplifiedOptics bypasses heavy BVH neck raytracing on Basil 290 mL and uses lightweight physical shell', () => {
+  const { createBasilWebBottleMaterialContext } = load(path.resolve(__dirname, '../../lib/viewer/basil-web-materials.ts'));
+  const asset = {
+    id: 'basil-strawberry',
+    packaging: 'glass',
+    materialSlots: { body: ['basil-web-neck', 'basil-web-outer'], liquid: ['Water'], cap: ['Cap'], label: ['Label'] },
+  };
+  const root = new THREE.Group();
+  const waterMat = new THREE.MeshStandardMaterial({ name: 'Water' });
+  waterMat.userData.basilProfile = 'basil-web-v1';
+  const water = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.14, 12), waterMat);
+  water.userData.basilProfile = 'basil-web-v1';
+  const neckMat = new THREE.MeshPhysicalMaterial({ name: 'basil-web-neck' });
+  neckMat.userData.basilProfile = 'basil-web-v1';
+  neckMat.userData.basilWebNeckWallMetres = 0.0013;
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.018, 0.025, 12, 1, true), neckMat);
+  neck.userData.basilProfile = 'basil-web-v1';
+  root.add(water, neck);
+
+  const lowCtx = createBasilWebBottleMaterialContext(root, asset, { simplifiedOptics: true });
+  assert.ok(lowCtx, 'context created in simplifiedOptics mode');
+  assert.equal(lowCtx.dispose, undefined, 'no BVH Float32 DataTextures allocated in simplifiedOptics mode');
+  const lowNeck = neckMat.clone();
+  lowCtx.configure(lowNeck, neck, 'body');
+  assert.equal(lowNeck.customProgramCacheKey(), 'basil-web-polished-shell-v1', 'neck shares lightweight calibrated transmission shell on low tier');
+  const lowShader = { uniforms: {}, vertexShader: THREE.ShaderLib.physical.vertexShader, fragmentShader: THREE.ShaderLib.physical.fragmentShader };
+  lowNeck.onBeforeCompile(lowShader, {});
+  assert.doesNotMatch(lowShader.fragmentShader, /glassNeckTrace/, 'BVH raytrace loop is completely excluded on low tier');
+
+  const fullCtx = createBasilWebBottleMaterialContext(root, asset, { simplifiedOptics: false });
+  assert.ok(fullCtx && typeof fullCtx.dispose === 'function', 'full mode builds BVH context');
+  const fullNeck = neckMat.clone();
+  fullCtx.configure(fullNeck, neck, 'body');
+  assert.equal(fullNeck.customProgramCacheKey(), 'pullcap-hollow-glass-neck-v1', 'full mode retains BVH neck raytracer');
+
+  fullCtx.dispose();
+  lowNeck.dispose();
+  fullNeck.dispose();
+  root.traverse(n => { if (n instanceof THREE.Mesh) { n.geometry.dispose(); n.material.dispose(); } });
+});
+
+

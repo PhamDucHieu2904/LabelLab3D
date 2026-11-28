@@ -13,6 +13,8 @@ const {
   parseQualityPreference,
   loadQualityPreference,
   saveQualityPreference,
+  loadWebglSafeMode,
+  markWebglSafeMode,
 } = loadSource(path.join(root, 'lib/mockup/quality-tier'));
 
 test('detectHardwareTier accurately classifies Ultra, High, Medium and Low GPUs across Windows/macOS/Mobile', () => {
@@ -36,14 +38,24 @@ test('detectHardwareTier accurately classifies Ultra, High, Medium and Low GPUs 
   assert.equal(detectHardwareTier({ ...base, rendererName: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 Laptop GPU)', hardwareConcurrency: 8 }), 'high');
   assert.equal(detectHardwareTier({ ...base, rendererName: 'Apple GPU', hardwareConcurrency: 8 }), 'high');
 
-  // Medium GPUs (Intel Iris Xe, Radeon Vega, GTX 1050, modern iPhone)
+  // Medium GPUs (Intel Iris Xe, UHD 770, Radeon Vega/TM Graphics, GTX 1050, modern iPhone)
   assert.equal(detectHardwareTier({ ...base, rendererName: 'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics)', hardwareConcurrency: 8 }), 'medium');
+  assert.equal(detectHardwareTier({ ...base, rendererName: 'ANGLE (Intel, Intel(R) UHD Graphics 770 Direct3D11)', hardwareConcurrency: 8 }), 'medium');
   assert.equal(detectHardwareTier({ ...base, rendererName: 'ANGLE (AMD, AMD Radeon(TM) Graphics)', hardwareConcurrency: 8 }), 'medium');
   assert.equal(detectHardwareTier({ ...base, rendererName: 'Apple GPU', isMobile: true, hardwareConcurrency: 6, deviceMemoryGb: 6 }), 'medium');
 
-  // Low GPUs (SwiftShader software, Intel HD 520/UHD 620, old weak mobile, no half-float)
+  // Low GPUs (SwiftShader software, Intel HD 520, bare Intel UHD Graphics, legacy Radeon R5/HD, GT 710/820M/Quadro K620, weak mobile/office PC, no half-float)
   assert.equal(detectHardwareTier({ ...base, rendererName: 'Google SwiftShader' }), 'low');
+  assert.equal(detectHardwareTier({ ...base, rendererName: 'ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11)' }), 'low');
   assert.equal(detectHardwareTier({ ...base, rendererName: 'ANGLE (Intel, Intel(R) HD Graphics 520)' }), 'low');
+  assert.equal(detectHardwareTier({ ...base, rendererName: 'ANGLE (Intel, Intel(R) UHD Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)' }), 'low');
+  assert.equal(detectHardwareTier({ ...base, rendererName: 'ANGLE (AMD, AMD Radeon(TM) R5 Graphics Direct3D11)' }), 'low');
+  assert.equal(detectHardwareTier({ ...base, rendererName: 'ANGLE (AMD, AMD Radeon HD 7470 Direct3D11)' }), 'low');
+  assert.equal(detectHardwareTier({ ...base, rendererName: 'ANGLE (NVIDIA, NVIDIA GeForce GT 710 Direct3D11)' }), 'low');
+  assert.equal(detectHardwareTier({ ...base, rendererName: 'ANGLE (NVIDIA, NVIDIA GeForce 820M Direct3D11)' }), 'low');
+  assert.equal(detectHardwareTier({ ...base, rendererName: 'ANGLE (NVIDIA, NVIDIA Quadro K620 Direct3D11)' }), 'low');
+  assert.equal(detectHardwareTier({ ...base, rendererName: 'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics)', hardwareConcurrency: 4, deviceMemoryGb: 4 }), 'low');
+  assert.equal(detectHardwareTier({ ...base, rendererName: '', hardwareConcurrency: 4 }), 'low');
   assert.equal(detectHardwareTier({ ...base, rendererName: 'Mali-G52', isMobile: true, hardwareConcurrency: 4, deviceMemoryGb: 4 }), 'low');
   assert.equal(detectHardwareTier({ ...base, rendererName: 'NVIDIA GeForce RTX 4070', supportsHalfFloat: false }), 'low');
 });
@@ -60,13 +72,14 @@ test('classifySceneWeight separates light boxes/cans from medium PET and heavy o
   assert.equal(classifySceneWeight({ id: 'pet-1500-short-label', packaging: 'pet' }, false), 'heavy');
 });
 
-test('4x3 quality matrix keeps boxes/cans sharp with 4x MSAA on Medium/High/Ultra and uses Idle Sharpness on heavy glass', () => {
+test('4x3 quality matrix keeps boxes/cans sharp with 4x MSAA on Medium/High/Ultra and optimizes Low tier against GPU TDR', () => {
   // Light scenes (Parametric Boxes & Trays, Cans) are full-scale + 4x MSAA immediately from Medium up!
   for (const tier of ['medium', 'high', 'ultra']) {
     const b = resolveQualityBudget(tier, 'light', 4);
     assert.equal(b.interactiveScale, 1, `${tier}/light full scale`);
     assert.equal(b.interactiveMsaa, 4, `${tier}/light 4x MSAA`);
     assert.equal(b.idleRefineMs, 0, `${tier}/light needs no delayed refine`);
+    assert.equal(b.simplifiedOptics, false, `${tier}/light retains full optics`);
   }
 
   // Heavy glass on High (GTX 1650 class) stays fluid interactively then refines to crisp 4x MSAA on idle!
@@ -75,6 +88,8 @@ test('4x3 quality matrix keeps boxes/cans sharp with 4x MSAA on Medium/High/Ultr
   assert.equal(highHeavy.interactiveMsaa, 0);
   assert.equal(highHeavy.idleScale, 1);
   assert.equal(highHeavy.idleMsaa, 4);
+  assert.equal(highHeavy.transmissionScale, 1);
+  assert.equal(highHeavy.simplifiedOptics, false);
   assert.ok(highHeavy.idleRefineMs > 0);
 
   // Ultra runs heavy glass at full scale + 4x MSAA + 8 bounces even interactively!
@@ -82,10 +97,22 @@ test('4x3 quality matrix keeps boxes/cans sharp with 4x MSAA on Medium/High/Ultr
   assert.equal(ultraHeavy.interactiveScale, 1);
   assert.equal(ultraHeavy.interactiveMsaa, 4);
   assert.equal(ultraHeavy.opticalBounces, 8);
+  assert.equal(ultraHeavy.transmissionScale, 1);
+  assert.equal(ultraHeavy.simplifiedOptics, false);
   assert.equal(ultraHeavy.idleRefineMs, 0);
 
+  // Low tier disables heavy BVH raytracing, halves transmission/backing buffers, and skips bottle MSAA!
+  const lowHeavy = resolveQualityBudget('low', 'heavy', 4);
+  assert.equal(lowHeavy.simplifiedOptics, true);
+  assert.equal(lowHeavy.transmissionScale, 0.5);
+  assert.equal(lowHeavy.paperBackingScale, 0.5);
+  assert.equal(lowHeavy.interactiveMsaa, 0);
+  assert.equal(lowHeavy.idleMsaa, 0);
+  assert.equal(lowHeavy.maxAnisotropy, 1);
+  assert.equal(lowHeavy.opticalBounces, 2);
+
   // Low tier respects hardware maxSamples clamp cleanly.
-  const lowWebgl1 = resolveQualityBudget('low', 'heavy', 0);
+  const lowWebgl1 = resolveQualityBudget('low', 'light', 0);
   assert.equal(lowWebgl1.interactiveMsaa, 0);
   assert.equal(lowWebgl1.idleMsaa, 0);
   assert.equal(stepTierDown('ultra'), 'high');
@@ -94,12 +121,22 @@ test('4x3 quality matrix keeps boxes/cans sharp with 4x MSAA on Medium/High/Ultr
   assert.equal(stepTierDown('low'), 'low');
 });
 
-test('quality preference persists strictly allowlisted values', () => {
+test('quality preference and session WebGL safe mode persist safely', () => {
   const store = new Map();
-  const storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
+  const storage = {
+    getItem: (k) => store.get(k) ?? null,
+    setItem: (k, v) => store.set(k, v),
+    removeItem: (k) => store.delete(k),
+  };
   assert.equal(loadQualityPreference(storage), 'auto');
   assert.equal(saveQualityPreference('high', storage), true);
   assert.equal(loadQualityPreference(storage), 'high');
   assert.equal(parseQualityPreference('extreme'), 'auto');
   assert.equal(parseQualityPreference(null), 'auto');
+
+  assert.equal(loadWebglSafeMode(storage), false);
+  assert.equal(markWebglSafeMode(true, storage), true);
+  assert.equal(loadWebglSafeMode(storage), true);
+  assert.equal(markWebglSafeMode(false, storage), true);
+  assert.equal(loadWebglSafeMode(storage), false);
 });
